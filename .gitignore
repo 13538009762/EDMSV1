@@ -1,33 +1,17 @@
-.cursor/
-frontend/dist/
-frontend/node_modules/*
+sources/frontend/dist/
+sources/frontend/node_modules/*
 
 # Backend
-backend/.venv/
-backend/__pycache__/
-backend/**/__pycache__/
-backend/*.pyc
-backend/instance/
-backend/.pytest_cache/
+sources/backend/.venv/
+sources/backend/__pycache__/
+sources/backend/**/__pycache__/
+sources/backend/*.pyc
+sources/backend/instance/
+sources/backend/.pytest_cache/
 
 # IDE
 .vscode/
 .idea/
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Environment files
-.env
-.env.local
-
-# Data files
-*.xlsx
-*.docx
-
-# Logs
-*.log
 
 # Build artifacts
 *.egg-info/
@@ -35,4 +19,7 @@ build/
 dist/
 
 # docker images
-bin/images/
+sources/bin/images/
+
+# temp gitignore
+install/
