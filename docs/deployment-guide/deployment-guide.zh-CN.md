@@ -236,5 +236,3 @@ tar -czvf edms-backup-$(date +%Y%m%d).tar.gz bin/data/
 ## 支持与反馈
 
 如需技术支持，请联系系统管理员或开发团队。
-
-[English](./README.en.md) | 简体中文
