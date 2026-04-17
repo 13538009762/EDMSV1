@@ -249,18 +249,21 @@ onMounted(() => {
   min-height: calc(100vh - 60px);
 }
 .header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 .header h2 {
-  margin: 0 0 8px;
-  font-size: 24px;
-  font-weight: 600;
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--el-text-color-primary);
+  letter-spacing: -0.5px;
 }
 .subtitle {
   margin: 0;
   color: var(--el-text-color-secondary);
-  font-size: 14px;
+  font-size: 15px;
+  opacity: 0.85;
 }
 .kpi-row {
   margin-bottom: 24px;

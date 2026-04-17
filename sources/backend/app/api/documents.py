@@ -28,6 +28,7 @@ from app.services.document_access import (
     user_can_edit_content,
     user_can_edit_metadata,
     user_can_view_document,
+    user_can_manage_permissions,
     user_effective_document_role,
 )
 from app.services.document_state import VALID_STATUSES
@@ -47,6 +48,7 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
             owner_department = doc.owner.department.name
     return {
         "id": doc.id,
+        "doc_number": doc.doc_number or f"{doc.created_at.strftime('%Y%m%d') if doc.created_at else '00000000'}{str(doc.id).zfill(3)}",
         "title": doc.title,
         "status": doc.status,
         "owner_id": doc.owner_id,
@@ -54,14 +56,15 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         "owner_department": owner_department,
         "is_owner": doc.owner_id == user.id,
         "my_role": user_effective_document_role(user, doc),
-        "created_at": doc.created_at.isoformat() if doc.created_at else None,
-        "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+        "created_at": doc.created_at.isoformat() + "Z" if doc.created_at else None,
+        "updated_at": doc.updated_at.isoformat() + "Z" if doc.updated_at else None,
         "current_version_id": doc.current_version_id,
         "version_no": ver.version_no if ver else None,
         "can_view": True,
         "can_edit": user_can_edit_content(user, doc),
         "can_comment": user_can_comment(user, doc),
-        "can_manage_permissions": doc.owner_id == user.id,
+        "can_manage_permissions": user_can_manage_permissions(user, doc),
+        "is_public": doc.is_public,
     }
 
 
@@ -119,7 +122,7 @@ def list_documents():
         q = q.filter(
             or_(
                 Document.owner_id == user.id,
-                Document.status == "approved",
+                Document.is_public == True,
                 Document.id.in_(perm_ids),
                 Document.id.in_(flow_ids),
             )
@@ -139,7 +142,24 @@ def create_document():
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "Untitled").strip()[:512]
-    doc = Document(owner_id=user.id, title=title, status="draft")
+    
+    # Generate doc_number (resets daily)
+    from sqlalchemy import func
+    today_str = datetime.utcnow().strftime("%Y%m%d")
+    # 查找当天最高编号以确保跨天重置且不因删除导致编号冲突
+    max_doc = db.session.query(func.max(Document.doc_number)).filter(
+        Document.doc_number.like(f"{today_str}%")
+    ).scalar()
+    if max_doc:
+        try:
+            last_seq = int(max_doc[-3:])
+            doc_number = f"{today_str}{str(last_seq + 1).zfill(3)}"
+        except:
+            doc_number = f"{today_str}001"
+    else:
+        doc_number = f"{today_str}001"
+    
+    doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number)
     db.session.add(doc)
     db.session.flush()
     ver = DocumentVersion(
@@ -192,9 +212,11 @@ def patch_document(doc_id: int):
             return jsonify({"error": "Forbidden: cannot edit title in current state/role"}), 403
         doc.title = str(data["title"])[:512]
     if "page_settings_json" in data:
-        if not user_can_edit_metadata(user, doc):
-            return jsonify({"error": "Forbidden: cannot edit page settings"}), 403
         doc.page_settings_json = data["page_settings_json"]
+    if "is_public" in data:
+        if not user_can_manage_permissions(user, doc):
+            return jsonify({"error": "Forbidden: only owner or approver (after approval) can change visibility"}), 403
+        doc.is_public = bool(data["is_public"])
     doc.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify(_doc_to_summary(doc, user))
@@ -245,6 +267,38 @@ def put_content(doc_id: int):
     return jsonify({"ok": True})
 
 
+@bp.delete("/<int:doc_id>")
+@jwt_required()
+def delete_document(doc_id: int):
+    """Delete a draft or rejected document (only owner)."""
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    doc = db.session.get(Document, doc_id)
+    if not doc:
+        return jsonify({"error": "Not found"}), 404
+    
+    # Only owner
+    if doc.owner_id != user.id:
+        return jsonify({"error": "Forbidden: Only creator can delete"}), 403
+    
+    # Only draft or rejected
+    if doc.status not in ("draft", "rejected"):
+        return jsonify({"error": f"Forbidden: Cannot delete document in status {doc.status}"}), 400
+    
+    # Manually clear AuditLog references to prevent FK issues in environments with enforced constraints
+    from app.models.workflow import AuditLog
+    v_ids = [v.id for v in doc.versions]
+    if v_ids:
+        db.session.query(AuditLog).filter(AuditLog.document_version_id.in_(v_ids)).update(
+            {AuditLog.document_version_id: None}, synchronize_session=False
+        )
+
+    db.session.delete(doc)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @bp.get("/<int:doc_id>/versions")
 @jwt_required()
 def list_versions(doc_id: int):
@@ -261,7 +315,7 @@ def list_versions(doc_id: int):
             {
                 "id": v.id,
                 "version_no": v.version_no,
-                "created_at": v.created_at.isoformat() if v.created_at else None,
+                "created_at": v.created_at.isoformat() + "Z" if v.created_at else None,
                 "parent_version_id": v.parent_version_id,
                 "created_by_id": v.created_by_id,
                 "created_by_name": v.created_by.login_name if v.created_by else "System",
@@ -358,10 +412,10 @@ def set_permissions(doc_id: int):
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     doc = db.session.get(Document, doc_id)
-    if not doc or doc.owner_id != user.id:
+    if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
-    if doc.status != "draft":
-        return jsonify({"error": "Permissions can only be changed while document is draft"}), 400
+    if doc.status not in ("draft", "approved"):
+        return jsonify({"error": "Permissions can only be changed while document is draft or approved"}), 400
     data = request.get_json(silent=True) or {}
     grants = data.get("grants") or []
     seen: set[int] = set()
@@ -369,7 +423,12 @@ def set_permissions(doc_id: int):
     for g in grants:
         uid = g.get("user_id")
         role = g.get("role")
-        if not uid or role not in ("view", "edit", "comment"):
+        if doc.status == "approved" and role not in ("view", "comment"):
+            continue # 已审批通过只能改查看和批注
+        if doc.status == "draft" and role not in ("view", "edit", "comment"):
+            # 草稿允许编辑和评论
+            continue
+        if not uid:
             continue
         uid_int = int(uid)
         if uid_int == user.id:
@@ -393,10 +452,10 @@ def delete_permission(doc_id: int, grantee_id: int):
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     doc = db.session.get(Document, doc_id)
-    if not doc or doc.owner_id != user.id:
+    if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
-    if doc.status != "draft":
-        return jsonify({"error": "Permissions can only be changed while document is draft"}), 400
+    if doc.status not in ("draft", "approved"):
+        return jsonify({"error": "Permissions can only be changed while document is draft or approved"}), 400
     p = DocumentPermission.query.filter_by(
         document_id=doc.id, user_id=grantee_id
     ).first()
@@ -414,7 +473,7 @@ def get_permissions(doc_id: int):
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     doc = db.session.get(Document, doc_id)
-    if not doc or doc.owner_id != user.id:
+    if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Not found"}), 404
     perms = DocumentPermission.query.filter_by(document_id=doc.id).all()
     return jsonify(
@@ -519,11 +578,14 @@ def upload_image():
         return jsonify({"error": "Invalid image extension. Only jpg, png, gif, webp allowed."}), 400
         
     from flask import current_app
-    save_dir = os.path.join(current_app.root_path, "static", "images")
+    # 💡 优化：从环境变量获取存储路径，方便 Docker 持久化
+    storage_base = os.environ.get("STORAGE_PATH", current_app.root_path)
+    save_dir = os.path.join(storage_base, "static", "images")
     os.makedirs(save_dir, exist_ok=True)
     filename = f"{uuid.uuid4().hex}{ext}"
     
     file.save(os.path.join(save_dir, filename))
+    # 注意：URL 仍然通过 /static/images 访问，我们需要在 Web 服务器配置静态映射
     url = f"/static/images/{filename}"
     return jsonify({"url": url})
 
@@ -536,7 +598,7 @@ def start_approval(doc_id: int):
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     doc = db.session.get(Document, doc_id)
-    if not doc or doc.owner_id != user.id:
+    if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json(silent=True) or {}
     # Align with frontend fields: 'type' and 'approvers'
@@ -557,6 +619,27 @@ def start_approval(doc_id: int):
     return jsonify({"flow_id": flow.id, "document_status": doc.status})
 
 
+@bp.post("/<int:doc_id>/recall")
+@jwt_required()
+def recall_document_approval(doc_id: int):
+    """Recall a document from approval state."""
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    doc = db.session.get(Document, doc_id)
+    if not doc or doc.owner_id != user.id:
+        return jsonify({"error": "Forbidden"}), 403
+    
+    from app.services.approval_service import recall_flow
+    try:
+        recall_flow(doc)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+        
+    db.session.commit()
+    return jsonify({"ok": True, "document_status": doc.status})
+
+
 @bp.post("/<int:doc_id>/new-version")
 @jwt_required()
 def new_version_after_reject(doc_id: int):
@@ -565,7 +648,7 @@ def new_version_after_reject(doc_id: int):
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     doc = db.session.get(Document, doc_id)
-    if not doc or doc.owner_id != user.id:
+    if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
     if doc.status != "rejected":
         return jsonify({"error": "Only rejected documents"}), 400

@@ -19,6 +19,13 @@
         </div>
         
         <div class="toolbar-right">
+          <el-input
+            v-model="searchQuery"
+            :placeholder="t('editor.searchPlaceholder')"
+            :prefix-icon="Search"
+            clearable
+            style="width: 200px"
+          />
           <el-select
             v-model="scope"
             clearable
@@ -48,8 +55,8 @@
         </div>
       </div>
 
-      <el-table :data="items" v-loading="loading" stripe style="width: 100%">
-        <el-table-column prop="id" :label="t('library.colId')" width="80" />
+      <el-table :data="paginatedItems" v-loading="loading" stripe style="width: 100%">
+        <el-table-column prop="doc_number" :label="t('library.colId')" width="140" />
         <el-table-column prop="title" :label="t('library.colTitle')" min-width="180" />
         <el-table-column prop="status" :label="t('library.colStatus')" width="160">
           <template #default="{ row }">
@@ -63,7 +70,7 @@
         <el-table-column prop="updated_at" :label="t('library.colUpdatedAt')" width="170">
           <template #default="{ row }">
             <div v-if="row.updated_at" style="font-size: 13px; color: var(--el-text-color-secondary);">
-              {{ row.updated_at.replace('T', ' ').substring(0, 16) }}
+              {{ formatLocalDate(row.updated_at) }}
             </div>
             <span v-else style="color: var(--el-text-color-placeholder);">-</span>
           </template>
@@ -76,7 +83,7 @@
             </el-button>
             
             <el-button
-              v-if="row.can_manage_permissions && row.status === 'draft'"
+              v-if="row.can_manage_permissions && (row.status === 'draft' || row.status === 'approved')"
               type="warning"
               plain
               size="small"
@@ -94,9 +101,30 @@
             >
               {{ t("library.diff") }}
             </el-button>
+
+            <el-button
+              v-if="row.is_owner && (row.status === 'draft' || row.status === 'rejected')"
+              type="danger"
+              plain
+              size="small"
+              @click="confirmDelete(row.id)"
+            >
+              {{ t("editor.delete") }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          small
+          background
+          layout="prev, pager, next, total"
+          :total="filteredItems.length"
+        />
+      </div>
     </el-card>
 
     <DocumentShareDialog
@@ -108,15 +136,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Plus, Upload, Refresh } from "@element-plus/icons-vue"; // 引入图标
+import { Plus, Upload, Refresh, Search } from "@element-plus/icons-vue"; // 引入图标
+import { formatLocalDate } from "@/utils/date";
+import { Editor } from "@tiptap/vue-3";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import TextAlign from "@tiptap/extension-text-align";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import Underline from "@tiptap/extension-underline";
 
 interface DocRow {
   id: number;
@@ -137,6 +175,25 @@ const scope = ref("");
 const statusFilter = ref("");
 const shareOpen = ref(false);
 const shareDocId = ref<number | null>(null);
+const searchQuery = ref("");
+
+// Pagination
+const currentPage = ref(1);
+const pageSize = ref(10);
+
+const filteredItems = computed(() => {
+  if (!searchQuery.value) return items.value;
+  const q = searchQuery.value.toLowerCase();
+  return items.value.filter(item => 
+    item.title?.toLowerCase().includes(q) || 
+    item.doc_number?.toLowerCase().includes(q)
+  );
+});
+
+const paginatedItems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredItems.value.slice(start, start + pageSize.value);
+});
 
 async function load() {
   loading.value = true;
@@ -174,24 +231,36 @@ async function onImportDocx(file: UploadRawFile) {
     const docId = docData.id;
     
     const ab = await file.arrayBuffer();
-    const { value: rawText } = await mammoth.extractRawText({ arrayBuffer: ab });
+    const { value: html } = await mammoth.convertToHtml({ arrayBuffer: ab }, {
+      convertImage: mammoth.images.imgElement(function(element) {
+        return element.read("base64").then(function(imageBuffer) {
+          return {
+            src: "data:" + element.contentType + ";base64," + imageBuffer
+          };
+        });
+      })
+    });
     
-    const lines = rawText.split('\n').filter(line => line.trim().length > 0);
-    const content = {
-      type: "doc",
-      content: lines.length > 0 ? lines.map(line => ({
-        type: "paragraph",
-        attrs: { textAlign: "left" },
-        content: line.trim() ? [{ type: "text", text: line.trim() }] : [],
-      })) : [{
-        type: "paragraph",
-        attrs: { textAlign: "left" },
-        content: [],
-      }],
-    };
+    // Use a headless editor to convert HTML to TipTap JSON
+    const tempEditor = new Editor({
+      extensions: [
+        StarterKit,
+        Underline,
+        Image.configure({ allowBase64: true }),
+        Table.configure({ resizable: true }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        TextAlign.configure({ types: ["heading", "paragraph", "image"] }),
+      ],
+      content: html,
+    });
     
+    const content_json = tempEditor.getJSON();
+    tempEditor.destroy();
+
     await api.put(`/documents/${docId}/content`, {
-      content_json: JSON.stringify(content),
+      content_json: JSON.stringify(content_json),
     });
     
     ElMessage.success(t("library.importDocxSuccess"));
@@ -203,10 +272,36 @@ async function onImportDocx(file: UploadRawFile) {
   return false;
 }
 
+async function confirmDelete(id: number) {
+  try {
+    await ElMessageBox.confirm(
+      t("editor.deleteConfirm"),
+      t("common.warning", "Warning"),
+      {
+        confirmButtonText: t("common.ok", "OK"),
+        cancelButtonText: t("inbox.cancel"),
+        type: "warning",
+      }
+    );
+    await api.delete(`/documents/${id}`);
+    ElMessage.success(t("editor.deleteSuccess"));
+    await load();
+  } catch (err) {
+    if (err !== "cancel") {
+      ElMessage.error(t("editor.deleteFailed"));
+    }
+  }
+}
+
 onMounted(load);
 </script>
 
 <style scoped>
+.pagination-wrapper {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
 .page-container {
   padding: 24px 32px;
   max-width: 1600px;
@@ -214,20 +309,22 @@ onMounted(load);
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
 .page-header h2 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--el-text-color-primary);
+  letter-spacing: -0.5px;
 }
 
 .table-card {
-  border-radius: 8px;
-  border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
 }
 
 .toolbar {

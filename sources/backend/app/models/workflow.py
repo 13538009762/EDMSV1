@@ -13,7 +13,7 @@ class ApprovalFlow(db.Model):
     current_order = db.Column(db.Integer, default=1)  # for sequential: min step pending
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    document = db.relationship("Document", backref="approval_flows")
+    document = db.relationship("Document", back_populates="approval_flows")
     participants = db.relationship(
         "ApprovalParticipant",
         back_populates="flow",
@@ -56,7 +56,7 @@ class AuditLog(db.Model):
     __tablename__ = "audit_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    document_version_id = db.Column(db.Integer, db.ForeignKey("document_versions.id"), nullable=True)
+    document_version_id = db.Column(db.Integer, db.ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     summary = db.Column(db.String(512), nullable=False)
     payload_json = db.Column(db.Text, nullable=True)

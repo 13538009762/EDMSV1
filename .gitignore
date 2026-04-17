@@ -21,5 +21,11 @@ dist/
 # docker images
 sources/bin/images/
 
+# docker data
+sources/bin/data/
+sources/docker/data/
+sources/backend/static/images/
+sources/backend/scratch/
+
 # temp gitignore
 install/

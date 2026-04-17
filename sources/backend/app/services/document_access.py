@@ -10,36 +10,46 @@ def user_effective_document_role(user: User, doc: Document) -> str:
     """用于 API / 列表展示：owner | edit | comment | view | approver | reader。"""
     if doc.owner_id == user.id:
         return "owner"
-    if doc.status == "approved":
-        return "reader"
+    
     perm = DocumentPermission.query.filter_by(document_id=doc.id, user_id=user.id).first()
+    
+    from app.models import ApprovalFlow, ApprovalParticipant
+    # Check current or past approvers
+    flows = ApprovalFlow.query.filter_by(document_id=doc.id).all()
+    for f in flows:
+        if ApprovalParticipant.query.filter_by(flow_id=f.id, user_id=user.id).first():
+            return "approver"
+
+    # If approved, contributors can only view or comment
+    if doc.status == "approved":
+        if perm:
+            if perm.role == "edit":
+                return "view"
+            return perm.role
+        if doc.is_public:
+            return "reader"
+        return "view"
+
     if perm:
         return perm.role
-    from app.models import ApprovalFlow, ApprovalParticipant
 
-    flow = ApprovalFlow.query.filter_by(document_id=doc.id, status="active").first()
-    if flow and ApprovalParticipant.query.filter_by(flow_id=flow.id, user_id=user.id).first():
-        return "approver"
-    if doc.status == "approved":
-        return "reader"
     return "reader"
 
 
 def user_can_view_document(user: User, doc: Document) -> bool:
-    if doc.status == "approved":
-        return True
     if doc.owner_id == user.id:
+        return True
+    if doc.status == "approved" and doc.is_public:
         return True
     perm = (
         DocumentPermission.query.filter_by(document_id=doc.id, user_id=user.id).first()
     )
     if perm:
         return True
-    # participant in active flow
+    
     from app.models import ApprovalFlow, ApprovalParticipant
-
-    flow = ApprovalFlow.query.filter_by(document_id=doc.id, status="active").first()
-    if flow:
+    flows = ApprovalFlow.query.filter_by(document_id=doc.id).all()
+    for flow in flows:
         p = ApprovalParticipant.query.filter_by(flow_id=flow.id, user_id=user.id).first()
         if p:
             return True
@@ -74,7 +84,7 @@ def user_can_edit_content(user: User, doc: Document) -> bool:
 
 
 def user_can_comment(user: User, doc: Document) -> bool:
-    if doc.status not in ("draft", "in_approval"):
+    if doc.status not in ("draft", "in_approval", "approved"):
         return False
     if doc.owner_id == user.id:
         return True
@@ -87,4 +97,18 @@ def user_can_comment(user: User, doc: Document) -> bool:
     if flow:
         if ApprovalParticipant.query.filter_by(flow_id=flow.id, user_id=user.id).first():
             return True
+    return False
+
+
+def user_can_manage_permissions(user: User, doc: Document) -> bool:
+    if doc.owner_id == user.id:
+        return True
+    # 审核过后的文档，审核人也可以管理权限
+    if doc.status == "approved":
+        from app.models import ApprovalFlow, ApprovalParticipant
+        flows = ApprovalFlow.query.filter_by(document_id=doc.id).all()
+        for flow in flows:
+            p = ApprovalParticipant.query.filter_by(flow_id=flow.id, user_id=user.id).first()
+            if p:
+                return True
     return False

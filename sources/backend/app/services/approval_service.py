@@ -103,3 +103,12 @@ def apply_decision(
         flow.status = "completed"
         document.status = "approved"
     document.updated_at = datetime.utcnow()
+
+
+def recall_flow(document: Document) -> None:
+    """Recall active approval and set back to draft."""
+    if document.status != "in_approval":
+        raise ValueError("Document is not in approval state")
+    cancel_active_flows(document.id)
+    document.status = "draft"
+    document.updated_at = datetime.utcnow()

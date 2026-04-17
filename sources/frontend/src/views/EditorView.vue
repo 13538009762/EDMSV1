@@ -26,7 +26,10 @@
               <el-dropdown-item @click="searchVisible = !searchVisible">{{ t("editor.findReplace") }}</el-dropdown-item>
               <el-dropdown-item @click="fixPunc">{{ t("editor.punctuation") }}</el-dropdown-item>
               <el-dropdown-item @click="pageSettingsVisible = true">{{ t("editor.pageSetup") }}</el-dropdown-item>
-              <el-dropdown-item v-if="meta.can_manage_permissions && meta.status === 'draft'" @click="showShare = true">{{ t("library.share") }}</el-dropdown-item>
+              <el-dropdown-item v-if="meta.can_manage_permissions && (meta.status === 'draft' || meta.status === 'approved')" @click="showShare = true">{{ t("library.share") }}</el-dropdown-item>
+              <el-dropdown-item v-if="isOwner && (meta.status === 'draft' || meta.status === 'rejected')" divided style="color: var(--el-color-danger)" @click="confirmDeleteDoc">
+                {{ t("editor.delete") }}
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -176,7 +179,7 @@
                   <div class="meta">
                     <div style="font-weight: 500;">{{ m.author_login }}</div>
                     <div class="meta-right">
-                      <span>{{ m.created_at ? m.created_at.split('T')[0] : '' }} · {{ m.status }}</span>
+                      <span>{{ formatLocalDate(m.created_at) }} · {{ m.status }}</span>
                       <el-button
                         v-if="m.status === 'active'"
                         link
@@ -203,7 +206,7 @@
                     <div class="meta">
                       <div style="font-weight: 500;">{{ r.author_login }}</div>
                       <div class="meta-right">
-                        <span>{{ r.created_at ? r.created_at.split('T')[0] : '' }}</span>
+                        <span>{{ formatLocalDate(r.created_at) }}</span>
                       </div>
                     </div>
                     <div class="comment-body">{{ r.body }}</div>
@@ -227,7 +230,7 @@
                     <span class="v-no">V{{ v.version_no }}</span>
                     <span class="v-user">{{ v.created_by_name }}</span>
                   </div>
-                  <div class="v-time">{{ new Date(v.created_at).toLocaleString() }}</div>
+                  <div class="v-time">{{ formatLocalDate(v.created_at) }}</div>
                 </div>
               </div>
             </div>
@@ -291,7 +294,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
@@ -322,6 +325,7 @@ import { fixPunctuation } from "@/utils/punctuation";
 import { ElMessage, ElMessageBox } from "element-plus";
 import mammoth from "mammoth";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
+import { formatLocalDate } from "@/utils/date";
 
 const CustomImage = Image.extend({
   addAttributes() {
@@ -337,8 +341,9 @@ const CustomImage = Image.extend({
       }
     };
   }
-});
+}).configure({ allowBase64: true });
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 const auth = useAuthStore();
 const docId = computed(() => Number(route.params.id));
@@ -585,6 +590,27 @@ async function saveNow() {
 
 async function saveTitle() { await api.patch(`/documents/${docId.value}`, { title: title.value }); }
 
+async function confirmDeleteDoc() {
+  try {
+    await ElMessageBox.confirm(
+      t("editor.deleteConfirm"),
+      t("common.warning", "Warning"),
+      {
+        confirmButtonText: t("common.ok", "OK"),
+        cancelButtonText: t("inbox.cancel"),
+        type: "warning",
+      }
+    );
+    await api.delete(`/documents/${docId.value}`);
+    ElMessage.success(t("editor.deleteSuccess"));
+    router.push({ name: "library" });
+  } catch (err) {
+    if (err !== "cancel") {
+      ElMessage.error(t("editor.deleteFailed"));
+    }
+  }
+}
+
 async function loadComments() {
   const { data } = await api.get(`/documents/${docId.value}/comments`, { params: { hide_resolved: 0 } });
   comments.value = data.items;
@@ -609,7 +635,15 @@ async function importDocx() {
   input.onchange = async (e: any) => {
     const file = e.target.files[0]; if (!file) return;
     try {
-      const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+      const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() }, {
+        convertImage: mammoth.images.imgElement(function(image) {
+          return image.read("base64").then(function(imageBuffer) {
+            return {
+              src: "data:" + image.contentType + ";base64," + imageBuffer
+            };
+          });
+        })
+      });
       editor.value?.commands.setContent(result.value);
       ElMessage.success(t("editor.messages.importSuccess"));
     } catch { ElMessage.error(t("editor.messages.importFailed")); }

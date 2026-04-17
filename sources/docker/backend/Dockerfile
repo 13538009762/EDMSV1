@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install Python dependencies
-# Note: Using --no-cache-dir reduces image size
-RUN pip install --no-cache-dir -r requirements.txt
+# 💡 增加 gunicorn 以支持生产级部署
+RUN pip install --no-cache-dir -r requirements.txt gunicorn eventlet
 
 # Copy backend code
 COPY . .
@@ -36,10 +36,11 @@ EXPOSE 5000
 ENV FLASK_APP=wsgi.py
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
+ENV STORAGE_PATH=/app/data
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
-# Run the application
-CMD ["python", "wsgi.py"]
+# Run the application with gunicorn + eventlet (Socket.IO support)
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "wsgi:app"]

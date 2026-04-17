@@ -15,6 +15,11 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     socketio.init_app(app)
 
+    # 💡 增加：健康检查接口 (放在最前面确保不被拦截)
+    @app.route("/api/health")
+    def health_check():
+        return {"status": "ok"}
+
     from app.api.auth import bp as auth_bp
     from app.api.master_data import bp as master_bp
     from app.api.documents import bp as documents_bp
@@ -32,6 +37,15 @@ def create_app(config_class=Config):
     app.register_blueprint(approvals_bp, url_prefix="/api/approvals")
     app.register_blueprint(users_bp, url_prefix="/api/users")
     app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
+
+
+    # 💡 增加：支持从持久化存储路径读取图片
+    @app.route("/static/images/<path:filename>")
+    def custom_static(filename):
+        import os
+        from flask import send_from_directory
+        storage_base = os.environ.get("STORAGE_PATH", app.root_path)
+        return send_from_directory(os.path.join(storage_base, "static", "images"), filename)
 
     from app.sockets import collab  # noqa: F401  registers handlers
 

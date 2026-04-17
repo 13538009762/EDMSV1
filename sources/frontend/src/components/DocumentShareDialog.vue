@@ -2,55 +2,86 @@
   <el-dialog
     :model-value="modelValue"
     :title="t('editor.sharingTitle')"
-    width="520px"
+    width="600px"
     destroy-on-close
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <p class="hint">{{ t("editor.sharingHint") }}</p>
-    <div v-for="(row, idx) in rows" :key="idx" class="row">
-      <el-select
-        v-model="row.user_id"
-        filterable
-        :placeholder="t('editor.sharingUser')"
-        style="width: 200px"
-      >
-        <el-option v-for="u in filteredUsers" :key="u.id" :label="`${u.login_name}`" :value="u.id" />
-      </el-select>
+    <div class="sharing-dialog-content">
+      <div style="margin-bottom: 20px; border-bottom: 1px solid var(--el-border-color-lighter); padding-bottom: 12px;">
+        <el-switch v-model="isPublic" :active-text="t('editor.isPublic')" />
+        <p class="hint" style="margin-top: 4px;">{{ t('editor.isPublicHint') }}</p>
+      </div>
 
-      <el-select v-model="row.role" style="width: 140px; margin-left: 8px">
-        <template #label>
-          <el-tag
-            :type="row.role === 'edit' ? 'primary' : row.role === 'comment' ? 'warning' : 'info'"
-            disable-transitions
-          >
-            {{ row.role === 'edit' ? t('editor.roleEdit') : row.role === 'comment' ? t('editor.roleComment') : t('editor.roleView') }}
-          </el-tag>
-        </template>
-        <el-option value="view" :label="t('editor.roleView')">
-          <el-tag type="info" size="small">{{ t('editor.roleView') }}</el-tag>
-        </el-option>
-        <el-option value="edit" :label="t('editor.roleEdit')">
-          <el-tag type="primary" size="small">{{ t('editor.roleEdit') }}</el-tag>
-        </el-option>
-        <el-option value="comment" :label="t('editor.roleComment')">
-          <el-tag type="warning" size="small">{{ t('editor.roleComment') }}</el-tag>
-        </el-option>
-      </el-select>
+      <!-- 可编辑 (Only for Drafts) -->
+      <div class="perm-section" v-if="docStatus === 'draft'">
+        <div class="section-header">
+          <el-tag type="primary" effect="plain">{{ t('editor.roleEdit') }}</el-tag>
+          <span class="section-desc">可以修改文档内容和设置</span>
+        </div>
+        <el-select
+          v-model="editIds"
+          multiple
+          filterable
+          collapse-tags
+          :placeholder="t('editor.sharingUser')"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="u in optionsForEdit"
+            :key="u.id"
+            :label="u.login_name"
+            :value="u.id"
+          />
+        </el-select>
+      </div>
 
-      <el-button type="danger" link :icon="Delete" style="margin-left: 12px" @click="rows.splice(idx, 1)">
-        {{ t("editor.sharingRemove") }}
-      </el-button>
+      <!-- 可批注 -->
+      <div class="perm-section">
+        <div class="section-header">
+          <el-tag type="warning" effect="plain">{{ t('editor.roleComment') }}</el-tag>
+          <span class="section-desc">可以针对内容发表批注</span>
+        </div>
+        <el-select
+          v-model="commentIds"
+          multiple
+          filterable
+          collapse-tags
+          :placeholder="t('editor.sharingUser')"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="u in optionsForComment"
+            :key="u.id"
+            :label="u.login_name"
+            :value="u.id"
+          />
+        </el-select>
+      </div>
+
+      <!-- 只读 -->
+      <div class="perm-section">
+        <div class="section-header">
+          <el-tag type="info" effect="plain">{{ t('editor.roleView') }}</el-tag>
+          <span class="section-desc">仅允许查看文档</span>
+        </div>
+        <el-select
+          v-model="viewIds"
+          multiple
+          filterable
+          collapse-tags
+          :placeholder="t('editor.sharingUser')"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="u in optionsForView"
+            :key="u.id"
+            :label="u.login_name"
+            :value="u.id"
+          />
+        </el-select>
+      </div>
     </div>
 
-    <el-button
-      type="primary"
-      plain
-      style="width: 100%; margin-top: 8px; margin-bottom: 16px; border-style: dashed;"
-      :icon="Plus"
-      @click="rows.push({ user_id: undefined, role: 'view' })"
-    >
-      {{ t("editor.sharingAdd") }}
-    </el-button>
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">{{ t("inbox.cancel") }}</el-button>
       <el-button type="primary" :icon="Check" :loading="saving" @click="save">
@@ -61,12 +92,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { ElMessage } from "element-plus";
-// 💡 新增：引入图标
-import { Plus, Delete, Check } from "@element-plus/icons-vue";
+import { Check } from "@element-plus/icons-vue";
+import { useAuthStore } from "@/stores/auth";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -79,31 +110,71 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-import { useAuthStore } from "@/stores/auth";
-import { computed } from "vue";
 const auth = useAuthStore();
 
 const users = ref<Array<{ id: number; login_name: string }>>([]);
-const rows = ref<Array<{ user_id: number | undefined; role: string }>>([]);
+const editIds = ref<number[]>([]);
+const commentIds = ref<number[]>([]);
+const viewIds = ref<number[]>([]);
+const isPublic = ref(false);
+const docStatus = ref("");
 const saving = ref(false);
 
-const filteredUsers = computed(() => {
-  if (!auth.user) return users.value;
-  return users.value.filter((u) => u.id !== auth.user!.id);
+const availableUsers = computed(() => {
+  return users.value.filter(u => u.id !== auth.user?.id);
 });
 
+/**
+ * 规则逻辑：
+ * 1. 只读 (View) 选择后，不可选择编辑和批注 (V disjoint E,C)
+ * 2. 编辑 (Edit) 选择后，不可选择只读，但可以选择批注 (E disjoint V, E can overlap C)
+ * 3. 批注 (Comment) 选择后，不可选择其他两个 (C disjoint V, C disjoint E ??) 
+ *    注：用户说“编辑后可选批注”，但又说“批注后不可选其他两个”。
+ *    理解为：Edit 是最高级，选了 Edit 可以顺便选 Comment（或在 Comment 列表里看到）；
+ *    但如果一个人没选 Edit 而是直接选了 Comment，就不能选 Edit 了。
+ */
+
+const optionsForView = computed(() => {
+  // 只读选项：排除已经选了编辑或批注的人
+  return availableUsers.value.filter(u => !editIds.value.includes(u.id) && !commentIds.value.includes(u.id));
+});
+
+const optionsForEdit = computed(() => {
+  // 编辑选项：排除已经选了只读的人；
+  // 另外根据“批注后不可选其他”，如果已经在批注里且不在编辑里，也排除？
+  return availableUsers.value.filter(u => {
+    const inView = viewIds.value.includes(u.id);
+    const inCommentOnly = commentIds.value.includes(u.id) && !editIds.value.includes(u.id);
+    return !inView && !inCommentOnly;
+  });
+});
+
+const optionsForComment = computed(() => {
+  // 批注选项：排除只读；编辑的人可以选批注
+  return availableUsers.value.filter(u => !viewIds.value.includes(u.id));
+});
 
 async function loadAll() {
   if (!props.documentId) return;
-  const [{ data: u }, { data: p }] = await Promise.all([
+  const [{ data: u }, { data: p }, { data: doc }] = await Promise.all([
     api.get("/users"),
     api.get(`/documents/${props.documentId}/permissions`),
+    api.get(`/documents/${props.documentId}`),
   ]);
   users.value = u.items;
-  rows.value = (p.items as Array<{ user_id: number; role: string }>).map((x) => ({
-    user_id: x.user_id,
-    role: x.role,
-  }));
+  isPublic.value = doc.is_public;
+  docStatus.value = doc.status;
+
+  editIds.value = [];
+  commentIds.value = [];
+  viewIds.value = [];
+
+  (p.items as Array<{ user_id: number; role: string }>).forEach(perm => {
+    if (perm.role === 'edit' && doc.status === 'draft') editIds.value.push(perm.user_id);
+    else if (perm.role === 'comment') commentIds.value.push(perm.user_id);
+    else if (perm.role === 'edit' && doc.status !== 'draft') viewIds.value.push(perm.user_id); // 降级
+    else viewIds.value.push(perm.user_id);
+  });
 }
 
 watch(
@@ -113,7 +184,9 @@ watch(
       try {
         await loadAll();
       } catch {
-        rows.value = [];
+        editIds.value = [];
+        commentIds.value = [];
+        viewIds.value = [];
       }
     }
   },
@@ -121,12 +194,23 @@ watch(
 
 async function save() {
   if (!props.documentId) return;
-  const grants = rows.value
-    .filter((r) => r.user_id != null)
-    .map((r) => ({ user_id: r.user_id, role: r.role }));
+  
+  // 权限映射回后端 role
+  const grantsMap = new Map<number, string>();
+  
+  // 优先级顺序：View < Comment < Edit
+  viewIds.value.forEach(id => grantsMap.set(id, 'view'));
+  commentIds.value.forEach(id => grantsMap.set(id, 'comment'));
+  editIds.value.forEach(id => grantsMap.set(id, 'edit'));
+
+  const grants = Array.from(grantsMap.entries()).map(([user_id, role]) => ({ user_id, role }));
+
   saving.value = true;
   try {
-    await api.post(`/documents/${props.documentId}/permissions`, { grants });
+    await Promise.all([
+      api.post(`/documents/${props.documentId}/permissions`, { grants }),
+      api.patch(`/documents/${props.documentId}`, { is_public: isPublic.value })
+    ]);
     ElMessage.success(t("editor.sharingSaved"));
     emit("saved");
     emit("update:modelValue", false);
@@ -144,10 +228,17 @@ async function save() {
   font-size: 13px;
   margin-bottom: 12px;
 }
-.row {
+.perm-section {
+  margin-bottom: 24px;
+}
+.section-header {
   display: flex;
   align-items: center;
+  gap: 12px;
   margin-bottom: 8px;
-  flex-wrap: wrap;
+}
+.section-desc {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 </style>

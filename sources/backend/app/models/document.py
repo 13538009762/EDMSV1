@@ -12,10 +12,12 @@ class Document(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    doc_number = db.Column(db.String(64), unique=True, nullable=True) # YYYYMMDDXXX
     title = db.Column(db.String(512), nullable=False, default="Untitled")
     status = db.Column(
         db.String(32), nullable=False, default="draft"
     )  # draft, in_approval, approved, rejected
+    is_public = db.Column(db.Boolean, default=False)
     current_version_id = db.Column(db.Integer, db.ForeignKey("document_versions.id"), nullable=True)
     page_settings_json = db.Column(db.Text, nullable=True)  # JSON string
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -35,6 +37,7 @@ class Document(db.Model):
         cascade="all, delete-orphan",
     )
     permissions = db.relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
+    approval_flows = db.relationship("ApprovalFlow", back_populates="document", cascade="all, delete-orphan")
 
 
 class DocumentVersion(db.Model):

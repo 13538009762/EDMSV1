@@ -15,6 +15,7 @@ services:
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=sqlite:////app/data/edms.db
+      - STORAGE_PATH=/app/data
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
     networks:

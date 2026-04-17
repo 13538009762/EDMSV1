@@ -25,7 +25,7 @@ def _serialize(c: Comment) -> dict:
         "status": c.status,
         "parent_id": c.parent_id,
         "hidden_when_resolved": c.hidden_when_resolved,
-        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "created_at": c.created_at.isoformat() + "Z" if c.created_at else None,
     }
 
 
