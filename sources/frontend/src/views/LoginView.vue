@@ -22,10 +22,17 @@
             <el-form-item :label="t('login.loginName')">
               <el-input v-model="loginName" autocomplete="username" />
             </el-form-item>
+            <el-form-item :label="t('login.password', 'Password')">
+              <el-input v-model="password" type="password" show-password autocomplete="current-password" />
+            </el-form-item>
             <el-button type="primary" native-type="submit" :loading="loading" style="width: 100%">{{
               t("login.submit")
             }}</el-button>
-            <div class="admin-link">
+            <div class="bottom-links">
+              <el-button type="primary" link @click="router.push({ name: 'register' })">{{
+                t("login.register", "Register Account")
+              }}</el-button>
+              <el-divider direction="vertical" />
               <el-button type="primary" link @click="router.push({ name: 'admin' })">{{
                 t("login.goAdmin")
               }}</el-button>
@@ -46,6 +53,7 @@ import { useAuthStore } from "@/stores/auth";
 import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
 
 const loginName = ref("");
+const password = ref("");
 const loading = ref(false);
 const router = useRouter();
 const route = useRoute();
@@ -71,7 +79,7 @@ const carouselImages = ref([
 async function submit() {
   loading.value = true;
   try {
-    await auth.login(loginName.value.trim());
+    await auth.login(loginName.value.trim(), password.value);
     const r = (route.query.redirect as string) || "/";
     router.replace(r);
   } catch {
@@ -144,7 +152,7 @@ async function submit() {
   object-fit: fill;
   display: block;
 }
-.admin-link {
+.admin-link, .bottom-links {
   margin-top: 12px;
   text-align: center;
 }

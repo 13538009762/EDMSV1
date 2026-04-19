@@ -3,7 +3,7 @@ import { ref, computed } from "vue";
 import api from "@/api/client";
 
 export const useAuthStore = defineStore("auth", () => {
-  const token = ref<string | null>(localStorage.getItem("edms_token"));
+  const token = ref<string | null>(sessionStorage.getItem("edms_token"));
   const user = ref<{ id: number; login_name: string; display_name: string; is_manager?: boolean } | null>(
     null,
   );
@@ -12,12 +12,12 @@ export const useAuthStore = defineStore("auth", () => {
 
   function setToken(t: string | null) {
     token.value = t;
-    if (t) localStorage.setItem("edms_token", t);
-    else localStorage.removeItem("edms_token");
+    if (t) sessionStorage.setItem("edms_token", t);
+    else sessionStorage.removeItem("edms_token");
   }
 
-  async function login(loginName: string) {
-    const { data } = await api.post("/auth/login", { login_name: loginName });
+  async function login(loginName: string, password?: string) {
+    const { data } = await api.post("/auth/login", { login_name: loginName, password });
     setToken(data.access_token);
     user.value = data.user;
     return data;

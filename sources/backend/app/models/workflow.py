@@ -7,11 +7,13 @@ class ApprovalFlow(db.Model):
     __tablename__ = "approval_flows"
 
     id = db.Column(db.Integer, primary_key=True)
-    document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=False)
-    flow_type = db.Column(db.String(32), nullable=False)  # parallel, sequential
+    document_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=True)
+    rel_id = db.Column(db.Integer, nullable=True) # Linked object ID (e.g. User ID for registration)
+    flow_type = db.Column(db.String(32), nullable=False)  # parallel, sequential, registration
     status = db.Column(db.String(32), nullable=False, default="active")  # active, completed, rejected
     current_order = db.Column(db.Integer, default=1)  # for sequential: min step pending
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     document = db.relationship("Document", back_populates="approval_flows")
     participants = db.relationship(
@@ -57,7 +59,13 @@ class AuditLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     document_version_id = db.Column(db.Integer, db.ForeignKey("document_versions.id", ondelete="SET NULL"), nullable=True)
+    document_id = db.Column(db.Integer, db.ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    action = db.Column(db.String(64), nullable=True)  # VIEW, EXPORT_PDF, EXPORT_DOCX, DOWNLOAD, DELETE, CHANGE_PERM
     summary = db.Column(db.String(512), nullable=False)
     payload_json = db.Column(db.Text, nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    document = db.relationship("Document", foreign_keys=[document_id])

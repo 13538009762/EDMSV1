@@ -5,6 +5,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/login", name: "login", component: () => import("@/views/LoginView.vue") },
+    { path: "/register", name: "register", component: () => import("@/views/RegisterView.vue") },
     { path: "/admin", name: "admin", component: () => import("@/views/AdminView.vue") },
     {
       path: "/",
@@ -15,6 +16,7 @@ const router = createRouter({
         { path: "import", name: "import", component: () => import("@/views/ImportView.vue"), meta: { requiresManager: true } },
         { path: "inbox", name: "inbox", component: () => import("@/views/InboxView.vue") },
         { path: "dashboard", name: "dashboard", component: () => import("@/views/DashboardView.vue") },
+        { path: "templates", name: "templates", component: () => import("@/views/TemplateView.vue") },
         {
           path: "doc/:id",
           name: "editor",
@@ -26,6 +28,8 @@ const router = createRouter({
           component: () => import("@/views/DiffView.vue"),
         },
         { path: "personal", name: "personal", component: () => import("@/views/PersonalView.vue") },
+        { path: "users", name: "users", component: () => import("@/views/UserManagementView.vue"), meta: { requiresManager: true } },
+        { path: "audit-log", name: "audit-log", component: () => import("@/views/AuditLogView.vue"), meta: { requiresAdmin: true } },
       ],
     },
   ],
@@ -43,6 +47,11 @@ router.beforeEach((to, _from, next) => {
   }
   // 检查是否需要 manager 权限
   if (to.meta.requiresManager && !auth.user?.is_manager) {
+    next({ name: "library" });
+    return;
+  }
+  // 检查是否需要 system admin 权限
+  if (to.meta.requiresAdmin && auth.user?.login_name !== 'admin') {
     next({ name: "library" });
     return;
   }

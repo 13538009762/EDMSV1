@@ -700,7 +700,7 @@ def _fetch_resources(uri, rel):
     return uri
 
 
-def _write_pdf_from_html(html: str, dest: BytesIO) -> None:
+def _write_pdf_from_html(html: str, dest: BytesIO, watermark_text: str = None) -> None:
     """
     生成 PDF。xhtml2pdf 只认 pisaContext.fontList，不能仅靠 pdfmetrics.registerFont，
     否则 font-family 会回退 Helvetica，中文/俄语成方块。
@@ -779,6 +779,20 @@ def _write_pdf_from_html(html: str, dest: BytesIO) -> None:
             pagesize=context.pageSize,
         )
 
+        if watermark_text:
+            def draw_watermark(canvas, d):
+                canvas.saveState()
+                try:
+                    canvas.setFont("PDFCJK", 40)
+                    canvas.setFillGray(0.5, 0.2)
+                    canvas.translate(d.pagesize[0] / 2, d.pagesize[1] / 2)
+                    canvas.rotate(45)
+                    canvas.drawCentredString(0, 0, watermark_text)
+                except Exception:
+                    pass
+                canvas.restoreState()
+            body.onPage = draw_watermark
+
     doc.addPageTemplates([body] + list(context.templateList.values()))
 
     if context.multiBuild:
@@ -796,7 +810,7 @@ def _write_pdf_from_html(html: str, dest: BytesIO) -> None:
     cleanFiles()
 
 
-def export_pdf_bytes(doc_json: str, page_settings: dict = None) -> bytes:
+def export_pdf_bytes(doc_json: str, page_settings: dict = None, watermark_text: str = None) -> bytes:
     """从 TipTap JSON 生成 PDF 文档，使用已注册的通用字体"""
     font_family_css, pdf_font_name = get_pdf_font_spec()
     html = tiptap_json_to_html(
@@ -806,7 +820,7 @@ def export_pdf_bytes(doc_json: str, page_settings: dict = None) -> bytes:
         page_settings=page_settings,
     )
     out = BytesIO()
-    _write_pdf_from_html(html, out)
+    _write_pdf_from_html(html, out, watermark_text=watermark_text)
     return out.getvalue()
 
 

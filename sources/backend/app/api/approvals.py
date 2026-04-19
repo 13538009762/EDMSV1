@@ -5,10 +5,12 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from app.extensions import db
-from app.models import Document
+from app.models.core import User, Department
+from app.models.document import Document
 from app.models.workflow import ApprovalFlow, ApprovalParticipant
 from app.services.approval_service import apply_decision
 from app.services.document_access import user_can_view_document
+from sqlalchemy import text
 from app.utils.auth import current_user
 
 bp = Blueprint("approvals", __name__)
@@ -24,14 +26,27 @@ def inbox():
     flows = ApprovalFlow.query.filter_by(status="active").all()
     for flow in flows:
         doc = flow.document
-        if not user_can_view_document(user, doc):
+        if flow.flow_type == "registration":
+            # Admin or Manager of the appropriate dept can see it
+            # Already checked by participants filter below, but good to have a title
+            title = f"User Registration: {User.query.get(flow.rel_id).display_name() if flow.rel_id else 'New User'}"
+        elif doc:
+            if not user_can_view_document(user, doc):
+                continue
+            title = doc.title
+        else:
             continue
+
         for p in flow.participants:
-            if p.user_id != user.id:
-                continue
-            if p.decision:
-                continue
+            # NORMAL FILTER: only show if it is MY turn
+            is_my_turn = p.user_id == user.id and not p.decision
             if flow.flow_type == "sequential" and p.step_order != flow.current_order:
+                is_my_turn = False
+            
+            # ADMIN OVERRIDE: admin can see and handle ANY registration flow active step
+            force_show = (user.login_name == 'admin' and flow.flow_type == "registration" and p.step_order == flow.current_order)
+            
+            if not is_my_turn and not force_show:
                 continue
             participants = []
             for p_detail in flow.participants:
@@ -49,8 +64,8 @@ def inbox():
             items.append(
                 {
                     "participant_id": p.id,
-                    "document_id": doc.id,
-                    "title": doc.title,
+                    "document_id": doc.id if doc else None,
+                    "title": title,
                     "flow_status": flow.status,
                     "flow_type": flow.flow_type,
                     "progress": {"done": done, "total": total},
@@ -69,10 +84,15 @@ def decide(participant_id: int):
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     p = db.session.get(ApprovalParticipant, participant_id)
-    if not p or p.user_id != user.id:
+    if not p:
         return jsonify({"error": "Not found"}), 404
+    
+    # Check if this flow is for the current user OR if current user is admin manually taking over a registration
+    is_admin_override = (user.login_name == 'admin' and p.flow.flow_type == 'registration')
+    if p.user_id != user.id and not is_admin_override:
+         return jsonify({"error": "Forbidden"}), 403
     doc = p.flow.document
-    if not user_can_view_document(user, doc):
+    if doc and not user_can_view_document(user, doc):
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json(silent=True) or {}
     decision = (data.get("decision") or "").lower()
@@ -86,7 +106,7 @@ def decide(participant_id: int):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     db.session.commit()
-    return jsonify({"ok": True, "document_status": doc.status})
+    return jsonify({"ok": True, "document_status": doc.status if doc else "N/A"})
 
 
 @bp.get("/my-applications")

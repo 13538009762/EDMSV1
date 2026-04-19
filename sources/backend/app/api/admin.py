@@ -91,3 +91,50 @@ def admin_import_master_data():
 
     return jsonify(stats), 200
 
+
+from app.models.workflow import AuditLog
+from flask_jwt_extended import jwt_required
+
+@bp.get("/audit-logs")
+@jwt_required()
+def admin_list_audit_logs():
+    """Get audit logs (System Admin only)"""
+    user = current_user()
+    if not user or user.login_name != 'admin':
+        return jsonify({"error": "Forbidden"}), 403
+
+    query = AuditLog.query
+
+    # Filters
+    document_id = request.args.get("document_id")
+    action = request.args.get("action")
+    user_id = request.args.get("user_id")
+
+    if document_id:
+        query = query.filter(AuditLog.document_id == document_id)
+    if action:
+        query = query.filter(AuditLog.action == action)
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
+
+    page = int(request.args.get("page", 1))
+    size = int(request.args.get("size", 20))
+    
+    total = query.count()
+    logs = query.order_by(AuditLog.created_at.desc()).offset((page - 1) * size).limit(size).all()
+
+    items = []
+    for lg in logs:
+        items.append({
+            "id": lg.id,
+            "document_id": lg.document_id,
+            "document_title": lg.document.title if lg.document else None,
+            "user_id": lg.user_id,
+            "user_login": lg.user.login_name if lg.user else None,
+            "action": lg.action,
+            "summary": lg.summary,
+            "ip_address": lg.ip_address,
+            "created_at": lg.created_at.isoformat() + "Z" if lg.created_at else None
+        })
+
+    return jsonify({"total": total, "items": items})

@@ -20,6 +20,10 @@ class Document(db.Model):
     is_public = db.Column(db.Boolean, default=False)
     current_version_id = db.Column(db.Integer, db.ForeignKey("document_versions.id"), nullable=True)
     page_settings_json = db.Column(db.Text, nullable=True)  # JSON string
+    space_id = db.Column(db.Integer, db.ForeignKey("spaces.id"), nullable=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=True)
+    is_template = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)  # soft delete for recycle bin
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -38,6 +42,8 @@ class Document(db.Model):
     )
     permissions = db.relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
     approval_flows = db.relationship("ApprovalFlow", back_populates="document", cascade="all, delete-orphan")
+    space = db.relationship("Space", back_populates="documents", foreign_keys=[space_id])
+    parent = db.relationship("Document", remote_side="Document.id", foreign_keys=[parent_id], backref=db.backref("children", lazy="dynamic"))
 
 
 class DocumentVersion(db.Model):

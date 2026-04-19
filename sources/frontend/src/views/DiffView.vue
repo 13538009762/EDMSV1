@@ -2,7 +2,10 @@
   <div v-loading="loading" class="diff-page-container">
     <div class="page-header">
       <div class="header-left">
-        <h2 class="page-title">{{ t("diff.title") }}</h2>
+        <div class="title-with-back">
+          <el-button link @click="router.back()" :icon="Back" class="back-btn" />
+          <h2 class="page-title">{{ t("diff.title") }}</h2>
+        </div>
         <div v-if="mode === 'blame' && legend.length" class="blame-legend">
           <span v-for="l in legend" :key="l.name" class="legend-item">
             <span class="color-box" :style="{ backgroundColor: l.color }"></span>
@@ -49,11 +52,15 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
+import { Back } from "@element-plus/icons-vue";
 
 const route = useRoute();
+const router = useRouter();
+
+
 const { t } = useI18n();
 const id = Number(route.params.id);
 const versions = ref<Array<{ id: number; version_no: number; created_by_name: string }>>([]);
@@ -135,9 +142,27 @@ onMounted(async () => {
 }
 
 .page-title {
-  margin: 0 0 12px 0;
+  margin: 0;
   font-size: 24px;
   color: #1a1a1a;
+}
+
+.title-with-back {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.back-btn {
+  font-size: 22px;
+  color: var(--el-text-color-primary);
+  padding: 0;
+  height: auto;
+}
+
+.back-btn:hover {
+  color: var(--el-color-primary);
 }
 
 .header-left {

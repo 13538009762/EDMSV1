@@ -11,6 +11,7 @@ from app.models.workflow import (
     ApprovalFlow,
     ApprovalParticipant,
 )
+from app.models.core import User
 
 
 def cancel_active_flows(document_id: int) -> None:
@@ -29,7 +30,9 @@ def start_flow(
         raise ValueError("Document must be draft")
     if not approver_user_ids:
         raise ValueError("At least one approver")
+    print(f"[DEBUG] Cancelling active flows for doc {document.id}")
     cancel_active_flows(document.id)
+    print(f"[DEBUG] Creating ApprovalFlow object for type {flow_type}")
     flow = ApprovalFlow(
         document_id=document.id,
         flow_type=flow_type,
@@ -37,14 +40,19 @@ def start_flow(
         current_order=1,
     )
     db.session.add(flow)
+    print("[DEBUG] Flushing flow to DB...")
     db.session.flush()
+    print(f"[DEBUG] Flow ID {flow.id} flushed. Adding {len(approver_user_ids)} participants...")
     for i, uid in enumerate(approver_user_ids, start=1):
         db.session.add(
             ApprovalParticipant(flow_id=flow.id, user_id=uid, step_order=i),
         )
+    print("[DEBUG] Updating document status to in_approval...")
     document.status = "in_approval"
     document.updated_at = datetime.utcnow()
+    print("[DEBUG] Finalizing flush for start_flow...")
     db.session.flush()
+    print("[DEBUG] start_flow logic complete.")
     return flow
 
 
@@ -52,7 +60,7 @@ def apply_decision(
     participant: ApprovalParticipant,
     decision: str,
     reason: Optional[str],
-    document: Document,
+    document: Optional[Document],
 ) -> None:
     if participant.flow.status != "active":
         raise ValueError("Flow not active")
@@ -75,34 +83,57 @@ def apply_decision(
 
     if decision == "reject":
         flow.status = "rejected"
-        document.status = "rejected"
-        document.updated_at = datetime.utcnow()
+        if document:
+            document.status = "rejected"
+            document.updated_at = datetime.utcnow()
+        if flow.flow_type == "registration":
+            user = User.query.get(flow.rel_id)
+            if user:
+                user.registration_status = "rejected"
         return
 
     if flow.flow_type == "parallel":
-        # 现在 participant.decision 在内存里有值了，pending 计算就会完全准确
         pending = [p for p in flow.participants if not p.decision]
         if not pending:
-            if all(
-                p.decision and p.decision.decision == "approve" for p in flow.participants
-            ):
+            if all(p.decision and p.decision.decision == "approve" for p in flow.participants):
                 flow.status = "completed"
-                document.status = "approved"
+                if document:
+                    document.status = "approved"
             else:
                 flow.status = "rejected"
-                document.status = "rejected"
-        document.updated_at = datetime.utcnow()
+                if document:
+                    document.status = "rejected"
+        if document:
+            document.updated_at = datetime.utcnow()
         return
 
-    # sequential approve
+    # sequential / registration approve
+    # For registration, multiple people might be at step 1 (HR).
+    # The first one to approve moves current_order to 2, effectively skipping others.
     orders = sorted({p.step_order for p in flow.participants})
     idx = orders.index(flow.current_order)
     if idx + 1 < len(orders):
         flow.current_order = orders[idx + 1]
+        # Intermediate status for registration (Moving from HR to Admin)
+        if flow.flow_type == "registration" and flow.current_order == 2:
+            user = User.query.get(flow.rel_id)
+            if user:
+                user.registration_status = "pending_admin"
     else:
         flow.status = "completed"
-        document.status = "approved"
-    document.updated_at = datetime.utcnow()
+        if document:
+            document.status = "approved"
+        if flow.flow_type == "registration":
+            user = User.query.get(flow.rel_id)
+            if user:
+                user.registration_status = "active"
+                # Also generate a unique employee number if it was REQ_...
+                if user.employee_no.startswith("REQ_"):
+                    import random
+                    user.employee_no = f"E{datetime.now().year}{random.randint(1000, 9999)}"
+    
+    if document:
+        document.updated_at = datetime.utcnow()
 
 
 def recall_flow(document: Document) -> None:

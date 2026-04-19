@@ -4,10 +4,39 @@
       <h2>{{ t("nav.library", "Document Library") }}</h2>
     </div>
 
-    <el-card shadow="sm" class="table-card">
+    <el-container class="library-layout">
+      <el-aside width="260px" class="tree-sidebar">
+        <el-card shadow="sm" class="tree-card" :body-style="{ padding: '16px 8px' }">
+          <div class="tree-header">
+            <el-icon><Folder /></el-icon> {{ t("library.wikiTree", "Wiki Directory") }}
+          </div>
+          <el-tree
+            :data="treeData"
+            :props="defaultProps"
+            @node-click="handleNodeClick"
+            highlight-current
+            :expand-on-click-node="false"
+            class="custom-tree"
+          >
+            <template #default="{ node, data }">
+              <span class="custom-tree-node">
+                <el-icon v-if="data.is_space"><Connection /></el-icon>
+                <el-icon v-else><Document /></el-icon>
+                <span class="node-label" :title="node.label">{{ node.label }}</span>
+              </span>
+            </template>
+          </el-tree>
+        </el-card>
+      </el-aside>
+
+      <el-main class="library-main">
+        <el-card shadow="sm" class="table-card">
       <div class="toolbar">
         <div class="toolbar-left">
           <el-button type="primary" :icon="Plus" @click="createDoc">{{ t("library.newDoc") }}</el-button>
+          <el-tag v-if="currentSpaceId" closable @close="clearSpaceFilter" type="info" size="large" effect="plain" style="margin-left: 10px; font-weight: 600;">
+            <el-icon><Folder /></el-icon> {{ currentSpaceName }}
+          </el-tag>
           <el-upload
             :show-file-list="false"
             accept=".docx"
@@ -19,6 +48,12 @@
         </div>
         
         <div class="toolbar-right">
+          <el-button-group v-if="selectedIds.length > 0" style="margin-right: 12px;">
+            <el-button type="danger" @click="batchDelete">{{ t('common.delete', 'Batch Delete') }} ({{ selectedIds.length }})</el-button>
+            <el-button type="warning" @click="batchShare(true)">{{ t('common.share', 'Share All') }}</el-button>
+            <el-button type="info" @click="batchShare(false)">{{ t('common.unshare', 'Unshare All') }}</el-button>
+          </el-button-group>
+
           <el-input
             v-model="searchQuery"
             :placeholder="t('editor.searchPlaceholder')"
@@ -55,7 +90,8 @@
         </div>
       </div>
 
-      <el-table :data="paginatedItems" v-loading="loading" stripe style="width: 100%">
+      <el-table :data="paginatedItems" v-loading="loading" stripe style="width: 100%" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="doc_number" :label="t('library.colId')" width="140" />
         <el-table-column prop="title" :label="t('library.colTitle')" min-width="180" />
         <el-table-column prop="status" :label="t('library.colStatus')" width="160">
@@ -66,7 +102,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="owner_name" :label="t('library.colOwner')" min-width="120" />
-        <el-table-column prop="owner_department" :label="t('library.colDepartment')" min-width="140" />
+        <el-table-column prop="owner_department" :label="t('library.colDepartment')" min-width="140">
+          <template #default="{ row }">
+            {{ t('dept.' + row.owner_department, row.owner_department) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="updated_at" :label="t('library.colUpdatedAt')" width="170">
           <template #default="{ row }">
             <div v-if="row.updated_at" style="font-size: 13px; color: var(--el-text-color-secondary);">
@@ -125,7 +165,9 @@
           :total="filteredItems.length"
         />
       </div>
-    </el-card>
+        </el-card>
+      </el-main>
+    </el-container>
 
     <DocumentShareDialog
       v-model="shareOpen"
@@ -144,7 +186,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Plus, Upload, Refresh, Search } from "@element-plus/icons-vue"; // 引入图标
+import { Plus, Upload, Refresh, Search, Folder, Document, Connection } from "@element-plus/icons-vue"; // 引入图标
 import { formatLocalDate } from "@/utils/date";
 import { Editor } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
@@ -164,6 +206,7 @@ interface DocRow {
   can_manage_permissions?: boolean;
   owner_name?: string;
   owner_department?: string;
+  doc_number?: string;
   updated_at?: string;
 }
 
@@ -176,6 +219,37 @@ const statusFilter = ref("");
 const shareOpen = ref(false);
 const shareDocId = ref<number | null>(null);
 const searchQuery = ref("");
+const currentSpaceId = ref<string | null>(null);
+const currentSpaceName = ref("");
+const selectedIds = ref<number[]>([]);
+
+function handleSelectionChange(selection: DocRow[]) {
+  selectedIds.value = selection.map(row => row.id);
+}
+
+async function batchDelete() {
+  try {
+    await ElMessageBox.confirm(
+      t("editor.deleteConfirm"),
+      t("common.warning"),
+      { type: "warning" }
+    );
+    await api.post("/documents/batch-delete", { doc_ids: selectedIds.value });
+    ElMessage.success(t("common.success"));
+    await load();
+  } catch {}
+}
+
+async function batchShare(isPublic: boolean) {
+  try {
+    await api.post("/documents/batch-share", { 
+      doc_ids: selectedIds.value,
+      is_public: isPublic
+    });
+    ElMessage.success(t("common.success"));
+    await load();
+  } catch {}
+}
 
 // Pagination
 const currentPage = ref(1);
@@ -200,6 +274,7 @@ async function load() {
   try {
     const params: Record<string, string> = { scope: scope.value || "all" };
     if (statusFilter.value) params.status = statusFilter.value;
+    if (currentSpaceId.value) params.space_id = currentSpaceId.value;
     const { data } = await api.get("/documents", { params });
     items.value = data.items as DocRow[];
   } finally {
@@ -207,9 +282,53 @@ async function load() {
   }
 }
 
+const treeData = ref([]);
+const defaultProps = {
+  children: "children",
+  label: (data: any) => data.title || data.name,
+};
+
+async function loadTree() {
+  try {
+    const { data } = await api.get('/documents/tree');
+    treeData.value = data.items;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function handleNodeClick(data: any) {
+  if (data.is_space) {
+    // 点击空间节点，切换表格过滤
+    const sid = data.id || data.space_id;
+    if (sid === "space_unassigned") {
+      currentSpaceId.value = "unassigned";
+      currentSpaceName.value = t("library.scopeMine");
+    } else {
+      currentSpaceId.value = sid.toString().replace("space_", "");
+      currentSpaceName.value = data.name || data.title;
+    }
+    load();
+  } else if (data.id) {
+    // 点击文档节点，跳转编辑器
+    router.push({ name: "editor", params: { id: data.id } });
+  }
+}
+
+function clearSpaceFilter() {
+  currentSpaceId.value = null;
+  currentSpaceName.value = "";
+  load();
+}
+
 async function createDoc() {
   try {
-    const { data } = await api.post("/documents", { title: t("common.untitled") });
+    const payload: any = { title: t("common.untitled") };
+    if (currentSpaceId.value && currentSpaceId.value !== "unassigned") {
+      payload.space_id = currentSpaceId.value;
+    }
+    
+    const { data } = await api.post("/documents", payload);
     router.push({ name: "editor", params: { id: data.id } });
   } catch {
     ElMessage.error(t("library.createFailed"));
@@ -227,7 +346,11 @@ function openShare(id: number) {
 
 async function onImportDocx(file: UploadRawFile) {
   try {
-    const { data: docData } = await api.post("/documents", { title: file.name.replace(/\.docx$/, "") });
+    const payload: any = { title: file.name.replace(/\.docx$/, "") };
+    if (currentSpaceId.value && currentSpaceId.value !== "unassigned") {
+      payload.space_id = currentSpaceId.value;
+    }
+    const { data: docData } = await api.post("/documents", payload);
     const docId = docData.id;
     
     const ab = await file.arrayBuffer();
@@ -293,7 +416,10 @@ async function confirmDelete(id: number) {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  loadTree();
+});
 </script>
 
 <style scoped>
@@ -341,5 +467,47 @@ onMounted(load);
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.library-layout {
+  gap: 24px;
+}
+.tree-sidebar {
+  overflow: hidden;
+}
+.tree-card {
+  height: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+}
+.tree-header {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--el-text-color-primary);
+  margin-bottom: 12px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.library-main {
+  padding: 0;
+  overflow: hidden;
+}
+
+.custom-tree {
+  background: transparent;
+}
+.custom-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  width: 100%;
+}
+.node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

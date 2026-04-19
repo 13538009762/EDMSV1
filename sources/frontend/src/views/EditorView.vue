@@ -149,6 +149,29 @@
     <div class="body">
       <div class="main-wrapper" v-if="editor">
         <div class="main-paper" :class="page.paperFormat">
+          <div class="watermark-overlay" :style="{ backgroundImage: watermarkDataUrl ? `url(${watermarkDataUrl})` : '' }"></div>
+          
+          <bubble-menu
+            v-if="editor && meta.can_edit"
+            :editor="editor"
+            :tippy-options="{ duration: 100, placement: 'top' }"
+            class="ai-bubble-menu"
+          >
+            <el-dropdown size="small" @command="handleAiAction" trigger="click" placement="top">
+              <el-button size="small" type="primary" plain class="ai-btn">✨ AI Assistant <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="summarize">Summarize</el-dropdown-item>
+                  <el-dropdown-item command="expand">Expand</el-dropdown-item>
+                  <el-dropdown-item command="polish">Polish Tone</el-dropdown-item>
+                  <el-dropdown-item divided command="translate_en">Translate to EN</el-dropdown-item>
+                  <el-dropdown-item command="translate_zh">Translate to ZH</el-dropdown-item>
+                  <el-dropdown-item command="translate_ru">Translate to RU</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </bubble-menu>
+
           <editor-content :editor="editor" class="tiptap" :style="{ paddingTop: page.marginTop + 'px', paddingBottom: page.marginBottom + 'px' }" />
         </div>
       </div>
@@ -275,18 +298,22 @@
         <el-radio label="parallel">{{ t("editor.parallel") }}</el-radio>
         <el-radio label="sequential">{{ t("editor.sequential") }}</el-radio>
       </el-radio-group>
-      <el-select
-        v-model="approverIds"
-        multiple
-        filterable
-        :placeholder="t('editor.approversPlaceholder')"
-        style="width: 100%; margin-top: 12px"
-      >
-        <el-option v-for="u in filteredUserOptions" :key="u.id" :label="`${u.login_name}`" :value="u.id" />
-
-      </el-select>
+      <div style="margin-top: 12px; display: flex; gap: 8px;">
+        <el-select v-model="selectedDeptId" clearable :placeholder="t('profile.dept')" style="width: 150px">
+          <el-option v-for="d in deptOptions" :key="d.id" :label="d.name" :value="d.id" />
+        </el-select>
+        <el-select
+          v-model="approverIds"
+          multiple
+          filterable
+          :placeholder="t('editor.approversPlaceholder')"
+          style="flex: 1"
+        >
+          <el-option v-for="u in filteredUserOptions" :key="u.id" :label="`${u.display_name || u.login_name}`" :value="u.id" />
+        </el-select>
+      </div>
       <template #footer>
-        <el-button type="primary" @click="startApproval">{{ t("editor.start") }}</el-button>
+        <el-button type="primary" :loading="loading" :disabled="loading" @click="startApproval">{{ t("editor.start") }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -298,7 +325,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
-import { useEditor, EditorContent } from "@tiptap/vue-3";
+import { useEditor, EditorContent, BubbleMenu } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
@@ -373,7 +400,16 @@ const pageSettingsVisible = ref(false);
 const showApproval = ref(false);
 const approvalType = ref("parallel");
 const approverIds = ref<number[]>([]);
-const userOptions = ref<Array<{ id: number; login_name: string }>>([]);
+const userOptions = ref<Array<{ id: number; login_name: string; display_name?: string; department_id?: number }>>([]);
+const deptOptions = ref<Array<{ id: number; name: string }>>([]);
+const selectedDeptId = ref<number | null>(null);
+
+watch(showApproval, (val) => {
+  if (val) {
+    selectedDeptId.value = null;
+    approverIds.value = [];
+  }
+});
 
 const page = ref({
   orientation: "portrait",
@@ -436,8 +472,14 @@ const statusTag = computed(() => {
 });
 
 const filteredUserOptions = computed(() => {
-  if (!auth.user) return userOptions.value;
-  return userOptions.value.filter((u) => u.id !== auth.user!.id);
+  let list = userOptions.value;
+  if (auth.user) {
+    list = list.filter((u) => u.id !== auth.user!.id);
+  }
+  if (selectedDeptId.value) {
+    list = list.filter((u) => u.department_id === selectedDeptId.value);
+  }
+  return list;
 });
 
 
@@ -511,12 +553,25 @@ function fixPunc() {
 
 async function startApproval() {
   if (!approverIds.value.length) return ElMessage.warning(t("editor.selectApprovers"));
+  loading.value = true;
   try {
-    await api.post(`/documents/${docId.value}/approvals`, { type: approvalType.value, approvers: approverIds.value });
+    const { data } = await api.post(`/documents/${docId.value}/approvals`, { type: approvalType.value, approvers: approverIds.value });
     showApproval.value = false;
     ElMessage.success(t("editor.approvalStarted"));
-    loadDoc();
-  } catch { ElMessage.error(t("editor.approvalFailed")); }
+    
+    // 关键优化：手动更新本地状态，不再重刷整个接口以防挂起
+    meta.value.status = data.document_status || "in_approval";
+    meta.value.can_edit = false; // 审批中不可编辑
+    if (editor.value) editor.value.setEditable(false);
+    
+    // 异步尝试刷新，即使失败也不影响 UI 展示
+    loadDoc().catch(() => {});
+  } catch (err: any) { 
+    console.error("Approval failed:", err);
+    ElMessage.error(t("editor.approvalFailed")); 
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function newVersion() {
@@ -540,10 +595,19 @@ async function loadVersions() {
   versionList.value = data.items;
 }
 
+async function loadDepts() {
+  try {
+    const { data } = await api.get("/users/departments");
+    deptOptions.value = data;
+  } catch {}
+}
+
 async function loadDoc() {
+  console.log("[DEBUG] loadDoc started");
   loading.value = true;
   try {
     const { data } = await api.get(`/documents/${docId.value}`);
+    console.log("[DEBUG] Doc data loaded, status:", data.status);
     title.value = data.title;
     meta.value = data;
     if (data.page_settings_json) {
@@ -557,23 +621,47 @@ async function loadDoc() {
         }
     }
     editor.value?.setEditable(data.can_edit);
-    if (data.yjs_state_b64) Y.applyUpdate(ydoc, Uint8Array.from(atob(data.yjs_state_b64), (c) => c.charCodeAt(0)));
-    else if (data.content_json) {
+    if (data.yjs_state_b64) {
+      Y.applyUpdate(ydoc, Uint8Array.from(atob(data.yjs_state_b64), (c) => c.charCodeAt(0)));
+    } else if (data.content_json) {
+      console.log("[DEBUG] Loading content from JSON...");
       const j = typeof data.content_json === "string" ? JSON.parse(data.content_json) : data.content_json;
-      await nextTick();
-      editor.value?.commands.setContent(j);
+      // 关键：在协作模式下，需要确保编辑器已就绪且稍作延迟以允许插件初始化
+      setTimeout(() => {
+        if (editor.value) {
+          editor.value.commands.setContent(j, true); // true means emit update for collab
+          console.log("[DEBUG] Content set successfully.");
+        }
+      }, 300);
     }
+    
+    console.log("[DEBUG] Attaching collaboration...");
     collabDisconnect?.();
     collabDisconnect = attachDocCollab(docId.value, ydoc, awareness, { name: auth.user?.display_name || auth.user?.login_name || "User", color: userColor });
     awareness.on("update", refreshCollabList);
-    await loadStaticCollaborators();
-    if (meta.value.status !== 'approved') refreshCollabList();
-    await loadComments();
-    await loadVersions();
-    const us = await api.get("/users");
+    
+    // 并行执行次要任务
+    console.log("[DEBUG] Starting parallel tasks (comments, versions, users)...");
+    Promise.all([
+      loadComments().catch(e => console.error("Load comments failed", e)),
+      loadVersions().catch(e => console.error("Load versions failed", e)),
+      loadStaticCollaborators().catch(e => console.error("Load collabs failed", e)),
+      loadDepts().catch(e => console.error("Load depts failed", e)),
+      // 仅在列表为空时加载用户数据
+      userOptions.value.length === 0 
+        ? api.get("/users").then(us => { userOptions.value = us.data.items; }).catch(e => console.error("Load users failed", e))
+        : Promise.resolve()
+    ]).then(() => {
+       console.log("[DEBUG] Parallel tasks complete.");
+    });
 
-    userOptions.value = us.data.items;
-  } finally { loading.value = false; }
+    if (meta.value.status !== 'approved') refreshCollabList();
+  } catch (err) {
+    console.error("[DEBUG] loadDoc CRITICAL ERROR:", err);
+  } finally { 
+    loading.value = false; 
+    console.log("[DEBUG] loadDoc finished, loading=false");
+  }
 }
 
 async function saveNow() {
@@ -732,7 +820,72 @@ function setImgWidth(width: string) {
     editor.value.chain().focus().updateAttributes('image', { width }).run();
   }
 }
-onMounted(() => loadDoc());
+
+const watermarkDataUrl = ref("");
+function updateWatermark() {
+  if (!auth.user) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = 400;
+  canvas.height = 300;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((-45 * Math.PI) / 180);
+  ctx.fillStyle = "rgba(100, 100, 100, 0.08)";
+  ctx.font = "18px Inter, sans-serif";
+  ctx.textAlign = "center";
+  const text = `${auth.user?.display_name || auth.user?.login_name || 'User'} · ${auth.user?.employee_no || ''} · ${new Date().toLocaleString()}`;
+  ctx.fillText(text, 0, 0);
+  watermarkDataUrl.value = canvas.toDataURL();
+}
+
+const generatingAi = ref(false);
+async function handleAiAction(action: string) {
+  if (!editor.value || !auth.user) return;
+  const selection = editor.value.state.selection;
+  const text = editor.value.state.doc.textBetween(selection.from, selection.to, " ");
+  if (!text) return ElMessage.warning(t("editor.selectTextFirst", "Please select text"));
+  generatingAi.value = true;
+  try {
+    editor.value.chain().focus().insertContent("\n\n").run();
+    const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
+      body: JSON.stringify({ prompt: text, action })
+    });
+    if (!response.body) throw new Error("No response body");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let done = false;
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      done = readerDone;
+      if (value) {
+        const chunkStr = decoder.decode(value, { stream: true });
+        for (const line of chunkStr.split("\n")) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            if (!dataStr) continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.type === "chunk") editor.value.chain().focus().insertContent(data.content).run();
+              else if (data.type === "done") { done = true; break; }
+            } catch(e) {}
+          }
+        }
+      }
+    }
+  } catch (err) {
+    ElMessage.error("AI generation failed");
+  } finally { generatingAi.value = false; }
+}
+
+onMounted(() => {
+  loadDoc();
+  updateWatermark();
+  setInterval(updateWatermark, 60000);
+});
 onBeforeUnmount(() => { collabDisconnect?.(); awareness.off("update", refreshCollabList); editor.value?.destroy(); });
 watch(() => route.params.id, () => loadDoc());
 </script>
@@ -822,6 +975,7 @@ watch(() => route.params.id, () => loadDoc());
 }
 
 .main-paper {
+  position: relative;
   background: white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-height: 800px; /* 纸张的初始最小高度 */
@@ -1010,5 +1164,23 @@ watch(() => route.params.id, () => loadDoc());
 }
 .tiptap :deep(img.ProseMirror-selectednode) {
   outline: 3px solid var(--el-color-primary);
+}
+
+.ai-bubble-menu {
+  display: flex;
+  background-color: white;
+  padding: 4px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border: 1px solid var(--el-border-color-lighter);
+}
+.ai-btn { font-weight: bold; }
+.watermark-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 15;
+  background-repeat: repeat;
+  opacity: 0.8;
 }
 </style>

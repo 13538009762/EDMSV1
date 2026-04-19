@@ -40,6 +40,9 @@ class User(db.Model):
     position_short = db.Column(db.String(128), default="")
     manager_employee_no = db.Column(db.String(64), default="")
     is_manager = db.Column(db.Boolean, default=False)
+    password_hash = db.Column(db.String(128), nullable=True)
+    # Status: active, pending_dept, pending_admin, rejected
+    registration_status = db.Column(db.String(32), default="active", index=True)
 
     department = db.relationship("Department", back_populates="users")
     documents_owned = db.relationship(
@@ -49,3 +52,13 @@ class User(db.Model):
     def display_name(self) -> str:
         parts = [self.last_name, self.first_name]
         return " ".join(p for p in parts if p)
+
+    def set_password(self, password):
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        from werkzeug.security import check_password_hash
+        if not self.password_hash: # For legacy seeded users or direct DB adds
+            return True 
+        return check_password_hash(self.password_hash, password)

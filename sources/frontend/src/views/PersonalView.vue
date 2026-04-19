@@ -10,14 +10,43 @@
         </div>
         <div class="info">
           <h2>{{ user?.last_name }} {{ user?.first_name }}</h2>
-          <div class="detail">{{ t("personal.department") }}: {{ user?.department_name }}</div>
-          <div class="detail">{{ t("personal.position") }}: {{ user?.position_full_name || user?.position_short }}</div>
+          <div class="detail">{{ t("personal.department") }}: {{ t('dept.' + user?.department_name, user?.department_name) }}</div>
+          <div class="detail">{{ t("personal.position") }}: {{ t('pos.' + (user?.position_full_name || user?.position_short), user?.position_full_name || user?.position_short) }}</div>
           <div class="detail">{{ t("personal.login") }}: {{ user?.login_name }}</div>
           <div class="detail">{{ t("personal.employeeNo") }}: {{ user?.employee_no }}</div>
           <div class="detail" v-if="user?.gender">{{ t("personal.gender") }}: {{ user.gender === 'Male' ? t("personal.male") : t("personal.female") }}</div>
           <div class="detail" v-if="user?.birth_date">{{ t("personal.birthDate") }}: {{ user.birth_date }} ({{ t("personal.age") }}: {{ user.age }})</div>
+          <div style="margin-top: 16px;">
+            <el-button type="primary" :icon="Edit" @click="editVisible = true">{{ t('common.edit') }}</el-button>
           </div>
+        </div>
       </div>
+
+      <!-- Edit Dialog -->
+      <el-dialog :title="t('profile.title')" v-model="editVisible" width="500px">
+        <el-form :model="editForm" label-width="100px" v-loading="editLoading">
+          <el-form-item :label="t('profile.firstName')">
+            <el-input v-model="editForm.first_name" />
+          </el-form-item>
+          <el-form-item :label="t('profile.lastName')">
+            <el-input v-model="editForm.last_name" />
+          </el-form-item>
+          <el-form-item :label="t('profile.gender')">
+            <el-select v-model="editForm.gender" style="width: 100%">
+              <el-option label="Male" value="Male" />
+              <el-option label="Female" value="Female" />
+              <el-option label="Other" value="Other" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('profile.birthDate')">
+            <el-date-picker v-model="editForm.birth_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="editVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" @click="saveProfile">{{ t('common.save') }}</el-button>
+        </template>
+      </el-dialog>
       <div class="stats">
         <h3>{{ t("personal.stats") }}</h3>
         <div class="stats-grid">
@@ -49,7 +78,8 @@
 import { onMounted, computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
+import { Edit } from "@element-plus/icons-vue";
+import { ElMessage } from "element-plus";
 
 interface UserInfo {
   id: number;
@@ -88,12 +118,29 @@ const userInitials = computed(() => {
   return (first + last).toUpperCase();
 });
 
+const editVisible = ref(false);
+const editLoading = ref(false);
+const editForm = ref({ first_name: '', last_name: '', gender: '', birth_date: '' });
+
 async function loadUserInfo() {
   try {
     const { data } = await api.get("/users/me");
     user.value = data;
-  } catch (error) {
-    console.error("Failed to load user info:", error);
+    editForm.value = { ...data };
+  } catch (error) {}
+}
+
+async function saveProfile() {
+  editLoading.value = true;
+  try {
+    await api.patch(`/users/${user.value.id}`, editForm.value);
+    ElMessage.success(t('profile.saveSuccess'));
+    editVisible.value = false;
+    await loadUserInfo();
+  } catch (e) {
+    ElMessage.error(t('common.failed'));
+  } finally {
+    editLoading.value = false;
   }
 }
 
@@ -101,9 +148,7 @@ async function loadStats() {
   try {
     const { data } = await api.get("/users/me/stats");
     stats.value = data;
-  } catch (error) {
-    console.error("Failed to load stats:", error);
-  }
+  } catch (error) {}
 }
 
 onMounted(async () => {

@@ -1,140 +1,162 @@
-"""Text diff between two TipTap JSON snapshots."""
+"""Structural diff and historical blame for TipTap JSON."""
 from __future__ import annotations
-
 import difflib
 import html
 import json
 from typing import Any
 
+def _node_to_text(n: dict[str, Any]) -> str:
+    if not n: return ""
+    if n.get("type") == "text": return n.get("text", "")
+    return "".join(_node_to_text(c) for c in n.get("content") or [])
 
-def _extract_plain(node: dict[str, Any], lines: list[str]) -> None:
-    t = node.get("type")
-    if t == "text":
-        lines.append(node.get("text") or "")
-        return
-    for ch in node.get("content") or []:
-        _extract_plain(ch, lines)
-    if t in ("paragraph", "heading"):
-        lines.append("\n")
-
-
-def json_to_lines(doc_json: str) -> str:
-    try:
-        root = json.loads(doc_json)
-    except json.JSONDecodeError:
-        return ""
-    parts: list[str] = []
-    _extract_plain(root, parts)
-    return "".join(parts)
-
-
-def diff_html(old_json: str, new_json: str) -> str:
-    # 移除 .splitlines()，改为直接对比字符，实现精准的字级别差异对比
-    a = json_to_lines(old_json)
-    b = json_to_lines(new_json)
+def _render_node(node: dict[str, Any], old_node: dict[str, Any] = None) -> str:
+    """Render a node, diffing it against old_node if provided."""
+    if not node and not old_node: return ""
     
-    out: list[str] = ['<div class="diff" style="white-space: pre-wrap; font-family: inherit; line-height: 1.8;">']
-    
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
-        if tag == "equal":
-            out.append(f"<span>{html.escape(a[i1:i2])}</span>")
-        elif tag == "delete":
-            out.append(f'<del class="diff-del" style="background:#ffe6e6; color:#d32f2f; text-decoration:line-through; padding:0 2px; border-radius:3px;">{html.escape(a[i1:i2])}</del>')
-        elif tag == "insert":
-            out.append(f'<ins class="diff-ins" style="background:#e6ffe6; color:#388e3c; text-decoration:none; padding:0 2px; border-radius:3px; font-weight:bold;">{html.escape(b[j1:j2])}</ins>')
-        elif tag == "replace":
-            out.append(f'<del class="diff-del" style="background:#ffe6e6; color:#d32f2f; text-decoration:line-through; padding:0 2px; border-radius:3px;">{html.escape(a[i1:i2])}</del>')
-            out.append(f'<ins class="diff-ins" style="background:#e6ffe6; color:#388e3c; text-decoration:none; padding:0 2px; border-radius:3px; font-weight:bold;">{html.escape(b[j1:j2])}</ins>')
-            
-    out.append("</div>")
-    return "".join(out)
+    # If one is missing, it's a block level add/delete
+    if not old_node: # Added
+        return f'<div style="background:#e6ffe6; border-left:4px solid #388e3c; padding:2px 10px;">{_render_simple(node)}</div>'
+    if not node: # Deleted
+        return f'<div style="background:#ffe6e6; border-left:4px solid #d32f2f; padding:2px 10px; text-decoration:line-through; opacity:0.6;">{_render_simple(old_node)}</div>'
 
-def side_by_side_diff(old_json: str, new_json: str) -> str:
-    from difflib import HtmlDiff
-    a = json_to_lines(old_json).splitlines()
-    b = json_to_lines(new_json).splitlines()
-    
-    hd = HtmlDiff(tabsize=4, wrapcolumn=60)
-    # make_table generates a <table> string
-    table = hd.make_table(a, b, context=True, numlines=5)
-    
-    # Custom styling for the table to make it fit our UI
-    styled_table = f"""
-    <style>
-        table.diff {{ font-family: Courier, monospace; font-size: 13px; border: 1px solid #ddd; width: 100%; border-collapse: collapse; }}
-        .diff_header {{ background-color: #f0f0f0; color: #666; text-align: right; padding: 2px 8px; width: 40px; border: 1px solid #ddd; }}
-        .diff_next {{ background-color: #f0f0f0; border: 1px solid #ddd; }}
-        .diff_add {{ background-color: #e6ffe6; }}
-        .diff_chg {{ background-color: #ffffd1; }}
-        .diff_sub {{ background-color: #ffe6e6; }}
-        td {{ padding: 0 10px; border: none; word-break: break-all; }}
-    </style>
-    {table}
-    """
-    return styled_table
+    t = node.get("type", "")
+    # If types differ, show replace
+    if t != old_node.get("type"):
+        return _render_node(None, old_node) + _render_node(node, None)
 
-def blame_html(versions_data: list[dict[str, Any]]) -> str:
-    """Generate a grouped blame view across multiple versions."""
-    if not versions_data:
-        return ""
-
-    class Chunk:
-        def __init__(self, text: str, author: str, color: str, time: str):
-            self.text = text
-            self.author = author
-            self.color = color
-            self.time = time
-
-    chunks: list[Chunk] = []
-
-    for v in sorted(versions_data, key=lambda x: x.get("version_no", 0)):
-        new_lines = json_to_lines(v.get("content_json") or "{}").splitlines(keepends=True)
-        old_lines = [c.text for c in chunks]
+    # If same type, diff content
+    if t in ("paragraph", "heading", "table_cell", "table_header", "listItem"):
+        txt_old = _node_to_text(old_node)
+        txt_new = _node_to_text(node)
+        if txt_old == txt_new: return _render_simple(node)
         
-        sm = difflib.SequenceMatcher(None, old_lines, new_lines)
-        new_chunks = []
+        diff_out = []
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, txt_old, txt_new).get_opcodes():
+            if tag == "equal": diff_out.append(html.escape(txt_old[i1:i2]))
+            elif tag == "delete": diff_out.append(f'<del style="background:#ffe6e6;color:#d32f2f;">{html.escape(txt_old[i1:i2])}</del>')
+            elif tag == "insert": diff_out.append(f'<ins style="background:#e6ffe6;color:#388e3c;font-weight:bold;text-decoration:none;">{html.escape(txt_new[j1:j2])}</ins>')
+            elif tag == "replace":
+                diff_out.append(f'<del style="background:#ffe6e6;color:#d32f2f;">{html.escape(txt_old[i1:i2])}</del>')
+                diff_out.append(f'<ins style="background:#e6ffe6;color:#388e3c;font-weight:bold;text-decoration:none;">{html.escape(txt_new[j1:j2])}</ins>')
         
+        res = "".join(diff_out)
+        if t == "paragraph": return f"<p style='margin:8px 0;'>{res}</p>"
+        if t == "heading": return f"<h{node.get('attrs',{}).get('level',3)}>{res}</h{node.get('attrs',{}).get('level',3)}>"
+        if t == "listItem": return f"<li>{res}</li>"
+        return res
+
+    if t == "table":
+        # Align rows
+        old_rows = old_node.get("content") or []
+        new_rows = node.get("content") or []
+        row_out = []
+        sm = difflib.SequenceMatcher(None, [_node_to_text(r) for r in old_rows], [_node_to_text(r) for r in new_rows])
         for tag, i1, i2, j1, j2 in sm.get_opcodes():
             if tag == "equal":
-                new_chunks.extend(chunks[i1:i2])
+                for idx in range(i2-i1):
+                    row_out.append(_diff_table_row(old_rows[i1+idx], new_rows[j1+idx]))
+            elif tag == "delete":
+                for idx in range(i1, i2): row_out.append(f'<tr style="background:#ffe6e6;">{_render_simple(old_rows[idx])}</tr>')
             elif tag == "insert":
-                for line in new_lines[j1:j2]:
-                    new_chunks.append(Chunk(line, v.get("author_name", "Unknown"), v.get("author_color", "#888"), v.get("created_at", "")))
+                for idx in range(j1, j2): row_out.append(f'<tr style="background:#e6ffe6;">{_render_simple(new_rows[idx])}</tr>')
             elif tag == "replace":
-                for line in new_lines[j1:j2]:
-                    new_chunks.append(Chunk(line, v.get("author_name", "Unknown"), v.get("author_color", "#888"), v.get("created_at", "")))
-        chunks = new_chunks
+                for idx in range(i1, i2): row_out.append(f'<tr style="background:#ffe6e6;">{_render_simple(old_rows[idx])}</tr>')
+                for idx in range(j1, j2): row_out.append(f'<tr style="background:#e6ffe6;">{_render_simple(new_rows[idx])}</tr>')
+        return f'<table border="1" style="border-collapse:collapse;width:100%;border:1px solid #ddd;">{"".join(row_out)}</table>'
 
-    # Group into blocks
-    blocks = []
-    if chunks:
-        current_block = {"author": chunks[0].author, "color": chunks[0].color, "time": chunks[0].time, "lines": [chunks[0].text]}
-        for i in range(1, len(chunks)):
-            if chunks[i].author == chunks[i-1].author and chunks[i].time == chunks[i-1].time:
-                current_block["lines"].append(chunks[i].text)
-            else:
-                blocks.append(current_block)
-                current_block = {"author": chunks[i].author, "color": chunks[i].color, "time": chunks[i].time, "lines": [chunks[i].text]}
-        blocks.append(current_block)
+    return _render_simple(node)
 
-    out = ['''<div class="blame-view" style="font-family: inherit; width: 100%; border-collapse: separate; border-spacing: 0;">''']
+def _diff_table_row(r_old, r_new):
+    cells_old = r_old.get("content") or []
+    cells_new = r_new.get("content") or []
+    res = []
+    for i in range(max(len(cells_old), len(cells_new))):
+        c_o = cells_old[i] if i < len(cells_old) else None
+        c_n = cells_new[i] if i < len(cells_new) else None
+        tag = "th" if (c_n or c_o).get("type") == "table_header" else "td"
+        res.append(f'<{tag} style="border:1px solid #ddd;padding:8px;">{_render_node(c_n, c_o)}</{tag}>')
+    return f"<tr>{''.join(res)}</tr>"
+
+def _render_simple(n: dict[str, Any]) -> str:
+    if not n: return ""
+    t = n.get("type", "")
+    if t == "text":
+        s = html.escape(n.get("text", ""))
+        for m in n.get("marks", []):
+            if m["type"] == "bold": s = f"<b>{s}</b>"
+            if m["type"] == "textStyle":
+                c = m.get("attrs", {}).get("color")
+                if c: s = f'<span style="color:{c}">{s}</span>'
+        return s
+    inner = "".join(_render_simple(c) for c in n.get("content") or [])
+    if t == "paragraph": return f"<p style='margin:8px 0;'>{inner}</p>"
+    if t == "heading": return f"<h{n.get('attrs',{}).get('level',3)}>{inner}</h{n.get('attrs',{}).get('level',3)}>"
+    if t == "table": return f'<table border="1" style="border-collapse:collapse;width:100%;border:1px solid #ddd;">{inner}</table>'
+    if t == "table_row": return f"<tr>{inner}</tr>"
+    if t == "table_cell": return f'<td style="border:1px solid #ddd;padding:8px;">{inner}</td>'
+    if t == "table_header": return f'<th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;">{inner}</th>'
+    if t == "image": return f'<img src="{n.get("attrs",{}).get("src","")}" style="max-width:300px;display:block;margin:10px 0;" />'
+    if t == "bulletList": return f"<ul>{inner}</ul>"
+    if t == "orderedList": return f"<ol>{inner}</ol>"
+    if t == "listItem": return f"<li>{inner}</li>"
+    return inner
+
+def diff_html(old_json: str, new_json: str) -> str:
+    try:
+        old_doc, new_doc = json.loads(old_json), json.loads(new_json)
+    except: return ""
+    c_o, c_n = old_doc.get("content", []), new_doc.get("content", [])
+    sm = difflib.SequenceMatcher(None, [_node_to_text(n) for n in c_o], [_node_to_text(n) for n in c_n])
     
-    for b in blocks:
-        author = html.escape(b["author"])
-        time_str = html.escape(b["time"])
-        color = b["color"]
-        content = html.escape("".join(b["lines"]))
-        
-        out.append(f'''
-        <div class="blame-row" style="display: flex; border-bottom: 1px solid #efefef; min-height: 48px;">
-            <div class="blame-gutter" style="width: 140px; flex-shrink: 0; padding: 12px 16px; background: #fafafa; position: relative; border-right: 3px solid {color}; overflow: hidden;">
-                <div style="font-weight: 600; font-size: 13px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{author}">{author}</div>
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">{time_str}</div>
-            </div>
-            <div class="blame-content" style="flex: 1; padding: 12px 20px; line-height: 1.7; font-size: 14px; color: #444; white-space: pre-wrap; background: white;">{content}</div>
-        </div>
-        ''')
-        
-    out.append("</div>")
-    return "".join(out)
+    out = ['<div style="font-family:sans-serif;max-width:900px;margin:auto;padding:40px;background:white;box-shadow:0 0 10px rgba(0,0,0,0.1);">']
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for idx in range(i1, i2): out.append(_render_node(c_n[j1 + (idx-i1)], c_o[idx]))
+        elif tag == "delete":
+            for idx in range(i1, i2): out.append(_render_node(None, c_o[idx]))
+        elif tag == "insert":
+            for idx in range(j1, j2): out.append(_render_node(c_n[idx], None))
+        elif tag == "replace":
+            for idx in range(i1, i2): out.append(_render_node(None, c_o[idx]))
+            for idx in range(j1, j2): out.append(_render_node(c_n[idx], None))
+    return "".join(out) + "</div>"
 
+def side_by_side_diff(old_json: str, new_json: str) -> str:
+    try: h_o, h_n = _render_simple(json.loads(old_json)), _render_simple(json.loads(new_json))
+    except: return ""
+    return f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:#f5f5f5;padding:20px;"><div style="background:white;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.1);"><div style="color:#888;font-size:12px;margin-bottom:10px;border-bottom:1px solid #eee;">OLD VERSION</div>{h_o}</div><div style="background:white;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.1);"><div style="color:#888;font-size:12px;margin-bottom:10px;border-bottom:1px solid #eee;">NEW VERSION</div>{h_n}</div></div>'
+
+def blame_html(versions_data: list[dict[str, Any]]) -> str:
+    if not versions_data: return ""
+    versions = sorted(versions_data, key=lambda x: x.get("version_no", 0))
+    # Track authors for each block of the LATEST version
+    latest_content = json.loads(versions[-1].get("content_json", "{}")).get("content", [])
+    blame_map = [] # list of (node, author_name, author_color)
+    
+    # Initialize with the oldest version
+    first_content = json.loads(versions[0].get("content_json", "{}")).get("content", [])
+    for n in first_content:
+        blame_map.append({"text": _node_to_text(n), "author": versions[0].get("author_name", "Unknown"), "color": versions[0].get("author_color", "#888")})
+    
+    # Iteratively update blame map through versions
+    for i in range(1, len(versions)):
+        v = versions[i]
+        curr_content = json.loads(v.get("content_json", "{}")).get("content", [])
+        curr_texts = [_node_to_text(n) for n in curr_content]
+        prev_texts = [m["text"] for m in blame_map]
+        
+        new_map = []
+        sm = difflib.SequenceMatcher(None, prev_texts, curr_texts)
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == "equal": new_map.extend(blame_map[i1:i2])
+            else:
+                for idx in range(j1, j2):
+                    new_map.append({"text": curr_texts[idx], "author": v.get("author_name", "Unknown"), "color": v.get("author_color", "#888")})
+        blame_map = new_map
+
+    out = ['<div class="blame-doc" style="background:#f9f9f9;padding:20px;">']
+    for i, node in enumerate(latest_content):
+        info = blame_map[i] if i < len(blame_map) else {"author": "Unknown", "color": "#888"}
+        out.append(f'<div style="display:flex;margin-bottom:4px;"><div style="width:120px;flex-shrink:0;font-size:11px;color:#aaa;padding:8px;border-right:3px solid {info["color"]};background:white;">{info["author"]}</div><div style="flex:1;background:white;padding:8px 20px;font-size:14px;color:#333;">{_render_simple(node)}</div></div>')
+    return "".join(out) + "</div>"

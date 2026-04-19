@@ -17,11 +17,137 @@ from app.models import (
     Comment,
     Department,
     Document,
+    DocumentVersion,
     DocumentPermission,
     Position,
     User,
 )
+import json
+import uuid
 
+
+def _create_tiptap_doc(content: list) -> dict:
+    return {"type": "doc", "content": content}
+
+def _create_heading(text: str, level: int = 1) -> dict:
+    return {
+        "type": "heading",
+        "attrs": {"level": level},
+        "content": [{"type": "text", "text": text}]
+    }
+
+def _create_paragraph(text: str = "") -> dict:
+    item = {"type": "paragraph"}
+    if text:
+        item["content"] = [{"type": "text", "text": text}]
+    return item
+
+def _create_bullet_list(items: list[str]) -> dict:
+    return {
+        "type": "bulletList",
+        "content": [
+            {
+                "type": "listItem",
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": i}]}]
+            } for i in items
+        ]
+    }
+
+def init_standard_templates(admin_user_id: int | None = None):
+    templates_data = [
+        {
+            "title": "Employment Contract",
+            "content": _create_tiptap_doc([
+                _create_heading("EMPLOYMENT AGREEMENT"),
+                _create_paragraph("This Agreement is made on [DATE] between:"),
+                _create_paragraph("PARTY A (EMPLOYER): [Organization Name]"),
+                _create_paragraph("PARTY B (EMPLOYEE): [Full Name]"),
+                _create_heading("1. Position and Responsibilities", 2),
+                _create_paragraph("The Employee shall perform the following duties:"),
+                _create_bullet_list(["Manage organizational workflow", "Report to department head", "Ensure quality compliance"]),
+                _create_heading("2. Term and Compensation", 2),
+                _create_paragraph("Salary: [Amount] per month. Effective Date: [Start Date].")
+            ])
+        },
+        {
+            "title": "Meeting Minutes",
+            "content": _create_tiptap_doc([
+                _create_heading("MEETING MINUTES"),
+                _create_paragraph("DATE: [Enter Date] | TIME: [Enter Time]"),
+                _create_paragraph("TOPIC: [Project/Department Meeting]"),
+                _create_heading("Attendees", 2),
+                _create_bullet_list(["[Name 1]", "[Name 2]", "[Name 3]"]),
+                _create_heading("Agenda & Discussion", 2),
+                _create_paragraph("[Details of discussions...]"),
+                _create_heading("Action Items", 2),
+                _create_bullet_list(["Task A - Assigned to [Name]", "Task B - Due [Date]"])
+            ])
+        },
+        {
+            "title": "Technical Specification",
+            "content": _create_tiptap_doc([
+                _create_heading("TECHNICAL SPECIFICATION"),
+                _create_paragraph("VERSION: 1.0 | STATUS: Draft"),
+                _create_heading("1. Overview", 2),
+                _create_paragraph("Provide a high-level summary of the system or feature."),
+                _create_heading("2. Requirements", 2),
+                _create_bullet_list(["Requirement 1", "Requirement 2", "Requirement 3"]),
+                _create_heading("3. Design & Architecture", 2),
+                _create_paragraph("Describe components, data flow, and technologies used.")
+            ])
+        },
+        {
+            "title": "Weekly Report",
+            "content": _create_tiptap_doc([
+                _create_heading("WEEKLY PROGRESS REPORT"),
+                _create_paragraph("PERIOD: [Start Date] to [End Date]"),
+                _create_heading("Done This Week", 2),
+                _create_bullet_list(["Completed Task A", "Delivered Feature B"]),
+                _create_heading("Planned for Next Week", 2),
+                _create_bullet_list(["Start Project C", "Review Milestone D"]),
+                _create_heading("Risks & Blockers", 2),
+                _create_paragraph("None.")
+            ])
+        },
+        {
+            "title": "Expense Report",
+            "content": _create_tiptap_doc([
+                _create_heading("EMPLOYEE EXPENSE REIMBURSEMENT"),
+                _create_paragraph("SUBMITTED BY: [Employee name]"),
+                _create_paragraph("DEPARTMENT: [Department]"),
+                _create_heading("Expense Summary", 2),
+                _create_paragraph("DATE | DESCRIPTION | CATEGORY | AMOUNT"),
+                _create_paragraph("-------------------------------------------"),
+                _create_paragraph("[Date] | [Travel/Lunch] | [Category] | [0.00]"),
+                _create_paragraph("TOTAL: 0.00")
+            ])
+        }
+    ]
+    
+    count = 0
+    for tmpl in templates_data:
+        doc = Document(
+            owner_id=admin_user_id,
+            title=tmpl["title"],
+            status="approved",
+            doc_number=f"TMPL-{uuid.uuid4().hex[:6].upper()}",
+            is_template=True,
+            is_public=True
+        )
+        db.session.add(doc)
+        db.session.flush()
+        
+        ver = DocumentVersion(
+            document_id=doc.id,
+            version_no=1,
+            content_json=json.dumps(tmpl["content"]),
+            created_by_id=admin_user_id
+        )
+        db.session.add(ver)
+        db.session.flush()
+        doc.current_version_id = ver.id
+        count += 1
+    return count
 
 def _norm_key(s: str) -> str:
     return re.sub(r"\s+", "", str(s).strip().lower()) if s is not None else ""
@@ -274,10 +400,18 @@ def import_master_data_xlsx(file_bytes: bytes) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{row.get('login_name')}: {exc}")
 
+    db.session.flush()
+    
+    # Initialize standard templates after users are created
+    admin_user = db.session.query(User).filter_by(login_name='admin').first() or db.session.query(User).first()
+    admin_id = admin_user.id if admin_user else None
+    tmpl_count = init_standard_templates(admin_id)
+
     # The calling API handler should commit the transaction.
     return {
         "departments": len(dept_rows),
         "positions": len(pos_rows),
         "users": len(merged),
+        "templates": tmpl_count,
         "errors": errors,
     }

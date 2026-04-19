@@ -34,6 +34,7 @@ from app.services.document_access import (
 from app.services.document_state import VALID_STATUSES
 from app.services.export_service import export_docx_bytes, export_pdf_bytes
 from app.utils.auth import current_user
+from app.utils.audit import audit_log_required
 
 bp = Blueprint("documents", __name__)
 
@@ -67,6 +68,86 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         "is_public": doc.is_public,
     }
 
+@bp.get("/tree")
+@jwt_required()
+def list_document_tree():
+    """Return documents grouped by spaces in a hierarchical tree format."""
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    from app.models.space import Space
+    spaces = Space.query.all()
+    
+    tree = []
+    
+    for s in spaces:
+        from sqlalchemy import or_
+        docs = Document.query.filter(
+            Document.space_id == s.id,
+            Document.is_template == False,
+            Document.deleted_at == None,
+            or_(
+                Document.owner_id == user.id,
+                Document.is_public == True
+            )
+        ).all()
+        
+        doc_map = {d.id: {
+            "id": d.id,
+            "title": d.title,
+            "status": d.status,
+            "parent_id": d.parent_id,
+            "children": []
+        } for d in docs}
+        
+        roots = []
+        for d_id, d_data in doc_map.items():
+            parent_id = d_data["parent_id"]
+            if parent_id and parent_id in doc_map:
+                doc_map[parent_id]["children"].append(d_data)
+            else:
+                roots.append(d_data)
+                
+        tree.append({
+            "id": f"space_{s.id}",
+            "space_id": s.id,
+            "name": s.name,
+            "is_space": True,
+            "children": roots
+        })
+        
+    orphan_docs = Document.query.filter(
+        Document.space_id == None,
+        Document.is_template == False,
+        Document.deleted_at == None,
+        Document.owner_id == user.id
+    ).all()
+    
+    if orphan_docs:
+        orphan_roots = []
+        doc_map = {d.id: {
+            "id": d.id,
+            "title": d.title,
+            "status": d.status,
+            "parent_id": d.parent_id,
+            "children": []
+        } for d in orphan_docs}
+        for d_id, d_data in doc_map.items():
+            parent_id = d_data["parent_id"]
+            if parent_id and parent_id in doc_map:
+                doc_map[parent_id]["children"].append(d_data)
+            else:
+                orphan_roots.append(d_data)
+                
+        tree.append({
+            "id": "space_unassigned",
+            "name": "Personal Documents",
+            "is_space": True,
+            "children": orphan_roots
+        })
+        
+    return jsonify({"items": tree})
 
 @bp.get("")
 @jwt_required()
@@ -74,63 +155,76 @@ def list_documents():
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    scope = request.args.get("scope", "mine")
+    scope = request.args.get("scope")
+    space_id = request.args.get("space_id")
     status_filter = request.args.get("status")
-    q = Document.query
-    if status_filter:
-        if status_filter not in VALID_STATUSES:
-            return jsonify({"error": "invalid status filter"}), 400
-        q = q.filter(Document.status == status_filter)
-    if scope == "approved":
-        q = q.filter(Document.status == "approved")
-    elif scope == "collab":
-        # 只看协助编写的文档（有权限但不是自己创建的）
-        perm_ids = select(DocumentPermission.document_id).where(
-            DocumentPermission.user_id == user.id
-        )
-        flow_ids = (
-            select(ApprovalFlow.document_id)
-            .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)
-            .where(ApprovalParticipant.user_id == user.id)
-        )
-        q = q.filter(
-            or_(
-                Document.id.in_(perm_ids),
-                Document.id.in_(flow_ids),
+
+    if not scope:
+        scope = "all"
+    
+    # Debug Probe
+    print(f"[DEBUG] User {user.id} ({user.login_name}) listing docs with scope={scope}, space_id={space_id}")
+
+    q = Document.query.filter(Document.is_template == False, Document.deleted_at == None)
+    
+    # ── Admin Super Access ────────────────────────────────────────────────
+    # If admin, show everything by default unless a specific space is filtered
+    if user.login_name == 'admin' and scope == "all":
+        pass 
+    else:
+        # Standard filtering for other users or specific scopes
+        if status_filter:
+            if status_filter not in VALID_STATUSES:
+                return jsonify({"error": "invalid status filter"}), 400
+            q = q.filter(Document.status == status_filter)
+
+        if scope == "approved":
+            q = q.filter(Document.status == "approved")
+        elif scope == "collab":
+            # 获取用户参与或有权限的 ID 列表
+            perm_ids = [r[0] for r in db.session.query(DocumentPermission.document_id).filter_by(user_id=user.id).all()]
+            flow_ids = [r[0] for r in db.session.query(ApprovalFlow.document_id)\
+                       .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
+                       .filter(ApprovalParticipant.user_id == user.id).all()]
+            
+            q = q.filter(
+                or_(
+                    Document.id.in_(perm_ids),
+                    Document.id.in_(flow_ids),
+                )
+            ).filter(Document.owner_id != user.id)
+        elif scope == "department":
+            if user.department_id:
+                dept_users = select(User.id).where(User.department_id == user.department_id)
+                q = q.filter(Document.owner_id.in_(dept_users))
+            else:
+                q = q.filter(Document.id == -1)
+        elif scope == "all":
+            perm_ids = [r[0] for r in db.session.query(DocumentPermission.document_id).filter_by(user_id=user.id).all()]
+            flow_ids = [r[0] for r in db.session.query(ApprovalFlow.document_id)\
+                       .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
+                       .filter(ApprovalParticipant.user_id == user.id).all()]
+            
+            q = q.filter(
+                or_(
+                    Document.owner_id == user.id,
+                    Document.is_public == True,
+                    Document.id.in_(perm_ids),
+                    Document.id.in_(flow_ids),
+                )
             )
-        ).filter(Document.owner_id != user.id)
-    elif scope == "department":
-        # 只看同部门的文档（只看本部门用户创建的文档，不包括协作文档）
-        if user.department_id:
-            # 获取同部门的所有用户 ID
-            dept_users = select(User.id).where(User.department_id == user.department_id)
-            # 只显示这些用户创建的文档（不包括协作文档）
-            q = q.filter(Document.owner_id.in_(dept_users))
+        else:  # scope == "mine"
+            q = q.filter(Document.owner_id == user.id)
+
+    # Re-apply space filter at the end
+    if space_id:
+        if space_id == "unassigned":
+            q = q.filter(Document.space_id == None)
         else:
-            # 如果用户没有部门，不显示任何文档
-            q = q.filter(Document.id == -1)  # 空结果集
-    elif scope == "all":
-        # 查看全部文档（自己的+其他人的最终版本）
-        perm_ids = select(DocumentPermission.document_id).where(
-            DocumentPermission.user_id == user.id
-        )
-        flow_ids = (
-            select(ApprovalFlow.document_id)
-            .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)
-            .where(ApprovalParticipant.user_id == user.id)
-        )
-        q = q.filter(
-            or_(
-                Document.owner_id == user.id,
-                Document.is_public == True,
-                Document.id.in_(perm_ids),
-                Document.id.in_(flow_ids),
-            )
-        )
-    else:  # scope == "mine"
-        # 只看自己创建的文档（owner）
-        q = q.filter(Document.owner_id == user.id)
+            q = q.filter(Document.space_id == space_id)
+
     docs = q.order_by(Document.updated_at.desc()).all()
+    print(f"[DEBUG] Query found {len(docs)} documents")
     return jsonify({"items": [_doc_to_summary(d, user) for d in docs]})
 
 
@@ -142,10 +236,12 @@ def create_document():
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "Untitled").strip()[:512]
+    space_id = data.get("space_id")
     
     # Generate doc_number (resets daily)
     from sqlalchemy import func
-    today_str = datetime.utcnow().strftime("%Y%m%d")
+    # 使用本地时间而非 UTC，确保编号符合用户直觉日期
+    today_str = datetime.now().strftime("%Y%m%d")
     # 查找当天最高编号以确保跨天重置且不因删除导致编号冲突
     max_doc = db.session.query(func.max(Document.doc_number)).filter(
         Document.doc_number.like(f"{today_str}%")
@@ -159,7 +255,7 @@ def create_document():
     else:
         doc_number = f"{today_str}001"
     
-    doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number)
+    doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number, space_id=space_id)
     db.session.add(doc)
     db.session.flush()
     ver = DocumentVersion(
@@ -177,6 +273,7 @@ def create_document():
 
 @bp.get("/<int:doc_id>")
 @jwt_required()
+@audit_log_required("VIEW")
 def get_document(doc_id: int):
     user = current_user()
     if not user:
@@ -269,6 +366,7 @@ def put_content(doc_id: int):
 
 @bp.delete("/<int:doc_id>")
 @jwt_required()
+@audit_log_required("DELETE")
 def delete_document(doc_id: int):
     """Delete a draft or rejected document (only owner)."""
     user = current_user()
@@ -525,6 +623,7 @@ def get_collaborators(doc_id: int):
 
 @bp.get("/<int:doc_id>/export.docx")
 @jwt_required()
+@audit_log_required("EXPORT_DOCX")
 def export_docx(doc_id: int):
     user = current_user()
     if not user:
@@ -544,6 +643,7 @@ def export_docx(doc_id: int):
 
 @bp.get("/<int:doc_id>/export.pdf")
 @jwt_required()
+@audit_log_required("EXPORT_PDF")
 def export_pdf(doc_id: int):
     user = current_user()
     if not user:
@@ -553,7 +653,9 @@ def export_pdf(doc_id: int):
         return jsonify({"error": "Not found"}), 404
     ver = doc.current_version
     ps = json.loads(doc.page_settings_json) if doc.page_settings_json else None
-    raw = export_pdf_bytes(ver.content_json if ver else "{}", page_settings=ps)
+    
+    watermark_text = f"{user.display_name()} · {user.employee_no} · {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+    raw = export_pdf_bytes(ver.content_json if ver else "{}", page_settings=ps, watermark_text=watermark_text)
     return Response(
         raw,
         mimetype="application/pdf",
@@ -595,28 +697,37 @@ def upload_image():
 @jwt_required()
 def start_approval(doc_id: int):
     user = current_user()
+    print(f"[DEBUG] Starting approval for doc {doc_id} by user {user.login_name if user else 'UNKNOWN'}")
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     doc = db.session.get(Document, doc_id)
     if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
+    
     data = request.get_json(silent=True) or {}
-    # Align with frontend fields: 'type' and 'approvers'
     flow_type = (data.get("type") or "parallel").lower()
     ids = data.get("approvers") or []
+    print(f"[DEBUG] Flow type: {flow_type}, Approver IDs: {ids}")
+    
     if flow_type not in ("parallel", "sequential"):
         return jsonify({"error": "invalid flow_type"}), 400
     approvers = [int(x) for x in ids]
+    
     if doc.owner_id in approvers:
         return jsonify({"error": "Owner cannot be an approver"}), 400
+        
     try:
-
-
+        from app.services.approval_service import start_flow
+        print("[DEBUG] Calling start_flow...")
         flow = start_flow(doc, flow_type, approvers)
-    except ValueError as e:
+        print(f"[DEBUG] Flow created with ID {flow.id}. Committing...")
+        db.session.commit()
+        print("[DEBUG] Commit successful.")
+        return jsonify({"flow_id": flow.id, "document_status": doc.status})
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DEBUG] ERROR in start_approval: {str(e)}")
         return jsonify({"error": str(e)}), 400
-    db.session.commit()
-    return jsonify({"flow_id": flow.id, "document_status": doc.status})
 
 
 @bp.post("/<int:doc_id>/recall")
@@ -669,3 +780,72 @@ def new_version_after_reject(doc_id: int):
     doc.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"current_version_id": ver.id, "version_no": ver.version_no})
+
+@bp.post("/batch-delete")
+@jwt_required()
+def batch_delete_documents():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json() or {}
+    doc_ids = data.get("doc_ids", [])
+    
+    success_count = 0
+    errors = []
+    
+    from app.models.workflow import AuditLog
+    
+    for did in doc_ids:
+        doc = db.session.get(Document, did)
+        if not doc:
+            continue
+        
+        # Permission check
+        if doc.owner_id != user.id:
+            errors.append(f"Doc {did}: Forbidden")
+            continue
+        if doc.status not in ("draft", "rejected"):
+            errors.append(f"Doc {did}: Cannot delete in status {doc.status}")
+            continue
+            
+        # Success path
+        v_ids = [v.id for v in doc.versions]
+        if v_ids:
+            db.session.query(AuditLog).filter(AuditLog.document_version_id.in_(v_ids)).update(
+                {AuditLog.document_version_id: None}, synchronize_session=False
+            )
+        db.session.delete(doc)
+        success_count += 1
+        
+    db.session.commit()
+    return jsonify({"message": f"Deleted {success_count} documents", "errors": errors})
+
+@bp.post("/batch-share")
+@jwt_required()
+def batch_share_documents():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json() or {}
+    doc_ids = data.get("doc_ids", [])
+    is_public = data.get("is_public", False)
+    
+    success_count = 0
+    errors = []
+    
+    for did in doc_ids:
+        doc = db.session.get(Document, did)
+        if not doc:
+            continue
+        
+        if not user_can_manage_permissions(user, doc):
+            errors.append(f"Doc {did}: Forbidden")
+            continue
+            
+        doc.is_public = is_public
+        success_count += 1
+        
+    db.session.commit()
+    return jsonify({"message": f"Shared {success_count} documents", "errors": errors})

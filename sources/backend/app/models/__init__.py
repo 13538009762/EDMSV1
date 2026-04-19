@@ -11,6 +11,8 @@ from app.models.workflow import (
     AuditLog,
 )
 from app.models.comment import Comment
+from app.models.space import Space
+from app.models.notification import Notification
 
 __all__ = [
     "Department",
@@ -24,4 +26,6 @@ __all__ = [
     "ApprovalParticipant",
     "ApprovalDecision",
     "AuditLog",
+    "Space",
+    "Notification",
 ]
