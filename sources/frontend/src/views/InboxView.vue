@@ -250,9 +250,13 @@ const paginatedItems = computed(() => {
 });
 
 const filteredMineApps = computed(() => {
-  if (!searchMineQuery.value) return myApps.value;
+  // 💡 核心优化：始终过滤掉状态为 'cancelled' (已撤销) 的申请
+  const baseList = myApps.value.filter(item => item.flow_status !== 'cancelled');
+  
+  if (!searchMineQuery.value) return baseList;
+  
   const q = searchMineQuery.value.toLowerCase();
-  return myApps.value.filter(item => 
+  return baseList.filter(item => 
     item.title?.toLowerCase().includes(q) || 
     String(item.document_id).includes(q)
   );

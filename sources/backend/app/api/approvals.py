@@ -157,8 +157,11 @@ def my_applications():
     from app.models import Document
     from app.models.workflow import ApprovalFlow
     
-    # 获取我拥有的所有文档的所有审批流，按时间倒序
-    flows = ApprovalFlow.query.join(Document).filter(Document.owner_id == user.id).order_by(ApprovalFlow.created_at.desc()).all()
+    # 获取我拥有的所有文档的所有审批流（排除已撤销的），按时间倒序
+    flows = ApprovalFlow.query.join(Document).filter(
+        Document.owner_id == user.id,
+        ApprovalFlow.status != 'cancelled'
+    ).order_by(ApprovalFlow.created_at.desc()).all()
     
     items = []
     for flow in flows:

@@ -24,7 +24,6 @@ export function attachDocCollab(
   ydoc: Y.Doc,
   awareness: Awareness,
   user: { name: string; color: string },
-  onStatusChange?: (data: any) => void,
 ): () => void {
   const url = import.meta.env.VITE_SOCKET_URL || "";
   const socket: Socket = io(url || undefined, {
@@ -34,51 +33,39 @@ export function attachDocCollab(
 
   const roomId = documentId;
 
-  socket.on("status_change", (data) => {
-    if (data.document_id === roomId && onStatusChange) {
-      onStatusChange(data);
+  // 1. 定义监听函数
+  const onYjsUpdate = (msg: { document_id?: number; payload?: string }) => {
+    if (msg.document_id === roomId && msg.payload) {
+      try { Y.applyUpdate(ydoc, fromB64(msg.payload), "remote"); } catch { /* ignore */ }
     }
-  });
+  };
 
-  function onYjs(msg: { document_id?: number; payload?: string }) {
-    if (msg.document_id !== roomId || !msg.payload) return;
-    try {
-      Y.applyUpdate(ydoc, fromB64(msg.payload), "remote");
-    } catch {
-      /* ignore */
+  const onAwarenessUpdate = (msg: { document_id?: number; payload?: string }) => {
+    if (msg.document_id === roomId && msg.payload) {
+      try { applyAwarenessUpdate(awareness, fromB64(msg.payload), "remote"); } catch { /* ignore */ }
     }
-  }
+  };
 
-  function onAware(msg: { document_id?: number; payload?: string }) {
-    if (msg.document_id !== roomId || !msg.payload) return;
-    try {
-      applyAwarenessUpdate(awareness, fromB64(msg.payload), "remote");
-    } catch {
-      /* ignore */
+  const onStatusChange = (data: any) => {
+    if (data.document_id === roomId) {
+       window.dispatchEvent(new CustomEvent("edms:status_changed", { detail: data }));
     }
-  }
+  };
 
-  socket.on("connect", () => {
-    socket.emit("join_document", { document_id: roomId });
-  });
-  socket.on("yjs_update", onYjs);
-  socket.on("awareness_update", onAware);
+  // 2. 绑定 Socket 监听
+  socket.on("connect", () => socket.emit("join_document", { document_id: roomId }));
+  socket.on("yjs_update", onYjsUpdate);
+  socket.on("awareness_update", onAwarenessUpdate);
+  socket.on("status_change", onStatusChange);
 
+  // 3. 绑定 Yjs/Awareness 本地监听
   const onDocUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === "remote") return;
     socket.emit("yjs_update", { document_id: roomId, payload: toB64(update) });
   };
   ydoc.on("update", onDocUpdate);
 
-  // 💡 监听后端发出的状态变更事件
-  socket.on("status_change", (data) => {
-    if (data.document_id === roomId) {
-       // 触发一个自定义事件或全局通知
-       window.dispatchEvent(new CustomEvent("edms:status_changed", { detail: data }));
-    }
-  });
-
-  const onAwareUpdate = (
+  const onLocalAwareUpdate = (
     changes: { added: number[]; updated: number[]; removed: number[] },
     origin: unknown,
   ) => {
@@ -88,18 +75,22 @@ export function attachDocCollab(
     const up = encodeAwarenessUpdate(awareness, clients);
     socket.emit("awareness_update", { document_id: roomId, payload: toB64(up) });
   };
-  awareness.on("update", onAwareUpdate);
+  awareness.on("update", onLocalAwareUpdate);
 
+  // 4. 设置初始状态
   awareness.setLocalStateField("user", { name: user.name, color: user.color });
 
-  function disconnect() {
+  // 5. 极简注销逻辑
+  return () => {
+    // 停止所有监听
     ydoc.off("update", onDocUpdate);
-    awareness.off("update", onAwareUpdate);
-    socket.off("yjs_update", onYjs);
-    socket.off("awareness_update", onAware);
+    awareness.off("update", onLocalAwareUpdate);
+    socket.off("yjs_update", onYjsUpdate);
+    socket.off("awareness_update", onAwarenessUpdate);
+    socket.off("status_change", onStatusChange);
+    
+    // 通知离线并关闭
     socket.emit("leave_document", { document_id: roomId });
-    socket.close();
-  }
-
-  return disconnect;
+    socket.disconnect();
+  };
 }

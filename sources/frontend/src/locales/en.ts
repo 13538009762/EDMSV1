@@ -34,6 +34,7 @@ export default {
     no: "No",
     noPermission: "No permission to perform this action",
     notifyRecipients: "Notify Recipients",
+    warning: "Warning",
   },
   nav: {
     library: "Library",
@@ -232,6 +233,7 @@ export default {
     approversPlaceholder: "Approvers",
     start: "Start",
     approvalStarted: "Approval started",
+    statusChanged: "Document status changed",
     approvalFailed: "Failed to start approval",
     newVersionOk: "New version created",
     docxImported: "DOCX imported",
@@ -258,6 +260,10 @@ export default {
     roleComment: "Comment",
     sharingSaved: "Access rules saved",
     toolbar: {
+      bold: "Bold",
+      italic: "Italic",
+      underline: "Underline",
+      strike: "Strike",
       bulletList: "Bullet List",
       orderedList: "Ordered List",
       indent: "Indent",

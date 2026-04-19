@@ -30,6 +30,7 @@ export default {
     no: "否",
     noPermission: "没有权限执行此操作",
     notifyRecipients: "通知被共享人",
+    warning: "警告",
   },
   nav: {
     library: "文档库",
@@ -235,6 +236,7 @@ export default {
     approversPlaceholder: "审批人",
     start: "开始",
     approvalStarted: "审批已发起",
+    statusChanged: "文档状态已变更",
     approvalFailed: "发起审批失败",
     newVersionOk: "已创建新版本",
     docxImported: "已导入 DOCX",
@@ -267,6 +269,10 @@ export default {
     deleteSuccess: "文档已删除",
     deleteFailed: "删除失败",
     toolbar: {
+      bold: "加粗",
+      italic: "倾斜",
+      underline: "下划线",
+      strike: "删除线",
       bulletList: "项目符号",
       orderedList: "编号列表",
       indent: "增加缩进",

@@ -53,7 +53,7 @@
       </template>
     </el-dialog>
 
-    <div class="editor-toolbar" v-if="editor && meta.can_edit">
+    <div class="editor-toolbar" v-if="editor" v-show="meta.can_edit">
       <el-select v-model="currentFontFamily" size="small" style="width: 120px" @change="setFontFamily">
         <el-option label="Default" value="Inter, sans-serif" />
         <el-option label="Arial" value="Arial" />
@@ -169,7 +169,8 @@
           <div class="watermark-overlay" :style="{ backgroundImage: watermarkDataUrl ? `url(${watermarkDataUrl})` : '' }"></div>
           
           <bubble-menu
-            v-if="editor && meta.can_edit"
+            v-if="editor"
+            v-show="meta.can_edit"
             :editor="editor"
             :tippy-options="{ duration: 100, placement: 'top' }"
             class="ai-bubble-menu"
@@ -310,7 +311,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showApproval" :title="t('editor.approvalTitle')" width="420px">
+    <el-dialog v-model="showApproval" :title="t('editor.approvalTitle')" width="420px" destroy-on-close>
       <el-radio-group v-model="approvalType">
         <el-radio label="parallel">{{ t("editor.parallel") }}</el-radio>
         <el-radio label="sequential">{{ t("editor.sequential") }}</el-radio>
@@ -507,8 +508,13 @@ const userColor = `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart
 let collabDisconnect: (() => void) | null = null;
 const staticCollabs = ref<Array<{ name: string; color: string }>>([]);
 
+const isMounted = ref(false);
+const isLoadingDoc = ref(false);
+
 function refreshCollabList() {
-  if (meta.value.status === 'approved') return;
+  // 💡 安全检查：如果组件已卸载、文档归档或正在重新加载文档，不再更新协作列表
+  if (!isMounted.value || isLoadingDoc.value || meta.value.status === 'approved') return;
+  
   const states = awareness.getStates();
   const list: Array<{ name: string; color: string }> = [];
   states.forEach((s) => {
@@ -664,12 +670,11 @@ async function loadDepts() {
 }
 
 async function loadDoc(silent = false) {
-  console.log(`[DEBUG] loadDoc started (silent=${silent})`);
-  if (!silent) {
-    loading.value = true;
-  }
+  if (!silent) loading.value = true;
+  isLoadingDoc.value = true; // 🔑 开启同步锁
+  console.log("[DEBUG] loadDoc started (silent=" + silent + ")");
   try {
-    const { data } = await api.get(`/documents/${docId.value}`);
+    const { data } = await api.get(`/documents/${route.params.id}`);
     console.log("[DEBUG] Doc data loaded, status:", data.status);
     title.value = data.title;
     meta.value = data;
@@ -735,8 +740,9 @@ async function loadDoc(silent = false) {
     if (meta.value.status !== 'approved') refreshCollabList();
   } catch (err) {
     console.error("[DEBUG] loadDoc CRITICAL ERROR:", err);
-  } finally { 
-    loading.value = false; 
+  } finally {
+    if (!silent) loading.value = false;
+    isLoadingDoc.value = false; // 🔑 释放同步锁
     console.log("[DEBUG] loadDoc finished, loading=false");
   }
 }
@@ -959,11 +965,15 @@ async function handleAiAction(action: string) {
 }
 
 const onStatusChanged = (e: any) => {
+  if (!isMounted.value) return; // 💡 保护逻辑
   const data = e.detail;
   console.log("[DEBUG] Status changed event received:", data);
   if (data.status === "in_approval") {
-    showApproval.value = false;
-    loading.value = false;
+    // 💡 只有当自己没在 Loading（不是操作发起者）时，才协助关闭弹窗
+    if (!loading.value) {
+      showApproval.value = false;
+    }
+    
     meta.value.status = "in_approval";
     meta.value.can_edit = false;
     editor.value?.setEditable(false);
@@ -976,12 +986,14 @@ const onStatusChanged = (e: any) => {
 };
 
 onMounted(() => {
+  isMounted.value = true;
   loadDoc();
   updateWatermark();
   setInterval(updateWatermark, 60000);
   window.addEventListener("edms:status_changed", onStatusChanged);
 });
 onBeforeUnmount(() => { 
+  isMounted.value = false;
   collabDisconnect?.(); 
   awareness.off("update", refreshCollabList); 
   editor.value?.destroy(); 
