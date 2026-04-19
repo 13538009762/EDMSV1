@@ -798,12 +798,17 @@ def start_approval(doc_id: int):
         db.session.commit()
         print(f"[DEBUG] Transaction committed. Flow: {flow.id}")
 
-        # 3. 实时通知前端
-        socketio.emit("status_change", {
-            "document_id": doc_id,
-            "status": doc.status,
-            "can_edit": False
-        }, room=f"doc_{doc_id}")
+        # 3. 实时通知前端（💡 关键修复：扔进后台任务，绝不阻塞当前请求）
+        socketio.start_background_task(
+            socketio.emit,
+            "status_change",
+            {
+                "document_id": doc_id,
+                "status": doc.status,
+                "can_edit": False
+            },
+            room=f"doc_{doc_id}"
+        )
         
         return jsonify({
             "flow_id": flow.id, 
@@ -835,13 +840,18 @@ def recall_document_approval(doc_id: int):
         
     db.session.commit()
 
-    # 💡 发送实时状态通知
+    # 💡 使用后台任务发送实时状态通知，不阻塞响应
     from app.extensions import socketio
-    socketio.emit("status_change", {
-        "document_id": doc.id,
-        "status": doc.status,
-        "can_edit": True
-    }, room=f"doc_{doc.id}")
+    socketio.start_background_task(
+        socketio.emit,
+        "status_change",
+        {
+            "document_id": doc.id,
+            "status": doc.status,
+            "can_edit": True
+        },
+        room=f"doc_{doc.id}"
+    )
 
     return jsonify({"ok": True, "document_status": doc.status})
 

@@ -570,54 +570,31 @@ function fixPunc() {
 
 async function startApproval() {
   if (!approverIds.value.length) return ElMessage.warning(t("editor.selectApprovers"));
+  
+  // 开启转圈
   loading.value = true;
-
-  // Disconnect collab socket before state change to avoid conflicts
-  collabDisconnect?.();
-  awareness.off("update", refreshCollabList);
-
-  // Fire-and-forget: The server processes it but the HTTP response may never
-  // arrive back (known Flask-SocketIO/Werkzeug dev server incompatibility).
-  // We intentionally do NOT await this call.
-  api.post(`/documents/${docId.value}/approvals`, {
-    type: approvalType.value,
-    approvers: approverIds.value,
-  }).catch(() => { /* response may not return — that's expected */ });
-
-  // Poll the document status every 500ms (up to 15s) to detect when the
-  // backend has finished processing the approval creation.
-  let attempts = 0;
-  const maxAttempts = 30; // 30 × 500ms = 15 seconds
-
-  const poll = async () => {
-    attempts++;
-    try {
-      const { data } = await api.get(`/documents/${docId.value}`);
-      if (data.status === "in_approval") {
-        // ✅ Backend confirmed success
-        showApproval.value = false;
-        ElMessage.success(t("editor.approvalStarted"));
-        meta.value.status = "in_approval";
-        meta.value.can_edit = false;
-        editor.value?.setEditable(false);
-        loading.value = false;
-        return;
-      }
-    } catch (e) {
-      console.warn("[Poll] status check failed:", e);
-    }
-
-    if (attempts < maxAttempts) {
-      setTimeout(poll, 500);
-    } else {
-      // Timed out — backend may still be processing
-      ElMessage.error(t("editor.approvalFailed"));
-      loading.value = false;
-    }
-  };
-
-  // Start polling 800ms after firing the request
-  setTimeout(poll, 800);
+  
+  try {
+    // 老老实实等待接口返回
+    await api.post(`/documents/${docId.value}/approvals`, {
+      type: approvalType.value,
+      approvers: approverIds.value,
+    });
+    
+    // 成功后关闭弹窗并提示
+    showApproval.value = false;
+    ElMessage.success(t("editor.approvalStarted"));
+    
+    // 静默刷新页面数据，让界面变成“审批中”
+    await loadDoc(true);
+    
+  } catch (err) {
+    console.error("Start approval failed:", err);
+    ElMessage.error(t("common.failed", "Failed"));
+  } finally {
+    // 4. 无论成功还是网络异常，铁定关闭转圈
+    loading.value = false;
+  }
 }
 
 async function newVersion() {
