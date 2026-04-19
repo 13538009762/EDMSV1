@@ -14,6 +14,11 @@
           </el-tooltip>
         </div>
         
+        <div v-if="meta.can_approve" class="approval-shortcuts" style="display: flex; gap: 8px; margin-right: 12px;">
+           <el-button type="success" @click="handleEditorApprove">{{ t("inbox.approve") }}</el-button>
+           <el-button type="danger" @click="handleEditorReject">{{ t("inbox.reject") }}</el-button>
+        </div>
+
         <el-dropdown trigger="click" style="margin-right: 8px;">
           <el-button>{{ t("editor.actions") }} <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
@@ -35,6 +40,18 @@
         </el-dropdown>
       </div>
     </div>
+
+    <!-- Rejection Dialog for Editor -->
+    <el-dialog v-model="rejectDlg" :title="t('inbox.rejectTitle')" width="420px">
+      <div style="margin-bottom: 8px;">{{ t("inbox.reasonPrompt", "Please provide a reason for rejection:") }}</div>
+      <el-input v-model="rejectReason" type="textarea" :rows="4" placeholder="..." />
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="rejectDlg = false">{{ t("inbox.cancel") }}</el-button>
+          <el-button type="danger" @click="confirmEditorReject">{{ t("inbox.reject") }}</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <div class="editor-toolbar" v-if="editor && meta.can_edit">
       <el-select v-model="currentFontFamily" size="small" style="width: 120px" @change="setFontFamily">
@@ -554,24 +571,53 @@ function fixPunc() {
 async function startApproval() {
   if (!approverIds.value.length) return ElMessage.warning(t("editor.selectApprovers"));
   loading.value = true;
-  try {
-    const { data } = await api.post(`/documents/${docId.value}/approvals`, { type: approvalType.value, approvers: approverIds.value });
-    showApproval.value = false;
-    ElMessage.success(t("editor.approvalStarted"));
-    
-    // 关键优化：手动更新本地状态，不再重刷整个接口以防挂起
-    meta.value.status = data.document_status || "in_approval";
-    meta.value.can_edit = false; // 审批中不可编辑
-    if (editor.value) editor.value.setEditable(false);
-    
-    // 异步尝试刷新，即使失败也不影响 UI 展示
-    loadDoc().catch(() => {});
-  } catch (err: any) { 
-    console.error("Approval failed:", err);
-    ElMessage.error(t("editor.approvalFailed")); 
-  } finally {
-    loading.value = false;
-  }
+
+  // Disconnect collab socket before state change to avoid conflicts
+  collabDisconnect?.();
+  awareness.off("update", refreshCollabList);
+
+  // Fire-and-forget: The server processes it but the HTTP response may never
+  // arrive back (known Flask-SocketIO/Werkzeug dev server incompatibility).
+  // We intentionally do NOT await this call.
+  api.post(`/documents/${docId.value}/approvals`, {
+    type: approvalType.value,
+    approvers: approverIds.value,
+  }).catch(() => { /* response may not return — that's expected */ });
+
+  // Poll the document status every 500ms (up to 15s) to detect when the
+  // backend has finished processing the approval creation.
+  let attempts = 0;
+  const maxAttempts = 30; // 30 × 500ms = 15 seconds
+
+  const poll = async () => {
+    attempts++;
+    try {
+      const { data } = await api.get(`/documents/${docId.value}`);
+      if (data.status === "in_approval") {
+        // ✅ Backend confirmed success
+        showApproval.value = false;
+        ElMessage.success(t("editor.approvalStarted"));
+        meta.value.status = "in_approval";
+        meta.value.can_edit = false;
+        editor.value?.setEditable(false);
+        loading.value = false;
+        return;
+      }
+    } catch (e) {
+      console.warn("[Poll] status check failed:", e);
+    }
+
+    if (attempts < maxAttempts) {
+      setTimeout(poll, 500);
+    } else {
+      // Timed out — backend may still be processing
+      ElMessage.error(t("editor.approvalFailed"));
+      loading.value = false;
+    }
+  };
+
+  // Start polling 800ms after firing the request
+  setTimeout(poll, 800);
 }
 
 async function newVersion() {
@@ -595,6 +641,44 @@ async function loadVersions() {
   versionList.value = data.items;
 }
 
+// Approval logic for approvers opening the doc
+const rejectDlg = ref(false);
+const rejectReason = ref("");
+
+async function handleEditorApprove() {
+  try {
+    await api.post(`/approvals/participants/${meta.value.pending_participant_id}/decision`, {
+      decision: "approve"
+    });
+    ElMessage.success(t("inbox.submitted"));
+    loadDoc(true);
+  } catch (err) {
+    ElMessage.error(t("common.failed", "Failed"));
+  }
+}
+
+function handleEditorReject() {
+  rejectReason.value = "";
+  rejectDlg.value = true;
+}
+
+async function confirmEditorReject() {
+  if (!rejectReason.value.trim()) {
+    return ElMessage.warning(t("inbox.reasonRequired"));
+  }
+  try {
+    await api.post(`/approvals/participants/${meta.value.pending_participant_id}/decision`, {
+      decision: "reject",
+      reason: rejectReason.value
+    });
+    ElMessage.success(t("inbox.submitted"));
+    rejectDlg.value = false;
+    loadDoc(true);
+  } catch (err) {
+    ElMessage.error(t("common.failed", "Failed"));
+  }
+}
+
 async function loadDepts() {
   try {
     const { data } = await api.get("/users/departments");
@@ -602,9 +686,11 @@ async function loadDepts() {
   } catch {}
 }
 
-async function loadDoc() {
-  console.log("[DEBUG] loadDoc started");
-  loading.value = true;
+async function loadDoc(silent = false) {
+  console.log(`[DEBUG] loadDoc started (silent=${silent})`);
+  if (!silent) {
+    loading.value = true;
+  }
   try {
     const { data } = await api.get(`/documents/${docId.value}`);
     console.log("[DEBUG] Doc data loaded, status:", data.status);
@@ -636,8 +722,22 @@ async function loadDoc() {
     }
     
     console.log("[DEBUG] Attaching collaboration...");
-    collabDisconnect?.();
-    collabDisconnect = attachDocCollab(docId.value, ydoc, awareness, { name: auth.user?.display_name || auth.user?.login_name || "User", color: userColor });
+    collabDisconnect?.(); // 💡 重要：先断开之前的连接，防止监听器堆积
+    collabDisconnect = attachDocCollab(
+      docId.value, 
+      ydoc, 
+      awareness, 
+      { name: auth.user?.display_name || auth.user?.login_name || "User", color: userColor },
+      (statusData) => {
+        console.log("[DEBUG] Received status_change event via socket:", statusData);
+        if (statusData.status) {
+          meta.value.status = statusData.status;
+          meta.value.can_edit = !!statusData.can_edit;
+          editor.value?.setEditable(meta.value.can_edit);
+          ElMessage.info(t("editor.statusChanged", { status: statusData.status }));
+        }
+      }
+    );
     awareness.on("update", refreshCollabList);
     
     // 并行执行次要任务
@@ -881,12 +981,35 @@ async function handleAiAction(action: string) {
   } finally { generatingAi.value = false; }
 }
 
+const onStatusChanged = (e: any) => {
+  const data = e.detail;
+  console.log("[DEBUG] Status changed event received:", data);
+  if (data.status === "in_approval") {
+    showApproval.value = false;
+    loading.value = false;
+    meta.value.status = "in_approval";
+    meta.value.can_edit = false;
+    editor.value?.setEditable(false);
+    ElMessage.success(t("editor.approvalStarted"));
+  } else if (data.can_edit !== undefined) {
+    meta.value.status = data.status;
+    meta.value.can_edit = data.can_edit;
+    editor.value?.setEditable(data.can_edit);
+  }
+};
+
 onMounted(() => {
   loadDoc();
   updateWatermark();
   setInterval(updateWatermark, 60000);
+  window.addEventListener("edms:status_changed", onStatusChanged);
 });
-onBeforeUnmount(() => { collabDisconnect?.(); awareness.off("update", refreshCollabList); editor.value?.destroy(); });
+onBeforeUnmount(() => { 
+  collabDisconnect?.(); 
+  awareness.off("update", refreshCollabList); 
+  editor.value?.destroy(); 
+  window.removeEventListener("edms:status_changed", onStatusChanged);
+});
 watch(() => route.params.id, () => loadDoc());
 </script>
 

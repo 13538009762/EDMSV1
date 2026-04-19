@@ -13,6 +13,11 @@ export default {
     markAllRead: "Пометить все как прочитанные",
     failed: "Операция не удалась",
     unknown: "Неизвестно",
+    roles: {
+      admin: "Системный администратор",
+      manager: "Менеджер отдела",
+      user: "Пользователь",
+    },
     status: {
       draft: "Черновик",
       in_approval: "На согласовании",

@@ -13,6 +13,7 @@ class Department(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(64), unique=True, nullable=False, index=True)
     name = db.Column(db.String(256), nullable=False)
+    name_en = db.Column(db.String(256), nullable=True) # 💡 增加英文名
 
     users = db.relationship("User", back_populates="department")
 
@@ -23,6 +24,7 @@ class Position(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     short_name = db.Column(db.String(128), unique=True, nullable=False, index=True)
     full_name = db.Column(db.String(256), nullable=False)
+    full_name_en = db.Column(db.String(256), nullable=True) # 💡 增加英文全称
 
 
 class User(db.Model):

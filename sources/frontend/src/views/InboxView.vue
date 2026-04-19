@@ -225,6 +225,8 @@ const items = ref<InboxRow[]>([]);
 const myApps = ref<any[]>([]);
 const loading = ref(false);
 const rejectPid = ref<number | null>(null);
+const rejectDlg = ref(false);
+const rejectReason = ref("");
 
 // Search & Pagination
 const searchQuery = ref("");

@@ -83,10 +83,15 @@
     </div>
 
     <template #footer>
-      <el-button @click="emit('update:modelValue', false)">{{ t("inbox.cancel") }}</el-button>
-      <el-button type="primary" :icon="Check" :loading="saving" @click="save">
-        {{ t("editor.sharingSave") }}
-      </el-button>
+      <div style="display: flex; align-items: center; justify-content: flex-end;">
+        <el-checkbox v-model="notify" style="margin-right: 16px;">
+          {{ t('common.notifyRecipients', 'Notify Recipients') }}
+        </el-checkbox>
+        <el-button @click="emit('update:modelValue', false)">{{ t("inbox.cancel") }}</el-button>
+        <el-button type="primary" :icon="Check" :loading="saving" @click="save">
+          {{ t("editor.sharingSave") }}
+        </el-button>
+      </div>
     </template>
   </el-dialog>
 </template>
@@ -119,6 +124,7 @@ const viewIds = ref<number[]>([]);
 const isPublic = ref(false);
 const docStatus = ref("");
 const saving = ref(false);
+const notify = ref(false); // 💡 通知勾选框
 
 const availableUsers = computed(() => {
   return users.value.filter(u => u.id !== auth.user?.id);
@@ -208,7 +214,7 @@ async function save() {
   saving.value = true;
   try {
     await Promise.all([
-      api.post(`/documents/${props.documentId}/permissions`, { grants }),
+      api.post(`/documents/${props.documentId}/permissions`, { grants, notify: notify.value }),
       api.patch(`/documents/${props.documentId}`, { is_public: isPublic.value })
     ]);
     ElMessage.success(t("editor.sharingSaved"));

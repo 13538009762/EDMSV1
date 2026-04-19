@@ -60,6 +60,7 @@ def get_me():
         "birth_date": user.birth_date.isoformat() if user.birth_date else None,
         "department_id": user.department_id,
         "department_name": user.department.name if user.department else None,
+        "department_name_en": user.department.name_en if user.department else None,
         "is_manager": user.is_manager
     })
 
@@ -97,6 +98,7 @@ def list_users():
             "display_name": u.display_name(),
             "department_id": u.department_id,
             "department_name": u.department.name if u.department else None,
+            "department_name_en": u.department.name_en if u.department else None,
             "is_manager": u.is_manager
         })
     return jsonify({"total": total, "items": items})
@@ -190,24 +192,25 @@ def batch_delete_users():
 @bp.get("/departments")
 def list_depts():
     depts = Department.query.all()
-    return jsonify([{"id": d.id, "name": d.name} for d in depts])
+    return jsonify([{"id": d.id, "name": d.name, "name_en": d.name_en} for d in depts])
 
 @bp.post("/departments")
 @jwt_required()
 def create_department():
     admin = current_user()
-    if not admin or not admin.is_manager:
-        return jsonify({"error": "Admin access required"}), 403
+    if not admin or admin.login_name != "admin":
+        return jsonify({"error": "Strict admin access required"}), 403
     
     data = request.get_json() or {}
     name = data.get("name")
+    name_en = data.get("name_en")
     if not name:
         return jsonify({"error": "Department name is required"}), 400
     
     if Department.query.filter_by(name=name).first():
         return jsonify({"error": "Department already exists"}), 409
     
-    dept = Department(name=name)
+    dept = Department(name=name, name_en=name_en, code=f"DEPT_{name}")
     db.session.add(dept)
     db.session.commit()
-    return jsonify({"id": dept.id, "name": dept.name}), 201
+    return jsonify({"id": dept.id, "name": dept.name, "name_en": dept.name_en}), 201

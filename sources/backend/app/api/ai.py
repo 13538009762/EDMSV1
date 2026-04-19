@@ -35,10 +35,11 @@ def mock_ai_generate():
         yield f"data: {json.dumps({'type': 'start'})}\n\n"
 
         # Stream character by character
+        import eventlet
         for char in mock_text:
             chunk = json.dumps({"type": "chunk", "content": char})
             yield f"data: {chunk}\n\n"
-            time.sleep(0.02)  # 20ms per character — fast but visible typewriter
+            eventlet.sleep(0.01)  # Yield to event loop, 10ms is enough
 
         # Send completion event
         yield f"data: {json.dumps({'type': 'done'})}\n\n"

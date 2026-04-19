@@ -5,8 +5,8 @@
     </div>
 
     <el-container class="library-layout">
-      <el-aside width="260px" class="tree-sidebar">
-        <el-card shadow="sm" class="tree-card" :body-style="{ padding: '16px 8px' }">
+      <el-aside width="200px" class="tree-sidebar">
+        <el-card shadow="sm" class="tree-card" :body-style="{ padding: '12px 4px' }">
           <div class="tree-header">
             <el-icon><Folder /></el-icon> {{ t("library.wikiTree", "Wiki Directory") }}
           </div>
@@ -470,7 +470,7 @@ onMounted(() => {
 }
 
 .library-layout {
-  gap: 24px;
+  gap: 16px;
 }
 .tree-sidebar {
   overflow: hidden;
@@ -482,9 +482,9 @@ onMounted(() => {
 }
 .tree-header {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--el-text-color-primary);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   padding: 0 8px;
   display: flex;
   align-items: center;
@@ -494,7 +494,7 @@ onMounted(() => {
   padding: 0;
   overflow: hidden;
 }
-
+ 
 .custom-tree {
   background: transparent;
 }
@@ -502,7 +502,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 13px;
   width: 100%;
 }
 .node-label {

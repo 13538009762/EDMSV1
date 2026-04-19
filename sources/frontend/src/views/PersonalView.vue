@@ -10,7 +10,10 @@
         </div>
         <div class="info">
           <h2>{{ user?.last_name }} {{ user?.first_name }}</h2>
-          <div class="detail">{{ t("personal.department") }}: {{ t('dept.' + user?.department_name, user?.department_name) }}</div>
+          <div class="detail">
+            {{ t("personal.department") }}: 
+            {{ locale === 'zh-CN' ? user?.department_name : (user?.department_name_en || user?.department_name) }}
+          </div>
           <div class="detail">{{ t("personal.position") }}: {{ t('pos.' + (user?.position_full_name || user?.position_short), user?.position_full_name || user?.position_short) }}</div>
           <div class="detail">{{ t("personal.login") }}: {{ user?.login_name }}</div>
           <div class="detail">{{ t("personal.employeeNo") }}: {{ user?.employee_no }}</div>
@@ -88,6 +91,7 @@ interface UserInfo {
   login_name: string;
   employee_no: string;
   department_name: string;
+  department_name_en?: string;
   position_short: string;
   position_full_name?: string;
   birth_date?: string;
@@ -102,7 +106,7 @@ interface Stats {
   approved_docs: number;
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const user = ref<UserInfo | null>(null);
 const stats = ref<Stats | null>(null);
 

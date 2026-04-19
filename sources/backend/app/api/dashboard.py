@@ -84,32 +84,39 @@ def get_stats():
         print(f"Error in personal stats: {e}")
         traceback.print_exc()
 
-    # 6. 30-Day Trend (Raw SQL to avoid ORM column issues)
+    # 6. 30-Day Trend (Optimized to avoid 60 queries)
     trend_data = []
     try:
+        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Get doc counts grouped by day
+        doc_q = db.session.execute(text("""
+            SELECT strftime('%Y-%m-%d', updated_at) as day, COUNT(*) 
+            FROM documents 
+            WHERE updated_at >= :since AND is_template = 0 AND deleted_at IS NULL
+            GROUP BY day
+        """), {"since": thirty_days_ago}).all()
+        doc_map = {row[0]: row[1] for row in doc_q}
+
+        # Get approval counts grouped by day
+        app_q = db.session.execute(text("""
+            SELECT strftime('%Y-%m-%d', created_at) as day, COUNT(*) 
+            FROM approval_flows 
+            WHERE created_at >= :since AND status IN ('completed', 'rejected')
+            GROUP BY day
+        """), {"since": thirty_days_ago}).all()
+        app_map = {row[0]: row[1] for row in app_q}
+
         today = datetime.utcnow().date()
         for i in range(29, -1, -1):
-            target_date = today - timedelta(days=i)
-            start_dt = datetime.combine(target_date, datetime.min.time())
-            end_dt = datetime.combine(target_date, datetime.max.time())
-
-            doc_count = db.session.execute(
-                text("SELECT COUNT(*) FROM documents WHERE updated_at >= :s AND updated_at <= :e AND is_template = 0 AND deleted_at IS NULL"),
-                {"s": start_dt, "e": end_dt}
-            ).scalar() or 0
-
-            approval_count = db.session.execute(
-                text("SELECT COUNT(*) FROM approval_flows WHERE created_at >= :s AND created_at <= :e AND status IN ('approved', 'rejected')"),
-                {"s": start_dt, "e": end_dt}
-            ).scalar() or 0
-
+            d_str = (today - timedelta(days=i)).isoformat()
             trend_data.append({
-                "date": target_date.isoformat(),
-                "docs": doc_count,
-                "approvals": approval_count
+                "date": d_str,
+                "docs": doc_map.get(d_str, 0),
+                "approvals": app_map.get(d_str, 0)
             })
     except Exception as e:
-        print(f"Error in trend: {e}")
+        print(f"Error in optimized trend: {e}")
         traceback.print_exc()
         
     # 7. Activity Feed

@@ -14,6 +14,11 @@ export default {
     failed: "操作失败",
     unknown: "未知",
     submit: "提交",
+    roles: {
+      admin: "系统管理员",
+      manager: "部门经理",
+      user: "普通用户",
+    },
     status: {
       draft: "草稿",
       in_approval: "审批中",
@@ -24,6 +29,7 @@ export default {
     yes: "是",
     no: "否",
     noPermission: "没有权限执行此操作",
+    notifyRecipients: "通知被共享人",
   },
   nav: {
     library: "文档库",
@@ -33,6 +39,7 @@ export default {
     auditLog: "合规审计",
     notifications: "消息通知",
     noNotifications: "暂无新消息",
+    viewMore: "查看更多",
     masterData: "主数据",
     users: "成员管理",
     logout: "退出",
@@ -132,6 +139,7 @@ export default {
     title: "个人资料",
     employeeNo: "员工编号",
     loginName: "登录名",
+    password: "密码",
     firstName: "名",
     lastName: "姓",
     gender: "性别",

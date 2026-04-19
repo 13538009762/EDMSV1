@@ -20,7 +20,7 @@ from app.models import (
     DocumentVersion,
     User,
 )
-from app.models.workflow import ApprovalParticipant
+from app.models.workflow import ApprovalParticipant, ApprovalDecision
 from app.services.approval_service import start_flow
 from app.services.diff_service import diff_html, blame_html, side_by_side_diff
 from app.services.document_access import (
@@ -47,6 +47,26 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         owner_name = f"{doc.owner.last_name} {doc.owner.first_name}".strip()
         if doc.owner.department:
             owner_department = doc.owner.department.name
+    # Check if current user is a pending approver for this document
+    can_approve = False
+    pending_participant_id = None
+    if doc.status == "in_approval":
+        flow = ApprovalFlow.query.filter_by(document_id=doc.id, status="active").first()
+        if flow:
+            # Find the participant for current user
+            participant = ApprovalParticipant.query.filter_by(
+                flow_id=flow.id, 
+                user_id=user.id
+            ).filter(ApprovalParticipant.id.not_in(
+                select(ApprovalDecision.participant_id)
+            )).first()
+            
+            if participant:
+                # Also check if it's their turn for sequential
+                if flow.flow_type == "parallel" or participant.step_order == flow.current_order:
+                    can_approve = True
+                    pending_participant_id = participant.id
+
     return {
         "id": doc.id,
         "doc_number": doc.doc_number or f"{doc.created_at.strftime('%Y%m%d') if doc.created_at else '00000000'}{str(doc.id).zfill(3)}",
@@ -66,6 +86,8 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         "can_comment": user_can_comment(user, doc),
         "can_manage_permissions": user_can_manage_permissions(user, doc),
         "is_public": doc.is_public,
+        "can_approve": can_approve,
+        "pending_participant_id": pending_participant_id,
     }
 
 @bp.get("/tree")
@@ -539,6 +561,42 @@ def set_permissions(doc_id: int):
         db.session.add(
             DocumentPermission(document_id=doc.id, user_id=uid_int, role=role),
         )
+
+        # 💡 处理通知逻辑
+        should_notify = (role == "edit") or (data.get("notify") is True)
+        if should_notify:
+            from app.models.notification import Notification
+            from datetime import datetime, timedelta
+            
+            # 检查是否已有相同文档的未读协作通知，避免刷屏
+            existing = Notification.query.filter_by(
+                user_id=uid_int, 
+                related_doc_id=doc.id, 
+                type="协作", 
+                is_read=False
+            ).first()
+            
+            if not existing:
+                title = f"待编辑: {doc.title}" if role == "edit" else f"共享文档: {doc.title}"
+                expires = datetime.utcnow() + timedelta(days=30) if role == "edit" else None
+                
+                # 💡 增加过期时间 30 天
+                from datetime import datetime, timedelta
+                expires = datetime.utcnow() + timedelta(days=30)
+                
+                print(f"[DEBUG] Creating share notification for user {uid_int}, doc {doc.id}")
+                new_notif = Notification(
+                    user_id=uid_int,
+                    type="协作",
+                    title=title,
+                    content=f"用户 {user.display_name()} 为您分配了文档的 {role} 权限。",
+                    related_doc_id=doc.id,
+                    link_url=f"/doc/{doc.id}",
+                    expires_at=expires
+                )
+                db.session.add(new_notif)
+
+    print(f"[DEBUG] Committing permissions for doc {doc.id}")
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -718,12 +776,40 @@ def start_approval(doc_id: int):
         
     try:
         from app.services.approval_service import start_flow
-        print("[DEBUG] Calling start_flow...")
+        from app.extensions import socketio
+        from app.models.notification import Notification
+
+        # 1. 核心流程：创建审批流
         flow = start_flow(doc, flow_type, approvers)
-        print(f"[DEBUG] Flow created with ID {flow.id}. Committing...")
+        
+        # 2. 发送通知给审批人
+        sender_name = user.display_name()
+        for aud in approvers:
+            n = Notification(
+                user_id=aud,
+                type="审批",
+                title=f"待审批: {doc.title}",
+                content=f"用户 {sender_name} 邀请您审批文档 '{doc.title}'。",
+                related_doc_id=doc_id,
+                link_url=f"/inbox"
+            )
+            db.session.add(n)
+        
         db.session.commit()
-        print("[DEBUG] Commit successful.")
-        return jsonify({"flow_id": flow.id, "document_status": doc.status})
+        print(f"[DEBUG] Transaction committed. Flow: {flow.id}")
+
+        # 3. 实时通知前端
+        socketio.emit("status_change", {
+            "document_id": doc_id,
+            "status": doc.status,
+            "can_edit": False
+        }, room=f"doc_{doc_id}")
+        
+        return jsonify({
+            "flow_id": flow.id, 
+            "document_status": doc.status,
+            "can_edit": False
+        })
     except Exception as e:
         db.session.rollback()
         print(f"[DEBUG] ERROR in start_approval: {str(e)}")
@@ -748,6 +834,15 @@ def recall_document_approval(doc_id: int):
         return jsonify({"error": str(e)}), 400
         
     db.session.commit()
+
+    # 💡 发送实时状态通知
+    from app.extensions import socketio
+    socketio.emit("status_change", {
+        "document_id": doc.id,
+        "status": doc.status,
+        "can_edit": True
+    }, room=f"doc_{doc.id}")
+
     return jsonify({"ok": True, "document_status": doc.status})
 
 

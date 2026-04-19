@@ -106,6 +106,43 @@ def decide(participant_id: int):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     db.session.commit()
+
+    # 💡 如果文档审批完成（通过），通知所有编辑者
+    if doc and doc.status == "approved":
+        from app.models.notification import Notification
+        members_to_notify = []
+        # 文署的所有者
+        if doc.owner_id: members_to_notify.append(doc.owner_id)
+        # 文署的所有权限持有者（编辑者/评论者）
+        from app.models.document import DocumentPermission
+        perms = DocumentPermission.query.filter_by(document_id=doc.id).all()
+        for perm in perms:
+            if perm.user_id not in members_to_notify:
+                members_to_notify.append(perm.user_id)
+        
+        for mid in members_to_notify:
+            # 不通知合规审计（如果有）、不通知自己（当前审批完结人）
+            if mid == user.id: continue
+            
+            n = Notification(
+                user_id=mid,
+                type="系统",
+                title=f"文档已批准: {doc.title}",
+                content=f"您参与的文档 '{doc.title}' 已经通过审批。",
+                related_doc_id=doc.id,
+                link_url=f"/doc/{doc.id}"
+            )
+            db.session.add(n)
+        db.session.commit()
+
+    if doc:
+        from app.extensions import socketio
+        socketio.emit("status_change", {
+            "document_id": doc.id,
+            "status": doc.status,
+            "can_edit": (doc.status in ("draft", "approved"))
+        }, room=f"doc_{doc.id}")
+
     return jsonify({"ok": True, "document_status": doc.status if doc else "N/A"})
 
 

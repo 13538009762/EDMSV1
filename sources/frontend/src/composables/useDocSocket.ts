@@ -24,6 +24,7 @@ export function attachDocCollab(
   ydoc: Y.Doc,
   awareness: Awareness,
   user: { name: string; color: string },
+  onStatusChange?: (data: any) => void,
 ): () => void {
   const url = import.meta.env.VITE_SOCKET_URL || "";
   const socket: Socket = io(url || undefined, {
@@ -32,6 +33,12 @@ export function attachDocCollab(
   });
 
   const roomId = documentId;
+
+  socket.on("status_change", (data) => {
+    if (data.document_id === roomId && onStatusChange) {
+      onStatusChange(data);
+    }
+  });
 
   function onYjs(msg: { document_id?: number; payload?: string }) {
     if (msg.document_id !== roomId || !msg.payload) return;
@@ -62,6 +69,14 @@ export function attachDocCollab(
     socket.emit("yjs_update", { document_id: roomId, payload: toB64(update) });
   };
   ydoc.on("update", onDocUpdate);
+
+  // 💡 监听后端发出的状态变更事件
+  socket.on("status_change", (data) => {
+    if (data.document_id === roomId) {
+       // 触发一个自定义事件或全局通知
+       window.dispatchEvent(new CustomEvent("edms:status_changed", { detail: data }));
+    }
+  });
 
   const onAwareUpdate = (
     changes: { added: number[]; updated: number[]; removed: number[] },

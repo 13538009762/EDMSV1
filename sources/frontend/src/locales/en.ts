@@ -13,6 +13,11 @@ export default {
     markAllRead: "Mark all read",
     failed: "Operation failed",
     unknown: "Unknown",
+    roles: {
+      admin: "System Admin",
+      manager: "Dept Manager",
+      user: "Regular User",
+    },
     status: {
       draft: "Draft",
       in_approval: "In Approval",
@@ -28,6 +33,7 @@ export default {
     yes: "Yes",
     no: "No",
     noPermission: "No permission to perform this action",
+    notifyRecipients: "Notify Recipients",
   },
   nav: {
     library: "Library",
@@ -139,6 +145,7 @@ export default {
     title: "Personal Profile",
     employeeNo: "Employee No",
     loginName: "Login Name",
+    password: "Password",
     firstName: "First Name",
     lastName: "Last Name",
     gender: "Gender",

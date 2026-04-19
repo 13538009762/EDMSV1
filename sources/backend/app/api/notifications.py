@@ -13,24 +13,20 @@ def list_notifications():
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     
+    # 💡 自动清理过期通知（仅清理未加星标的）
+    from datetime import datetime
+    Notification.query.filter(
+        Notification.expires_at < datetime.utcnow(),
+        Notification.is_starred == False
+    ).delete()
+    db.session.commit()
+
     # Get last 50 notifications
     nots = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(50).all()
     
-    items = []
-    for n in nots:
-        items.append({
-            "id": n.id,
-            "title": n.title,
-            "content": n.content,
-            "type": n.type,
-            "is_read": n.is_read,
-            "link_url": n.link_url,
-            "created_at": n.created_at.isoformat() + "Z" if n.created_at else None
-        })
-        
     return jsonify({
-        "items": items,
-        "unread_count": sum(1 for n in items if not n["is_read"])
+        "items": [n.to_dict() for n in nots],
+        "unread_count": sum(1 for n in nots if not n.is_read)
     })
 
 @bp.post("/<int:id>/read")
@@ -42,6 +38,38 @@ def mark_read(id: int):
         return jsonify({"error": "Not found"}), 404
         
     n.is_read = True
+    db.session.commit()
+    return jsonify({"success": True})
+
+@bp.post("/<int:id>/star")
+@jwt_required()
+def toggle_star(id: int):
+    user = current_user()
+    n = db.session.get(Notification, id)
+    if not n or n.user_id != user.id:
+        return jsonify({"error": "Not found"}), 404
+    
+    n.is_starred = not n.is_starred
+    if not n.is_starred:
+        # 💡 取消星标，重新开始 30 天计时
+        from datetime import datetime, timedelta
+        n.expires_at = datetime.utcnow() + timedelta(days=30)
+    else:
+        # 💡 加上星标，永不过期（或者设置一个极远的时间）
+        n.expires_at = None
+        
+    db.session.commit()
+    return jsonify({"success": True, "is_starred": n.is_starred})
+
+@bp.delete("/<int:id>")
+@jwt_required()
+def delete_notification(id: int):
+    user = current_user()
+    n = db.session.get(Notification, id)
+    if not n or n.user_id != user.id:
+        return jsonify({"error": "Not found"}), 404
+    
+    db.session.delete(n)
     db.session.commit()
     return jsonify({"success": True})
 

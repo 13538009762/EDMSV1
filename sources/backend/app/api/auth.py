@@ -124,6 +124,15 @@ def me():
             "id": user.id,
             "login_name": user.login_name,
             "display_name": user.display_name(),
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "employee_no": user.employee_no,
             "is_manager": user.is_manager,
+            "department": {
+                "id": user.department.id if user.department else None,
+                "name": user.department.name if user.department else "",
+                "name_en": user.department.name_en if user.department else ""
+            } if user.department else None,
+            "position": user.position_short
         }
     )
