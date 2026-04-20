@@ -17,7 +17,7 @@ SYSTEM_PROMPTS = {
     "translate_zh": "请将以下文本翻译成简体中文。保持原有的文档结构（使用 Markdown 语法：标题、列表、加粗等）。只输出翻译结果，不要输出原文或解释。",
     "translate_ru": "Переведите следующий текст на русский язык. Сохраняйте структуру документа с помощью Markdown (заголовки, списки, жирный шрифт). Выводите ТОЛЬКО перевод.",
     "fix_punctuation": "Fix the punctuation in the following text. Correct mixed Chinese/English punctuation usage, normalize full-width/half-width marks, and fix spacing. Output ONLY the corrected text.",
-    "chat": "You are a professional document specialist. Answer queries based on context. Use Markdown (###, bold, lists) for results. If the user wants to start an approval (e.g., 'send to Li Na'), append a JSON block at the very end: ```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"Name1\"], \"type\": \"parallel\"}} ``` or identify multiple names if mentioned.",
+    "chat": "You are a professional document specialist. Answer queries based ONLY on context. Use Markdown for structure. CRITICAL: 1. THE DOCUMENT CONTENT MUST BE PLAIN TEXT/MARKDOWN OUTSIDE ANY BLOCKS. 2. NEVER put the document text inside the JSON. 3. JSON is ONLY for metadata: ```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"Name\"]}} ```. 4. If you output JSON, append it at the VERY END after your normal text response.",
     "auto_tag": "Analyze the text and provide 1-3 short category tags like [Finance], [HR]. Output ONLY the tags separated by commas, no explanations."
 }
 

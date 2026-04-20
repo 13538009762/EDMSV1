@@ -545,14 +545,21 @@ function resolveApproverIds(names: any = []) {
   
   list.forEach(name => {
     if (!name || typeof name !== 'string') return;
-    // Strip common AI punctuation: [Name], "Name", Name.
-    const cleanName = name.replace(/[\[\]"'.]/g, "").trim().toLowerCase();
+    
+    // 💡 Normalized Search: Remove spaces and ignore case
+    const cleanName = name.replace(/[\[\]"'.\s]/g, "").toLowerCase();
     if (!cleanName) return;
 
-    const match = userOptions.value.find(u => {
-      const dName = (u.display_name || "").toLowerCase();
+    const match = userOptions.value.find((u: any) => {
+      const dName = (u.display_name || "").replace(/\s/g, "").toLowerCase();
       const lName = (u.login_name || "").toLowerCase();
-      return dName === cleanName || lName === cleanName || dName.includes(cleanName) || cleanName.includes(dName);
+      const eNo = (String(u.employee_no || "")).toLowerCase();
+      
+      return dName === cleanName || 
+             lName === cleanName || 
+             eNo === cleanName ||
+             dName.includes(cleanName) || 
+             cleanName.includes(dName);
     });
 
     if (match) ids.push(match.id);
@@ -648,14 +655,25 @@ async function askAi() {
             if (data.type === "chunk" && data.content) {
               aiMsg.content += data.content;
             } else if (data.type === "done") {
-              // Extract action from message content
+              // Extract action from message content with multi-format support
               const jsonMatch = aiMsg.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
               if (jsonMatch) {
                 try {
-                  const actionData = JSON.parse(jsonMatch[1]);
-                  if (actionData.action) {
+                  let actionData = JSON.parse(jsonMatch[1]);
+                  // 💡 Robustness: Normalize different AI output formats
+                  if (actionData.start_approval || actionData.action === "start_approval") {
+                    const normalizedAction = {
+                      action: "start_approval",
+                      params: actionData.params || {
+                        approvers: actionData.approvers || [],
+                        type: actionData.type || "parallel"
+                      }
+                    };
+                    aiMsg.action = normalizedAction;
+                    // Remove the raw JSON block from the content for clean UI
+                    aiMsg.content = aiMsg.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
+                  } else if (actionData.action) {
                     aiMsg.action = actionData;
-                    // Remove the raw JSON block from the chat display for clean UX
                     aiMsg.content = aiMsg.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                   }
                 } catch(e) { console.error("Action parsing error", e); }
@@ -677,8 +695,29 @@ async function askAi() {
 }
 function insertChatToEditor(content: string) {
   if (!editor.value || !content) return;
-  // Use insertContent which now supports Markdown thanks to the extension
-  editor.value.chain().focus().insertContent(content).run();
+  
+  // 💡 Robustness: Aggressively strip ANY leftover JSON blocks to prevent leakage into document
+  let cleanContent = content.replace(/```json[\s\S]*?```/g, "").replace(/\{[\s\n]*"approvers"[\s\S]*?\}/g, "").trim();
+  
+  if (cleanContent.startsWith('```')) {
+    const lines = cleanContent.split('\n');
+    if (lines.length > 2) {
+      cleanContent = lines.slice(1, -1).join('\n').trim();
+    }
+  }
+
+  if (!cleanContent) {
+    ElMessage.warning(t("editor.ai.noContentToInsert", "No text content found to insert."));
+    return;
+  }
+
+  try {
+    const html = (editor.value.storage as any).markdown.getHtml(cleanContent);
+    editor.value.chain().focus().insertContent(html).run();
+  } catch (e) {
+    console.error("Markdown parse failed", e);
+    editor.value.chain().focus().insertContent(cleanContent).run();
+  }
   ElMessage.success(t("editor.ai.insertToDoc"));
 }
 
@@ -782,9 +821,9 @@ const userColor = `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart
 
 // Undo/Redo Manager with 20-step limit
 const undoManager = new Y.UndoManager(ydoc.getXmlFragment("default"), {
-  limit: 20,
+  limit: 20, // 💡 Robustness: Restored 20-step limit as requested
   captureTimeout: 200 // Consolidate fast edits into one step
-});
+} as any);
 
 function doUndo() { 
   if (editor.value) {
