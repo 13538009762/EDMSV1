@@ -59,6 +59,7 @@
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
+          size="small"
           background
           layout="prev, pager, next, total"
           :total="total"

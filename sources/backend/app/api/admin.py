@@ -103,7 +103,9 @@ def admin_list_audit_logs():
     if not user or user.login_name != 'admin':
         return jsonify({"error": "Forbidden"}), 403
 
-    query = AuditLog.query
+    from datetime import datetime, timedelta
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    query = AuditLog.query.filter(AuditLog.created_at >= cutoff)
 
     # Filters
     document_id = request.args.get("document_id")

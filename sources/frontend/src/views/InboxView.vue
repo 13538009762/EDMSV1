@@ -91,7 +91,7 @@
             <el-pagination
               v-model:current-page="currentPage"
               :page-size="pageSize"
-              small
+              size="small"
               background
               layout="prev, pager, next, total"
               :total="filteredItems.length"
@@ -188,7 +188,7 @@
             <el-pagination
               v-model:current-page="currentMinePage"
               :page-size="pageSize"
-              small
+              size="small"
               background
               layout="prev, pager, next, total"
               :total="filteredMineApps.length"

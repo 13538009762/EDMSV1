@@ -49,6 +49,12 @@ def audit_log_required(action: str):
                         ip_address=request.remote_addr,
                     )
                     db.session.add(log)
+                    
+                    # 💡 Proactive Cleanup: Delete logs older than 24h
+                    from datetime import datetime, timedelta
+                    cutoff = datetime.utcnow() - timedelta(hours=24)
+                    AuditLog.query.filter(AuditLog.created_at < cutoff).delete()
+                    
                     db.session.commit()
             except Exception:
                 # Audit logging should never break the main request

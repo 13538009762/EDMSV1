@@ -14,8 +14,8 @@
         </div>
       </div>
       <el-radio-group v-model="mode" @change="onModeChange" class="mode-toggle">
-        <el-radio-button label="compare">{{ t("diff.modes.compare") }}</el-radio-button>
-        <el-radio-button label="blame">{{ t("diff.modes.blame") }}</el-radio-button>
+        <el-radio-button label="compare" value="compare">{{ t("diff.modes.compare") }}</el-radio-button>
+        <el-radio-button label="blame" value="blame">{{ t("diff.modes.blame") }}</el-radio-button>
       </el-radio-group>
     </div>
 
@@ -37,8 +37,8 @@
         />
       </el-select>
       <el-radio-group v-model="diffMode" size="small" class="diff-mode-select">
-        <el-radio-button label="inline">{{ t("diff.modes.inline") }}</el-radio-button>
-        <el-radio-button label="side_by_side">{{ t("diff.modes.sideBySide") }}</el-radio-button>
+        <el-radio-button label="inline" value="inline">{{ t("diff.modes.inline") }}</el-radio-button>
+        <el-radio-button label="side_by_side" value="side_by_side">{{ t("diff.modes.sideBySide") }}</el-radio-button>
       </el-radio-group>
       <el-button type="primary" @click="loadDiff">{{ t("diff.compare") }}</el-button>
     </div>

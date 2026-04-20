@@ -29,7 +29,6 @@
               <el-dropdown-item v-if="meta.can_edit && meta.status === 'draft'" @click="showApproval = true">{{ t("editor.startApproval") }}</el-dropdown-item>
               <el-dropdown-item v-if="meta.status === 'rejected' && isOwner" @click="newVersion">{{ t("editor.newVersion") }}</el-dropdown-item>
               <el-dropdown-item @click="searchVisible = !searchVisible">{{ t("editor.findReplace") }}</el-dropdown-item>
-              <el-dropdown-item @click="fixPunc">{{ t("editor.punctuation") }}</el-dropdown-item>
               <el-dropdown-item @click="pageSettingsVisible = true">{{ t("editor.pageSetup") }}</el-dropdown-item>
               <el-dropdown-item v-if="meta.can_manage_permissions && (meta.status === 'draft' || meta.status === 'approved')" @click="showShare = true">{{ t("library.share") }}</el-dropdown-item>
               <el-dropdown-item v-if="(isOwner || isAdmin) && (meta.status === 'draft' || meta.status === 'rejected' || meta.status === 'approved')" divided style="color: var(--el-color-danger)" @click="confirmDeleteDoc">
@@ -54,6 +53,11 @@
     </el-dialog>
 
     <div class="editor-toolbar" v-if="editor && meta.doc_type !== 'pdf'" v-show="meta.can_edit">
+      <el-button-group class="toolbar-group" style="margin-right: 8px;">
+        <el-button size="small" @click="doUndo" :icon="Back" :title="t('editor.toolbar.undo')"></el-button>
+        <el-button size="small" @click="doRedo" :icon="Right" :title="t('editor.toolbar.redo')"></el-button>
+      </el-button-group>
+
       <el-select v-model="currentFontFamily" size="small" style="width: 120px" @change="setFontFamily">
         <el-option label="Default" value="Inter, sans-serif" />
         <el-option label="Arial" value="Arial" />
@@ -117,7 +121,6 @@
       <el-button size="small" @click="insertImage">{{ t("editor.toolbar.image") }}</el-button>
       <el-button size="small" @click="insertCustomTable">{{ t("editor.toolbar.table") }}</el-button>
       <el-button size="small" type="success" plain @click="importDocx">{{ t("editor.toolbar.importDocx") }}</el-button>
-      <el-button size="small" @click="fixPunc">{{ t("editor.toolbar.fixPunc") }}</el-button>
       <el-button size="small" type="info" plain @click="searchVisible = !searchVisible">{{ t("editor.toolbar.findReplace") }}</el-button>
       
       <el-button-group class="toolbar-group" v-if="editor && editor.isActive('table')">
@@ -190,15 +193,16 @@
             class="ai-bubble-menu"
           >
             <el-dropdown size="small" @command="handleAiAction" trigger="click" placement="top">
-              <el-button size="small" type="primary" plain class="ai-btn">✨ AI Assistant <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+              <el-button size="small" type="primary" plain class="ai-btn">✨ {{ t("editor.ai.assistant") }} <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="summarize">Summarize</el-dropdown-item>
-                  <el-dropdown-item command="expand">Expand</el-dropdown-item>
-                  <el-dropdown-item command="polish">Polish Tone</el-dropdown-item>
-                  <el-dropdown-item divided command="translate_en">Translate to EN</el-dropdown-item>
-                  <el-dropdown-item command="translate_zh">Translate to ZH</el-dropdown-item>
-                  <el-dropdown-item command="translate_ru">Translate to RU</el-dropdown-item>
+                  <el-dropdown-item command="summarize">{{ t("editor.ai.summarize") }}</el-dropdown-item>
+                  <el-dropdown-item command="expand">{{ t("editor.ai.expand") }}</el-dropdown-item>
+                  <el-dropdown-item command="polish">{{ t("editor.ai.polish") }}</el-dropdown-item>
+                  <el-dropdown-item divided command="fix_punctuation">✨ {{ t("editor.ai.fixPunc") }}</el-dropdown-item>
+                  <el-dropdown-item divided command="translate_en">{{ t("editor.ai.translateEn") }}</el-dropdown-item>
+                  <el-dropdown-item command="translate_zh">{{ t("editor.ai.translateZh") }}</el-dropdown-item>
+                  <el-dropdown-item command="translate_ru">{{ t("editor.ai.translateRu") }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -209,6 +213,86 @@
       </div>
       <div class="side">
         <el-tabs v-model="activeSideTab" stretch>
+          <!-- AI Tab -->
+          <el-tab-pane name="ai">
+            <template #label>
+              <span>✨ {{ t("editor.ai.aiTab") }}</span>
+            </template>
+            <div class="ai-panel">
+              <!-- AI Tags Section -->
+              <div class="ai-tags-section">
+                <div class="section-title">
+                   <span>🏷️ {{ t("editor.ai.aiTags") }}</span>
+                   <el-button link type="primary" size="small" @click="runAutoTag" :loading="tagging">
+                     {{ t("editor.ai.aiActionAutoTag") }}
+                   </el-button>
+                </div>
+                <div class="tags-container">
+                  <el-tag v-for="tag in aiTags" :key="tag" size="small" round effect="plain" class="ai-tag">
+                    {{ tag }}
+                  </el-tag>
+                  <div v-if="aiTags.length === 0 && !tagging" class="empty-tags">
+                    {{ t("editor.ai.noTagsYet") }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI Chat Section -->
+              <div class="ai-chat-container">
+                <div class="chat-messages" ref="chatScroll">
+                  <div v-for="(msg, idx) in chatHistory" :key="idx" :class="['chat-msg', msg.role]">
+                    <div class="msg-content">{{ msg.content }}</div>
+                    
+                    <!-- AI Action Card -->
+                    <div v-if="msg.action && msg.action.params" class="ai-action-card">
+                      <div class="card-header">
+                        <el-icon><MagicStick /></el-icon>
+                        <span>{{ t('editor.ai.actionConfirmTitle') }}</span>
+                      </div>
+                      <div class="card-body">
+                        <div class="action-desc" v-if="msg.action.params.approvers">
+                          {{ t('editor.ai.actionStartApproval', { names: msg.action.params.approvers.join?.(', ') || '' }) }}
+                        </div>
+                        <div class="action-meta">
+                          <el-tag size="small" type="info" effect="dark">
+                            {{ t('editor.ai.actionType', { type: msg.action.params.type || 'parallel' }) }}
+                          </el-tag>
+                        </div>
+                      </div>
+                      <div class="card-actions">
+                        <el-button type="primary" size="small" @click="confirmAiAction(msg.action, idx)">
+                          {{ t('editor.ai.actionConfirmBtn') }}
+                        </el-button>
+                        <el-button size="small" @click="msg.action = null">
+                          {{ t('editor.ai.actionCancelBtn') }}
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="chatHistory.length === 0" class="chat-placeholder">
+                    <el-empty :description="t('editor.ai.aiChatEmpty')" :image-size="40" />
+                  </div>
+                </div>
+                
+                <div class="chat-input-area">
+                  <el-input
+                    v-model="aiQuery"
+                    type="textarea"
+                    :rows="2"
+                    :placeholder="t('editor.ai.aiChatPlaceholder')"
+                    @keyup.enter.prevent="askAi"
+                    resize="none"
+                  />
+                  <div class="chat-actions">
+                    <el-button type="primary" size="small" :loading="asking" @click="askAi">
+                      {{ t("common.send") }}
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+
           <el-tab-pane :label="t('editor.commentsTab')" name="comments">
             <div class="comments-header">
               <el-button v-if="meta.can_comment" size="small" type="primary" style="width: 100%; margin-top: 8px; margin-bottom: 12px;" @click="addCommentOnSelection">
@@ -300,8 +384,8 @@
       <el-form label-width="120px">
         <el-form-item :label="t('editor.orientation')">
           <el-radio-group v-model="page.orientation">
-            <el-radio label="portrait">{{ t("editor.portrait") }}</el-radio>
-            <el-radio label="landscape">{{ t("editor.landscape") }}</el-radio>
+            <el-radio label="portrait" value="portrait">{{ t("editor.portrait") }}</el-radio>
+            <el-radio label="landscape" value="landscape">{{ t("editor.landscape") }}</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item :label="t('editor.paperSize')">
@@ -327,8 +411,8 @@
 
     <el-dialog v-model="showApproval" :title="t('editor.approvalTitle')" width="420px" destroy-on-close>
       <el-radio-group v-model="approvalType">
-        <el-radio label="parallel">{{ t("editor.parallel") }}</el-radio>
-        <el-radio label="sequential">{{ t("editor.sequential") }}</el-radio>
+        <el-radio label="parallel" value="parallel">{{ t("editor.parallel") }}</el-radio>
+        <el-radio label="sequential" value="sequential">{{ t("editor.sequential") }}</el-radio>
       </el-radio-group>
       <div style="margin-top: 12px; display: flex; gap: 8px;">
         <el-select v-model="selectedDeptId" clearable :placeholder="t('profile.dept')" style="width: 150px">
@@ -374,7 +458,7 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { ArrowDown } from "@element-plus/icons-vue";
+import { ArrowDown, Back, Right, MagicStick } from "@element-plus/icons-vue";
 
 import { FontSize, LineHeight, Indent, CommentMark, TableExit, SearchAndReplace } from "@/utils/tiptapExtensions";
 import api from "@/api/client";
@@ -423,7 +507,144 @@ const meta = ref<any>({
 const showShare = ref(false);
 const comments = ref<Array<any>>([]);
 const replyMap = ref<Record<number, string>>({});
-const activeSideTab = ref("comments");
+const activeSideTab = ref("ai");
+const aiTags = ref<string[]>([]);
+const tagging = ref(false);
+const aiQuery = ref("");
+const asking = ref(false);
+const chatHistory = ref<Array<{role: 'user' | 'ai', content: string, action?: any}>>([]);
+const chatScroll = ref<HTMLElement | null>(null);
+
+// AI Agent Action Resolver
+function resolveApproverIds(names: string[] = []) {
+  const ids: number[] = [];
+  const notFound: string[] = [];
+  if (!Array.isArray(names)) return { ids, notFound };
+  
+  names.forEach(name => {
+    if (!name) return;
+    const cleanName = name.replace(/[\[\]]/g, "").trim();
+    const match = userOptions.value.find(u => 
+      u.display_name?.includes(cleanName) || 
+      u.login_name?.toLowerCase() === cleanName.toLowerCase() ||
+      (typeof u.display_name === 'string' && u.display_name.toLowerCase().includes(cleanName.toLowerCase()))
+    );
+    if (match) ids.push(match.id);
+    else notFound.push(name);
+  });
+  return { ids, notFound };
+}
+
+async function confirmAiAction(action: any, msgIdx: number) {
+  if (action?.action === "start_approval") {
+    const approvers = action.params?.approvers || [];
+    const { ids, notFound } = resolveApproverIds(approvers);
+    if (notFound.length > 0) {
+      ElMessage.warning(t("editor.ai.approverNotFound", { name: notFound.join(", ") }));
+    }
+    if (ids.length === 0) return;
+    
+    try {
+      loading.value = true;
+      await api.post(`/documents/${docId.value}/approvals`, {
+        type: action.params.approval_type || action.params.type || "parallel",
+        approvers: ids,
+      });
+      ElMessage.success(t("editor.messages.sentToApproval"));
+      chatHistory.value[msgIdx].action = null; // Hide card after success
+      loadDoc(true);
+    } catch (err) {
+      ElMessage.error(t("common.failed"));
+    } finally {
+      loading.value = false;
+    }
+  }
+}
+
+async function runAutoTag() {
+  if (!editor.value) return;
+  tagging.value = true;
+  try {
+    const text = editor.value.getText().slice(0, 500);
+    const response = await api.post("/ai/generate", { action: "auto_tag", prompt: text });
+    if (response.data?.content) {
+      aiTags.value = response.data.content.split(",").map((s: string) => s.trim());
+    }
+  } catch (err) {
+    console.error("Auto-tag failed:", err);
+  } finally {
+    tagging.value = false;
+  }
+}
+
+async function askAi() {
+  if (!aiQuery.value.trim() || asking.value || !editor.value) return;
+  
+  const query = aiQuery.value.trim();
+  chatHistory.value.push({ role: 'user', content: query });
+  aiQuery.value = "";
+  asking.value = true;
+  
+  // Scoped RAG: Send document context + user question
+  const docContext = editor.value.getText().slice(0, 3000); // Send first 3k chars as context
+  const fullPrompt = `Document Context:\n${docContext}\n\nUser Question: ${query}`;
+  
+  try {
+     const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
+      body: JSON.stringify({ action: "chat", prompt: fullPrompt })
+    });
+    
+    if (!response.ok) throw new Error("AI request failed");
+    
+    const aiMsg = { role: 'ai' as const, content: "", action: undefined as any };
+    chatHistory.value.push(aiMsg);
+    
+    const reader = response.body?.getReader();
+    if (!reader) return;
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = new TextDecoder().decode(value);
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const raw = line.replace("data: ", "").trim();
+          if (raw === "[DONE]") break;
+          try {
+            const data = JSON.parse(raw);
+            if (data.type === "chunk" && data.content) {
+              aiMsg.content += data.content;
+            } else if (data.type === "done") {
+              // Extract action from message content
+              const jsonMatch = aiMsg.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+              if (jsonMatch) {
+                try {
+                  const actionData = JSON.parse(jsonMatch[1]);
+                  if (actionData.action) {
+                    aiMsg.action = actionData;
+                    // Remove the raw JSON block from the chat display for clean UX
+                    aiMsg.content = aiMsg.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
+                  }
+                } catch(e) { console.error("Action parsing error", e); }
+              }
+            }
+            // Auto scroll to latest response
+            if (chatScroll.value) {
+              chatScroll.value.scrollTop = chatScroll.value.scrollHeight;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+  } catch (err) {
+    ElMessage.error(t("common.failed"));
+  } finally {
+    asking.value = false;
+  }
+}
 const versionList = ref<Array<any>>([]);
 
 const searchVisible = ref(false);
@@ -522,6 +743,27 @@ const ydoc = new Y.Doc();
 const awareness = new Awareness(ydoc);
 const userColor = `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0")}`;
 
+// Undo/Redo Manager with 20-step limit
+const undoManager = new Y.UndoManager(ydoc.getXmlFragment("default"), {
+  limit: 20,
+  captureTimeout: 200 // Consolidate fast edits into one step
+});
+
+function doUndo() { 
+  if (editor.value) {
+    editor.value.chain().focus().undo().run();
+  } else {
+    undoManager.undo();
+  }
+}
+function doRedo() { 
+  if (editor.value) {
+    editor.value.chain().focus().redo().run();
+  } else {
+    undoManager.redo();
+  }
+}
+
 let collabDisconnect: (() => void) | null = null;
 const staticCollabs = ref<Array<{ name: string; color: string }>>([]);
 
@@ -543,8 +785,13 @@ function refreshCollabList() {
 
 const editor = useEditor({
   extensions: [
-    StarterKit.configure({ history: false }),
-    Underline, TextStyle, Color, FontFamily, CustomImage, Dropcursor, Gapcursor, TableRow, TableHeader, TableCell,
+    StarterKit.configure({ 
+      history: {
+        depth: 20,
+        newGroupDelay: 300
+      }
+    }),
+    Underline, TextStyle, Color, FontFamily, CustomImage, TableRow, TableHeader, TableCell,
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ["heading", "paragraph", "image"] }),
     Collaboration.configure({ document: ydoc }),
@@ -585,10 +832,54 @@ async function savePageSettings() {
   } catch { ElMessage.error(t("common.failed", "Failed")); }
 }
 
-function fixPunc() {
+async function fixPunc() {
   if (!editor.value) return;
-  editor.value.commands.setContent(fixPunctuation(editor.value.getText())); 
-  ElMessage.success(t("editor.messages.punctuationFixed"));
+  // Repurpose handleAiAction for whole document
+  const fullText = editor.value.getText();
+  if (!fullText.trim()) return;
+  
+  loading.value = true;
+  try {
+    const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
+      body: JSON.stringify({ action: "fix_punctuation", prompt: fullText })
+    });
+    
+    if (!response.ok) throw new Error("AI request failed");
+    
+    let result = "";
+    const reader = response.body?.getReader();
+    if (!reader) return;
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = new TextDecoder().decode(value);
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const raw = line.replace("data: ", "").trim();
+          if (raw === "[DONE]") break;
+          try {
+            const data = JSON.parse(raw);
+            if (data.type === "chunk" && data.content) {
+              result += data.content;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+    
+    // Replace content carefully
+    editor.value.commands.setContent(result);
+    ElMessage.success(t("editor.messages.punctuationFixed"));
+  } catch (err) {
+    console.error("AI Punctuation fix failed:", err);
+    ElMessage.error(t("common.failed", "Failed"));
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function startApproval() {
@@ -763,6 +1054,9 @@ async function saveNow() {
     const update = Y.encodeStateAsUpdate(ydoc);
     await api.put(`/documents/${docId.value}/content`, { content_json, yjs_state_b64: btoa(String.fromCharCode(...update)) });
     saveHint.value = t("editor.savedAt", { time: new Date().toLocaleTimeString() });
+    
+    // 💡 Clear history on save as requested
+    undoManager.clear();
   } catch { saveHint.value = t("editor.saveFailed"); }
   finally { saving.value = false; }
 }
@@ -939,7 +1233,8 @@ async function handleAiAction(action: string) {
   if (!text) return ElMessage.warning(t("editor.selectTextFirst", "Please select text"));
   generatingAi.value = true;
   try {
-    editor.value.chain().focus().insertContent("\n\n").run();
+    // Move cursor to the end of selection to avoid replacing original text
+    editor.value.chain().focus().setTextSelection(selection.to).insertContent("\n\n").run();
     const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
@@ -956,13 +1251,19 @@ async function handleAiAction(action: string) {
         const chunkStr = decoder.decode(value, { stream: true });
         for (const line of chunkStr.split("\n")) {
           if (line.startsWith("data: ")) {
-            const dataStr = line.slice(6);
-            if (!dataStr) continue;
+            const raw = line.replace("data: ", "").trim();
+            if (raw === "[DONE]" || !raw) continue;
             try {
-              const data = JSON.parse(dataStr);
-              if (data.type === "chunk") editor.value.chain().focus().insertContent(data.content).run();
-              else if (data.type === "done") { done = true; break; }
-            } catch(e) {}
+              const data = JSON.parse(raw);
+              if (data.type === "chunk" && data.content) {
+                editor.value.chain().focus().insertContent(data.content).run();
+              } else if (data.type === "done") {
+                done = true;
+                break;
+              }
+            } catch(e) {
+              console.warn("Parse error in handleAiAction:", e);
+            }
           }
         }
       }
@@ -1320,5 +1621,161 @@ watch(() => route.params.id, () => loadDoc());
   z-index: 15;
   background-repeat: repeat;
   opacity: 0.8;
+}
+
+/* AI Panel Styles */
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);
+  padding: 12px;
+}
+
+.ai-tags-section {
+  margin-bottom: 20px;
+  background: var(--el-color-primary-light-9);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--el-color-primary);
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--el-text-color-primary);
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ai-tag:hover {
+  transform: scale(1.05);
+  border-color: var(--el-color-primary);
+}
+
+.empty-tags {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-style: italic;
+}
+
+.ai-chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--el-fill-color-extra-light);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-msg {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chat-msg.user {
+  align-self: flex-end;
+  background-color: var(--el-color-primary);
+  color: white;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-msg.ai {
+  align-self: flex-start;
+  background-color: white;
+  color: var(--el-text-color-primary);
+  border: 1px solid var(--el-border-color-lighter);
+  border-bottom-left-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.chat-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-input-area {
+  padding: 12px;
+  background: white;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* AI Action Card Styles */
+.ai-action-card {
+  margin-top: 12px;
+  background: white;
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.ai-action-card .card-header {
+  background: var(--el-color-primary-light-9);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--el-color-primary-light-7);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--el-color-primary);
+}
+
+.ai-action-card .card-body {
+  padding: 12px;
+}
+
+.ai-action-card .action-desc {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.ai-action-card .action-meta {
+  margin-bottom: 8px;
+}
+
+.ai-action-card .card-actions {
+  padding: 8px 12px;
+  background: var(--el-fill-color-extra-light);
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

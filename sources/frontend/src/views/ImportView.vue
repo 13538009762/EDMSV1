@@ -85,6 +85,7 @@
 
           <div class="pagination">
             <el-pagination
+              size="small"
               layout="prev, pager, next"
               v-model:current-page="currentPage"
               :total="totalUsers"

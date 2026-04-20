@@ -53,6 +53,7 @@
         v-model:current-page="page"
         v-model:page-size="size"
         :total="total"
+        size="small"
         layout="total, prev, pager, next"
         @current-change="loadData"
       />

@@ -831,12 +831,21 @@ def upload_image():
 @jwt_required()
 def start_approval(doc_id: int):
     user = current_user()
-    print(f"[DEBUG] Starting approval for doc {doc_id} by user {user.login_name if user else 'UNKNOWN'}")
+    doc = db.session.get(Document, doc_id)
+    if not doc:
+        return jsonify({"error": "Document not found"}), 404
+        
+    print(f"[DEBUG] Starting approval for doc {doc_id} by user {user.login_name if user else 'UNKNOWN'}. Doc Owner: {doc.owner_id}, Status: {doc.status}")
+    
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
-    if not doc or not user_can_manage_permissions(user, doc):
-        return jsonify({"error": "Forbidden"}), 403
+    
+    # 💡 只有草稿状态才能发起审批
+    if doc.status != "draft":
+        return jsonify({"error": f"Cannot start approval: Document is already in {doc.status} status."}), 400
+        
+    if not user_can_manage_permissions(user, doc):
+        return jsonify({"error": "Forbidden: You don't have permission to start approval for this document."}), 403
     
     data = request.get_json(silent=True) or {}
     flow_type = (data.get("type") or "parallel").lower()
