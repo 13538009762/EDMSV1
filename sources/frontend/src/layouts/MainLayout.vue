@@ -1,8 +1,8 @@
 <template>
-  <el-container class="layout">
-    <el-header class="header">
+  <div class="layout-wrapper">
+    <header class="header">
       <div class="brand-container">
-        <el-icon class="brand-icon"><Platform /></el-icon>
+        <img src="/favicon.png" class="brand-logo" alt="Logo" />
         <span class="brand">EDMS</span>
       </div>
       <el-menu mode="horizontal" router :default-active="route.path" class="menu" :ellipsis="false">
@@ -100,11 +100,11 @@
       <el-button type="primary" link @click="onLogout">
         <el-icon><SwitchButton /></el-icon>
       </el-button>
-    </el-header>
-    <el-main class="main">
-      <router-view :key="route.fullPath" />
-    </el-main>
-  </el-container>
+    </header>
+    <main class="main">
+      <router-view />
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -115,7 +115,7 @@ import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
 import { 
-  Platform, Reading, DataLine, Bell, Message, Setting, SwitchButton, 
+  Reading, DataLine, Bell, Message, Setting, SwitchButton, 
   Monitor, CopyDocument, User, Star, StarFilled, Delete 
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
@@ -264,7 +264,10 @@ html.theme-user .layout {
 }
 
 /* Specific Layout Header Style (Glassmorphism) */
-.layout > .header {
+.layout-wrapper > .header {
+  height: 60px;
+  display: flex;
+  align-items: center;
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   z-index: 2000;
@@ -273,31 +276,32 @@ html.theme-user .layout {
   transition: all 0.3s;
 }
 
-html.theme-admin .layout > .header {
+html.theme-admin .layout-wrapper > .header {
   background-color: rgba(255, 255, 255, 0.7);
   border-bottom: 2px solid rgba(139, 92, 246, 0.2);
 }
 
-html.theme-manager .layout > .header {
+html.theme-manager .layout-wrapper > .header {
   background-color: rgba(255, 255, 255, 0.7);
   border-bottom: 2px solid rgba(37, 99, 235, 0.2);
 }
 
-html.theme-user .layout > .header {
+html.theme-user .layout-wrapper > .header {
   background-color: rgba(255, 255, 255, 0.7);
   border-bottom: 2px solid rgba(13, 148, 136, 0.2);
 }
 </style>
 
 <style scoped>
-.layout {
+.layout-wrapper {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
   background-color: #f8fafc;
 }
 .header {
   display: flex;
   align-items: center;
-  /* background: white; */ /* Handled by glassmorphism in global style */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   padding: 0 24px;
 }
@@ -310,6 +314,12 @@ html.theme-user .layout > .header {
 .brand-icon {
   font-size: 24px;
   margin-right: 8px;
+}
+.brand-logo {
+  height: 32px;
+  width: auto;
+  margin-right: 12px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
 .brand {
   font-size: 20px;
@@ -343,6 +353,11 @@ html.theme-user .layout > .header {
 .main {
   padding: 0;
   overflow: auto;
+}
+.view-content-wrapper {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .spacer {
   flex: 1;

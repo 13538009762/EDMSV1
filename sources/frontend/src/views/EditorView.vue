@@ -32,7 +32,7 @@
               <el-dropdown-item @click="fixPunc">{{ t("editor.punctuation") }}</el-dropdown-item>
               <el-dropdown-item @click="pageSettingsVisible = true">{{ t("editor.pageSetup") }}</el-dropdown-item>
               <el-dropdown-item v-if="meta.can_manage_permissions && (meta.status === 'draft' || meta.status === 'approved')" @click="showShare = true">{{ t("library.share") }}</el-dropdown-item>
-              <el-dropdown-item v-if="isOwner && (meta.status === 'draft' || meta.status === 'rejected')" divided style="color: var(--el-color-danger)" @click="confirmDeleteDoc">
+              <el-dropdown-item v-if="(isOwner || isAdmin) && (meta.status === 'draft' || meta.status === 'rejected' || meta.status === 'approved')" divided style="color: var(--el-color-danger)" @click="confirmDeleteDoc">
                 {{ t("editor.delete") }}
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -53,7 +53,7 @@
       </template>
     </el-dialog>
 
-    <div class="editor-toolbar" v-if="editor" v-show="meta.can_edit">
+    <div class="editor-toolbar" v-if="editor && meta.doc_type !== 'pdf'" v-show="meta.can_edit">
       <el-select v-model="currentFontFamily" size="small" style="width: 120px" @change="setFontFamily">
         <el-option label="Default" value="Inter, sans-serif" />
         <el-option label="Arial" value="Arial" />
@@ -164,8 +164,22 @@
     </div>
 
     <div class="body">
-      <div class="main-wrapper" v-if="editor">
-        <div class="main-paper" :class="page.paperFormat">
+      <div class="main-wrapper">
+        <!-- PDF Viewer Mode -->
+        <div v-if="meta.doc_type === 'pdf'" class="pdf-view-wrapper">
+          <iframe 
+            :src="meta.file_path" 
+            class="pdf-frame" 
+            frameborder="0"
+          ></iframe>
+        </div>
+
+        <!-- Rich Text Editor Mode -->
+        <div 
+          v-else-if="editor" 
+          class="main-paper" 
+          :class="page.paperFormat"
+        >
           <div class="watermark-overlay" :style="{ backgroundImage: watermarkDataUrl ? `url(${watermarkDataUrl})` : '' }"></div>
           
           <bubble-menu
@@ -402,6 +416,8 @@ const meta = ref<any>({
   can_comment: false,
   can_manage_permissions: false,
   owner_id: 0,
+  doc_type: "rich_text",
+  file_path: null,
 });
 
 const showShare = ref(false);
@@ -477,6 +493,7 @@ const threadedComments = computed(() => {
 });
 
 const isOwner = computed(() => auth.user?.id === meta.value.owner_id);
+const isAdmin = computed(() => auth.user?.login_name === "admin");
 
 const statusLabel = computed(() => {
   return t("common.status." + meta.value.status);
@@ -1078,6 +1095,21 @@ watch(() => route.params.id, () => loadDoc());
   display: flex;
   justify-content: center;
   align-items: flex-start; /* 关键1：顶部对齐，允许底部无限生长 */
+}
+
+.pdf-view-wrapper {
+  width: 100%;
+  max-width: 1000px;
+  height: calc(100vh - 160px);
+  background: white;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pdf-frame {
+  width: 100%;
+  height: 100%;
 }
 
 .main-paper {

@@ -1,6 +1,8 @@
-npm<template>
+<template>
   <el-config-provider :locale="elementLocale">
-    <router-view />
+    <div id="app-wrapper">
+      <router-view />
+    </div>
   </el-config-provider>
 </template>
 
@@ -27,7 +29,8 @@ watch(
 <style>
 html,
 body,
-#app {
+#app,
+#app-wrapper {
   margin: 0;
   height: 100%;
   font-family:

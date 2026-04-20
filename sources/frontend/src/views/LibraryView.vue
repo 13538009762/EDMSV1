@@ -61,9 +61,17 @@
               :show-file-list="false"
               accept=".docx"
               :before-upload="onImportDocx"
-              style="display: inline-flex;"
+              style="display: inline-flex; margin-right: 8px;"
             >
               <el-button :icon="Upload">{{ t("library.importDocx") }}</el-button>
+            </el-upload>
+            <el-upload
+              :show-file-list="false"
+              accept=".pdf"
+              :before-upload="onImportPdf"
+              style="display: inline-flex;"
+            >
+              <el-button :icon="Upload">{{ t("library.importPdf") }}</el-button>
             </el-upload>
           </div>
           
@@ -145,41 +153,51 @@
             <span v-else style="color: var(--el-text-color-placeholder);">-</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('library.colActions')" width="260" fixed="right">
+        <el-table-column :label="t('library.colActions')" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="open(row.id)">
-              {{ t("library.open") }}
-            </el-button>
-            
-            <el-button
-              v-if="row.can_manage_permissions && (row.status === 'draft' || row.status === 'approved')"
-              type="warning"
-              plain
-              size="small"
-              @click="openShare(row.id)"
-            >
-              {{ t("library.share") }}
-            </el-button>
-            
-            <el-button
-              v-if="row.status === 'approved'"
-              type="info"
-              plain
-              size="small"
-              @click="router.push({ name: 'diff', params: { id: row.id } })"
-            >
-              {{ t("library.diff") }}
-            </el-button>
-
-            <el-button
-              v-if="row.is_owner && (row.status === 'draft' || row.status === 'rejected')"
-              type="danger"
-              plain
-              size="small"
-              @click="confirmDelete(row.id)"
-            >
-              {{ t("editor.delete") }}
-            </el-button>
+            <div class="action-btns">
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="open(row.id)"
+                class="main-action"
+              >
+                {{ t("library.open") }}
+              </el-button>
+              
+              <el-dropdown trigger="click" @command="(cmd: any) => handleCommand(cmd, row)">
+                <el-button size="small" :icon="More" class="more-btn" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item 
+                      v-if="row.can_manage_permissions && (row.status === 'draft' || row.status === 'approved')"
+                      command="share"
+                      :icon="Share"
+                    >
+                      {{ t("library.share") }}
+                    </el-dropdown-item>
+                    
+                    <el-dropdown-item 
+                      v-if="row.status === 'approved'"
+                      command="diff"
+                      :icon="Connection"
+                    >
+                      {{ t("library.diff") }}
+                    </el-dropdown-item>
+                    
+                    <el-dropdown-item 
+                      v-if="(row.is_owner || authStore.user?.login_name === 'admin') && (row.status === 'draft' || row.status === 'rejected' || row.status === 'approved')"
+                      command="delete"
+                      :icon="Delete"
+                      divided
+                      style="color: var(--el-color-danger)"
+                    >
+                      {{ t("editor.delete") }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -215,8 +233,9 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Plus, Upload, Refresh, Search, Folder, Document, Connection, Fold, Expand, ArrowUp, ArrowDown } from "@element-plus/icons-vue"; // 引入图标
+import { Plus, Upload, Refresh, Search, Folder, Document, Connection, Fold, Expand, ArrowUp, ArrowDown, Share, Delete, More } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
+import { useAuthStore } from "@/stores/auth";
 import { Editor } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -237,10 +256,12 @@ interface DocRow {
   owner_department?: string;
   doc_number?: string;
   updated_at?: string;
+  is_owner?: boolean;
 }
 
 const router = useRouter();
 const { t } = useI18n();
+const authStore = useAuthStore();
 const items = ref<DocRow[]>([]);
 const loading = ref(false);
 const scope = ref("");
@@ -252,7 +273,6 @@ const currentSpaceId = ref<string | null>(null);
 const currentSpaceName = ref("");
 const selectedIds = ref<number[]>([]);
 
-// Sidebar and Toolbar collapse states
 const sidebarCollapsed = ref(false);
 const toolbarCollapsed = ref(false);
 
@@ -292,7 +312,6 @@ async function batchShare(isPublic: boolean) {
   } catch {}
 }
 
-// Pagination
 const currentPage = ref(1);
 const pageSize = ref(10);
 
@@ -340,7 +359,6 @@ async function loadTree() {
 
 function handleNodeClick(data: any) {
   if (data.is_space) {
-    // 点击空间节点，切换表格过滤
     const sid = data.id || data.space_id;
     if (sid === "space_unassigned") {
       currentSpaceId.value = "unassigned";
@@ -350,10 +368,15 @@ function handleNodeClick(data: any) {
       currentSpaceName.value = data.name || data.title;
     }
     load();
-  } else if (data.id) {
-    // 点击文档节点，跳转编辑器
-    router.push({ name: "editor", params: { id: data.id } });
+  } else if (data.id && !data.is_space) {
+    open(data.id);
   }
+}
+
+function handleCommand(cmd: string, row: DocRow) {
+    if (cmd === 'share') openShare(row.id);
+    if (cmd === 'diff') router.push({ name: 'diff', params: { id: row.id } });
+    if (cmd === 'delete') confirmDelete(row.id);
 }
 
 function clearSpaceFilter() {
@@ -405,7 +428,6 @@ async function onImportDocx(file: UploadRawFile) {
       })
     });
     
-    // Use a headless editor to convert HTML to TipTap JSON
     const tempEditor = new Editor({
       extensions: [
         StarterKit,
@@ -432,6 +454,30 @@ async function onImportDocx(file: UploadRawFile) {
   } catch (error) {
     console.error("Import DOCX error:", error);
     ElMessage.error(t("library.importDocxFailed"));
+  }
+  return false;
+}
+
+async function onImportPdf(file: UploadRawFile) {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (currentSpaceId.value && currentSpaceId.value !== "unassigned") {
+      formData.append("space_id", currentSpaceId.value);
+    }
+
+    loading.value = true;
+    await api.post("/documents/import-pdf", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    
+    ElMessage.success(t("library.importPdfSuccess"));
+    await load();
+  } catch (err) {
+    console.error("Import PDF error:", err);
+    ElMessage.error(t("library.importPdfFailed"));
+  } finally {
+    loading.value = false;
   }
   return false;
 }
@@ -464,16 +510,73 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.library-container {
+  padding: 24px;
+  background-color: #f6f8fb;
+  min-height: calc(100vh - 60px);
+}
+
+.library-card {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.tree-card {
+  height: calc(100vh - 120px);
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.main-action {
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 100%);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.main-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(115, 103, 240, 0.3);
+}
+
+.more-btn {
+  border: 1px solid var(--el-border-color-lighter);
+  background: #fff;
+  color: var(--el-text-color-secondary);
+}
+
+.more-btn:hover {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+:deep(.el-table__row) {
+  transition: background-color 0.2s ease;
+}
+
+:deep(.el-table__row:hover > td) {
+  background-color: var(--el-color-primary-light-9) !important;
+}
+
+.status-tag {
+    font-weight: 500;
+    border-radius: 6px;
+    padding: 0 10px;
+}
+
 .pagination-wrapper {
-  margin-top: 20px;
+  margin-top: 24px;
   display: flex;
   justify-content: flex-end;
-}
-.page-container {
-  padding: 24px 32px;
-  width: 100%;
-  margin: 0 auto;
-  box-sizing: border-box;
 }
 
 .page-header {

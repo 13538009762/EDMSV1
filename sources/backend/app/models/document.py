@@ -23,6 +23,7 @@ class Document(db.Model):
     space_id = db.Column(db.Integer, db.ForeignKey("spaces.id"), nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=True)
     is_template = db.Column(db.Boolean, default=False)
+    doc_type = db.Column(db.String(32), default="rich_text") # rich_text, pdf
     deleted_at = db.Column(db.DateTime, nullable=True)  # soft delete for recycle bin
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -54,6 +55,7 @@ class DocumentVersion(db.Model):
     version_no = db.Column(db.Integer, nullable=False, default=1)
     content_json = db.Column(db.Text, nullable=True)  # TipTap / ProseMirror JSON
     yjs_state = db.Column(db.LargeBinary, nullable=True)
+    file_path = db.Column(db.String(512), nullable=True) # Path for PDF/Binary files
     created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     parent_version_id = db.Column(db.Integer, db.ForeignKey("document_versions.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

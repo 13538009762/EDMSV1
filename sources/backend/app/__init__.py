@@ -7,7 +7,9 @@ from app.extensions import db, jwt, socketio
 
 
 def create_app(config_class=Config):
-    app = Flask(__name__)
+    import os
+    dist_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dist")
+    app = Flask(__name__, static_folder=dist_folder, static_url_path="")
     app.config.from_object(config_class)
     
     # 💡 告诉 Flask 信任前面的 1 层反向代理 (Nginx)
@@ -73,5 +75,21 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
+
+    # 💡 增加：捕捉所有非 API 路由并返回前端 index.html (支持 SPA)
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def serve_frontend(path):
+        import os
+        from flask import send_from_directory
+        if path.startswith("api/") or path.startswith("static/"):
+             return {"error": "Not Found"}, 404
+             
+        # 检查文件是否存在
+        file_path = os.path.join(app.static_folder, path)
+        if path != "" and os.path.exists(file_path):
+            return send_from_directory(app.static_folder, path)
+        else:
+            return send_from_directory(app.static_folder, "index.html")
 
     return app

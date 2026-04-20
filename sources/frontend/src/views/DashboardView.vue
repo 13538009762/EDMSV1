@@ -84,7 +84,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="chart-row">
+    <el-row :gutter="20" class="chart-row" v-if="!loading">
       <el-col :span="12" v-if="shouldShow('statusDistribution')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
@@ -110,7 +110,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;">
+    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;" v-if="!loading">
       <el-col :span="8" v-if="shouldShow('spaceDistribution')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
@@ -127,8 +127,11 @@
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>{{ t('dashboard.storageBreakdown') }}</span>
-              <small>{{ storageInfo.total_size_mb }} MB</small>
+              <span>{{ t('dashboard.storageBreakdown', 'Storage by File Type') }}</span>
+              <div class="header-actions">
+                  <small style="margin-right: 8px">{{ storageInfo.total_size_mb }} MB</small>
+                  <el-button link :icon="FullScreen" @click="zoomWidget('storageBreakdown')" />
+              </div>
             </div>
           </template>
           <v-chart class="echart-container small" :option="storageOption" autoresize />
@@ -158,7 +161,7 @@
     </el-row>
 
     <!-- Row for Insights: Full width for users, Split for Admins -->
-    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;">
+    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;" v-if="!loading">
       <el-col :span="isAdmin ? 12 : 24" v-if="shouldShow('trendingDocs')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
@@ -190,14 +193,17 @@
           <template #header>
             <div class="card-header">
               <span>{{ t('dashboard.activityHeatmap', 'User Activity Heatmap') }}</span>
+              <el-button link :icon="FullScreen" @click="zoomWidget('activityHeatmap')" />
             </div>
           </template>
-          <v-chart class="echart-container" :option="heatmapOption" autoresize />
+          <div class="heatmap-wrapper">
+             <v-chart class="echart-container heatmap" :option="heatmapOption" autoresize />
+          </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;">
+    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;" v-if="!loading">
       <el-col :span="24" v-if="shouldShow('activityTrend')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
@@ -347,7 +353,7 @@ use([
   CalendarComponent,
 ]);
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const loading = ref(true);
 const totalDocs = ref(0);
@@ -435,6 +441,8 @@ const zoomedOption = computed(() => {
     if (zoomedWidget.value === 'spaceDistribution') return spaceOption.value;
     if (zoomedWidget.value === 'activityTrend') return lineOption.value;
     if (zoomedWidget.value === 'statusDistribution') return statusDistributionOption.value;
+    if (zoomedWidget.value === 'storageBreakdown') return storageOption.value;
+    if (zoomedWidget.value === 'activityHeatmap') return heatmapOption.value;
     return {};
 });
 
@@ -460,7 +468,16 @@ const statusDistributionOption = computed(() => {
           name: t(`common.status.${s.status}`),
           itemStyle: { color: colorMap[s.status as keyof typeof colorMap] }
         })),
-        itemStyle: { borderRadius: 6 }
+        itemStyle: { borderRadius: 6 },
+        label: {
+          show: true,
+          position: 'outside',
+          formatter: '{b}\n{c}',
+          overflow: 'break',
+          width: 70,
+          fontSize: 11
+        },
+        labelLine: { length: 10, length2: 5 }
       },
     ],
   };
@@ -496,16 +513,14 @@ const donutOption = computed(() => {
           borderColor: "#fff",
           borderWidth: 2,
         },
-        label: { show: false, position: "center" },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: 20,
-            fontWeight: "bold",
-            formatter: '{b}\n{c} ({d}%)'
-          },
+        label: {
+          show: true,
+          formatter: '{b}\n({d}%)',
+          overflow: 'break',
+          width: 80,
+          fontSize: 11
         },
-        labelLine: { show: false },
+        labelLine: { length: 15, length2: 10 },
         data: deptData.value.map((s) => ({
           value: s.count,
           name: t('dept.' + (s.name || ''), s.name || t('common.unknown')),
@@ -569,7 +584,16 @@ const spaceOption = computed(() => {
         })),
         itemStyle: {
             borderRadius: 6,
-        }
+        },
+        label: {
+          show: true,
+          position: 'outside',
+          formatter: '{b}\n({c})',
+          overflow: 'break',
+          width: 80,
+          fontSize: 11
+        },
+        labelLine: { length: 15, length2: 10 }
       },
     ],
   };
@@ -578,10 +602,16 @@ const spaceOption = computed(() => {
 const storageOption = computed(() => {
     return {
         tooltip: { trigger: 'item', formatter: '{b}: {c} MB ({d}%)' },
+        legend: { 
+            bottom: '0%', 
+            left: 'center', 
+            textStyle: { fontSize: 10 } 
+        },
         series: [{
             type: 'pie',
-            radius: ['40%', '70%'],
-            avoidLabelOverlap: false,
+            radius: ['35%', '60%'],
+            center: ['50%', '45%'],
+            avoidLabelOverlap: true,
             itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
             label: { show: false },
             emphasis: { label: { show: true, fontSize: '14', fontWeight: 'bold' } },
@@ -592,29 +622,41 @@ const storageOption = computed(() => {
 
 const heatmapOption = computed(() => {
     const today = new Date();
-    const year = today.getFullYear();
     return {
-        tooltip: { position: 'top' },
+        tooltip: { 
+            position: 'top',
+            formatter: (p: any) => {
+                return `${p.data[0]}: ${p.data[1]} ${t('dashboard.activityUnit', 'activities')}`;
+            }
+        },
         visualMap: {
             min: 0,
             max: 10,
             type: 'piecewise',
             orient: 'horizontal',
             left: 'center',
-            top: 0,
-            textStyle: { fontSize: 10 },
+            top: 10,
+            textStyle: { fontSize: 11 },
             inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] }
         },
         calendar: {
-            top: 40,
-            left: 30,
-            right: 10,
-            cellSize: ['auto', 13],
+            top: 80,
+            left: 40,
+            right: 20,
+            cellSize: [18, 18],
             range: [new Date(today.getTime() - 90 * 24 * 3600 * 1000), today],
-            itemStyle: { borderWidth: 0.5 },
+            itemStyle: { borderWidth: 2, borderColor: '#fff' },
             yearLabel: { show: false },
-            dayLabel: { fontSize: 10 },
-            monthLabel: { fontSize: 10 }
+            dayLabel: { 
+                fontSize: 11, 
+                firstDay: 1, 
+                nameMap: locale.value === 'zh-CN' ? 'cn' : 'en' 
+            },
+            monthLabel: { 
+                fontSize: 11, 
+                margin: 10,
+                nameMap: locale.value === 'zh-CN' ? 'cn' : 'en'
+            }
         },
         series: {
             type: 'heatmap',
@@ -624,9 +666,11 @@ const heatmapOption = computed(() => {
     };
 });
 
-function calculatePercentage(hits: number) {
-    const max = trendingDocs.value.length > 0 ? trendingDocs.value[0].hits : 1;
-    return Math.round((hits / max) * 100);
+function calculatePercentage(hits: number | null | undefined) {
+    const val = hits || 0;
+    const max = trendingDocs.value.length > 0 ? (trendingDocs.value[0].hits || 1) : 1;
+    const p = Math.round((val / max) * 100);
+    return isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
 }
 
 async function loadData() {
@@ -795,6 +839,9 @@ onMounted(() => {
 }
 .echart-container.small {
   height: 250px;
+}
+.echart-container.heatmap {
+  height: 320px;
 }
 .timeline-container {
   height: 400px;

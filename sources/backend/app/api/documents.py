@@ -88,6 +88,8 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         "is_public": doc.is_public,
         "can_approve": can_approve,
         "pending_participant_id": pending_participant_id,
+        "doc_type": doc.doc_type,
+        "file_path": ver.file_path if ver else None,
     }
 
 @bp.get("/tree")
@@ -293,6 +295,77 @@ def create_document():
     return jsonify(_doc_to_summary(doc, user)), 201
 
 
+@bp.post("/import-pdf")
+@jwt_required()
+def import_pdf():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+    if not file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "Only PDF files are allowed"}), 400
+    
+    title = request.form.get("title") or file.filename
+    space_id = request.form.get("space_id")
+    
+    # Save file
+    filename = f"{uuid.uuid4()}.pdf"
+    # Ensure directory exists in workspace
+    upload_dir = os.path.join("app", "static", "uploads", "pdfs")
+    if not os.path.exists(upload_dir):
+        os.makedirs(upload_dir, exist_ok=True)
+    
+    dest_path = os.path.join(upload_dir, filename)
+    file.save(dest_path)
+    
+    # Relative URL for frontend
+    relative_path = f"/static/uploads/pdfs/{filename}"
+    
+    # Generate doc_number
+    from sqlalchemy import func
+    today_str = datetime.now().strftime("%Y%m%d")
+    max_doc = db.session.query(func.max(Document.doc_number)).filter(
+        Document.doc_number.like(f"{today_str}%")
+    ).scalar()
+    if max_doc:
+        try:
+            last_seq = int(max_doc[-3:])
+            doc_number = f"{today_str}{str(last_seq + 1).zfill(3)}"
+        except:
+            doc_number = f"{today_str}001"
+    else:
+        doc_number = f"{today_str}001"
+        
+    doc = Document(
+        owner_id=user.id, 
+        title=title, 
+        status="draft", 
+        doc_number=doc_number, 
+        space_id=space_id if space_id and space_id != "unassigned" else None,
+        doc_type="pdf"
+    )
+    db.session.add(doc)
+    db.session.flush()
+    
+    ver = DocumentVersion(
+        document_id=doc.id,
+        version_no=1,
+        file_path=relative_path,
+        created_by_id=user.id,
+    )
+    db.session.add(ver)
+    db.session.flush()
+    doc.current_version_id = ver.id
+    db.session.commit()
+    
+    return jsonify(_doc_to_summary(doc, user)), 201
+
+
 @bp.get("/<int:doc_id>")
 @jwt_required()
 @audit_log_required("VIEW")
@@ -312,6 +385,8 @@ def get_document(doc_id: int):
         "yjs_state_b64": base64.b64encode(ver.yjs_state).decode("ascii")
         if ver and ver.yjs_state
         else None,
+        "file_path": ver.file_path if ver else None,
+        "doc_type": doc.doc_type,
     }
     return jsonify(body)
 
@@ -398,12 +473,13 @@ def delete_document(doc_id: int):
     if not doc:
         return jsonify({"error": "Not found"}), 404
     
-    # Only owner
-    if doc.owner_id != user.id:
-        return jsonify({"error": "Forbidden: Only creator can delete"}), 403
+    # Only owner or admin
+    is_admin = user.login_name == 'admin'
+    if doc.owner_id != user.id and not is_admin:
+        return jsonify({"error": "Forbidden: Only creator or admin can delete"}), 403
     
-    # Only draft or rejected
-    if doc.status not in ("draft", "rejected"):
+    # Only draft, approved or rejected (basically not in_approval)
+    if doc.status not in ("draft", "approved", "rejected"):
         return jsonify({"error": f"Forbidden: Cannot delete document in status {doc.status}"}), 400
     
     # Manually clear AuditLog references to prevent FK issues in environments with enforced constraints
