@@ -213,6 +213,7 @@ export default {
       actionConfirmBtn: "Confirm & Execute",
       actionCancelBtn: "Dismiss",
       approverNotFound: "User '{name}' not found",
+      insertToDoc: "Insert into Document",
     },
     actions: "Actions",
     save: "Save",

@@ -10,15 +10,15 @@ SPARK_API_PASSWORD = "XyuSepRzbdDVUKvIkpXV:boQXTGszIkfPLZYjOeiz"
 SPARK_API_URL = "https://spark-api-open.xf-yun.com/v1/chat/completions"
 
 SYSTEM_PROMPTS = {
-    "summarize": "Summarize the following text concisely. Output ONLY the summary.",
-    "expand": "Expand on the following text with more detail and examples. Output ONLY the expanded content.",
-    "polish": "Polish the following text for clarity and professionalism. Output ONLY the polished version. Crucially, the output MUST be in the SAME LANGUAGE as the input text.",
-    "translate_en": "Translate the following text into English. Output ONLY the translation.",
-    "translate_zh": "请将以下文本翻译成简体中文。只输出翻译结果，不要输出原文或解释。",
-    "translate_ru": "Переведите следующий текст на русский язык. Выводите ТОЛЬКО перевод.",
+    "summarize": "Summarize the following text concisely. Use Markdown formatting (bullet points, bold text) where appropriate. Output ONLY the summary.",
+    "expand": "Expand on the following text with more detail and examples. Use Markdown (headings, lists, bold) for better structure. Output ONLY the expanded content.",
+    "polish": "Polish the following text for clarity and professionalism. Keep the existing structure but use Markdown (bold, lists) if it improves readability. Output ONLY the polished version. Crucially, the output MUST be in the SAME LANGUAGE as the input text.",
+    "translate_en": "Translate the following text into English. Preserve the original document structure using Markdown (headings, lists, bold). Output ONLY the translation.",
+    "translate_zh": "请将以下文本翻译成简体中文。保持原有的文档结构（使用 Markdown 语法：标题、列表、加粗等）。只输出翻译结果，不要输出原文或解释。",
+    "translate_ru": "Переведите следующий текст на русский язык. Сохраняйте структуру документа с помощью Markdown (заголовки, списки, жирный шрифт). Выводите ТОЛЬКО перевод.",
     "fix_punctuation": "Fix the punctuation in the following text. Correct mixed Chinese/English punctuation usage, normalize full-width/half-width marks, and fix spacing. Output ONLY the corrected text.",
-    "chat": "You are a helpful document assistant. Answer questions based on the document. If the user wants to take action (like starting an approval), help them and THEN append a JSON block at the very end of your response like this: ```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"Name1\", \"Name2\"], \"type\": \"parallel\"}} ``` . Mention names exactly as the user said them.",
-    "auto_tag": "Analyze the text and provide 1-3 short category tags like [Finance], [HR], [Technology]. Output ONLY the tags separated by commas, no explanations."
+    "chat": "You are a professional document specialist. Answer queries based on context. Use Markdown (###, bold, lists) for results. If the user wants to start an approval (e.g., 'send to Li Na'), append a JSON block at the very end: ```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"Name1\"], \"type\": \"parallel\"}} ``` or identify multiple names if mentioned.",
+    "auto_tag": "Analyze the text and provide 1-3 short category tags like [Finance], [HR]. Output ONLY the tags separated by commas, no explanations."
 }
 
 @bp.post("/generate")

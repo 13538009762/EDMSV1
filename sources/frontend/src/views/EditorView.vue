@@ -243,6 +243,18 @@
                   <div v-for="(msg, idx) in chatHistory" :key="idx" :class="['chat-msg', msg.role]">
                     <div class="msg-content">{{ msg.content }}</div>
                     
+                    <div v-if="msg.role === 'ai'" class="msg-footer" style="margin-top: 8px;">
+                      <el-button 
+                        size="small" 
+                        type="primary" 
+                        plain 
+                        icon="MagicStick" 
+                        @click="insertChatToEditor(msg.content)"
+                      >
+                        ✨ {{ t('editor.ai.insertToDoc') }}
+                      </el-button>
+                    </div>
+                    
                     <!-- AI Action Card -->
                     <div v-if="msg.action && msg.action.params" class="ai-action-card">
                       <div class="card-header">
@@ -250,8 +262,15 @@
                         <span>{{ t('editor.ai.actionConfirmTitle') }}</span>
                       </div>
                       <div class="card-body">
-                        <div class="action-desc" v-if="msg.action.params.approvers">
-                          {{ t('editor.ai.actionStartApproval', { names: msg.action.params.approvers.join?.(', ') || '' }) }}
+                        <div class="action-desc" v-if="msg.action.params?.approvers || msg.action.params?.approver || msg.action.approvers || msg.action.approver">
+                          {{ t('editor.ai.actionStartApproval', { 
+                            names: [
+                              ...(msg.action.params?.approvers || []), 
+                              ...(msg.action.params?.approver ? [msg.action.params.approver] : []),
+                              ...(msg.action.approvers || []),
+                              ...(msg.action.approver ? [msg.action.approver] : [])
+                            ].filter(Boolean).join(', ') 
+                          }) }}
                         </div>
                         <div class="action-meta">
                           <el-tag size="small" type="info" effect="dark">
@@ -467,6 +486,7 @@ import { attachDocCollab } from "@/composables/useDocSocket";
 import { fixPunctuation } from "@/utils/punctuation";
 import { ElMessage, ElMessageBox } from "element-plus";
 import mammoth from "mammoth";
+import { Markdown } from "tiptap-markdown";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
 import { formatLocalDate } from "@/utils/date";
 
@@ -516,19 +536,25 @@ const chatHistory = ref<Array<{role: 'user' | 'ai', content: string, action?: an
 const chatScroll = ref<HTMLElement | null>(null);
 
 // AI Agent Action Resolver
-function resolveApproverIds(names: string[] = []) {
+function resolveApproverIds(names: any = []) {
   const ids: number[] = [];
   const notFound: string[] = [];
-  if (!Array.isArray(names)) return { ids, notFound };
   
-  names.forEach(name => {
-    if (!name) return;
-    const cleanName = name.replace(/[\[\]]/g, "").trim();
-    const match = userOptions.value.find(u => 
-      u.display_name?.includes(cleanName) || 
-      u.login_name?.toLowerCase() === cleanName.toLowerCase() ||
-      (typeof u.display_name === 'string' && u.display_name.toLowerCase().includes(cleanName.toLowerCase()))
-    );
+  // 💡 Robustness: Handle non-array or mixed case inputs
+  const list = Array.isArray(names) ? names : [String(names)];
+  
+  list.forEach(name => {
+    if (!name || typeof name !== 'string') return;
+    // Strip common AI punctuation: [Name], "Name", Name.
+    const cleanName = name.replace(/[\[\]"'.]/g, "").trim().toLowerCase();
+    if (!cleanName) return;
+
+    const match = userOptions.value.find(u => {
+      const dName = (u.display_name || "").toLowerCase();
+      const lName = (u.login_name || "").toLowerCase();
+      return dName === cleanName || lName === cleanName || dName.includes(cleanName) || cleanName.includes(dName);
+    });
+
     if (match) ids.push(match.id);
     else notFound.push(name);
   });
@@ -537,17 +563,21 @@ function resolveApproverIds(names: string[] = []) {
 
 async function confirmAiAction(action: any, msgIdx: number) {
   if (action?.action === "start_approval") {
-    const approvers = action.params?.approvers || [];
-    const { ids, notFound } = resolveApproverIds(approvers);
+    // 💡 Robustness: AI might use 'approver' or 'approvers', with or without 'params'
+    const params = action.params || action;
+    const rawApprovers = params.approvers || params.approver || [];
+    
+    const { ids, notFound } = resolveApproverIds(rawApprovers);
     if (notFound.length > 0) {
       ElMessage.warning(t("editor.ai.approverNotFound", { name: notFound.join(", ") }));
     }
+    
     if (ids.length === 0) return;
     
     try {
       loading.value = true;
       await api.post(`/documents/${docId.value}/approvals`, {
-        type: action.params.approval_type || action.params.type || "parallel",
+        type: params.approval_type || params.type || "parallel",
         approvers: ids,
       });
       ElMessage.success(t("editor.messages.sentToApproval"));
@@ -645,6 +675,13 @@ async function askAi() {
     asking.value = false;
   }
 }
+function insertChatToEditor(content: string) {
+  if (!editor.value || !content) return;
+  // Use insertContent which now supports Markdown thanks to the extension
+  editor.value.chain().focus().insertContent(content).run();
+  ElMessage.success(t("editor.ai.insertToDoc"));
+}
+
 const versionList = ref<Array<any>>([]);
 
 const searchVisible = ref(false);
@@ -798,6 +835,7 @@ const editor = useEditor({
     CollaborationCursor.configure({ provider: { awareness } as never }),
     Table.configure({ resizable: true }),
     FontSize, LineHeight, Indent, CommentMark, TableExit, SearchAndReplace,
+    Markdown,
   ],
   editable: true,
   onUpdate: () => scheduleSave(),
