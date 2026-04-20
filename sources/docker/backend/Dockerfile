@@ -42,5 +42,5 @@ ENV STORAGE_PATH=/app/data
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
-# Run the application with gunicorn + eventlet (Socket.IO support)
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "wsgi:app"]
+# Run the application with gunicorn + gthread (Matches async_mode="threading" in code)
+CMD ["gunicorn", "--worker-class", "gthread", "-w", "1", "--threads", "100", "--bind", "0.0.0.0:5000", "wsgi:app"]

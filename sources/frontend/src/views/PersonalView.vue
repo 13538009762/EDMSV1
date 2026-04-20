@@ -14,7 +14,7 @@
             {{ t("personal.department") }}: 
             {{ locale === 'zh-CN' ? user?.department_name : (user?.department_name_en || user?.department_name) }}
           </div>
-          <div class="detail">{{ t("personal.position") }}: {{ t('pos.' + (user?.position_full_name || user?.position_short), user?.position_full_name || user?.position_short) }}</div>
+          <div class="detail">{{ t("personal.position") }}: {{ t('pos.' + (user?.position_full_name || user?.position_short)) }}</div>
           <div class="detail">{{ t("personal.login") }}: {{ user?.login_name }}</div>
           <div class="detail">{{ t("personal.employeeNo") }}: {{ user?.employee_no }}</div>
           <div class="detail" v-if="user?.gender">{{ t("personal.gender") }}: {{ user.gender === 'Male' ? t("personal.male") : t("personal.female") }}</div>
@@ -135,6 +135,7 @@ async function loadUserInfo() {
 }
 
 async function saveProfile() {
+  if (!user.value) return;
   editLoading.value = true;
   try {
     await api.patch(`/users/${user.value.id}`, editForm.value);

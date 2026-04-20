@@ -85,7 +85,7 @@
     </el-row>
 
     <el-row :gutter="20" class="chart-row">
-      <el-col :span="6" v-if="shouldShow('statusDistribution')">
+      <el-col :span="12" v-if="shouldShow('statusDistribution')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -97,7 +97,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="6" v-if="shouldShow('departmentDist')">
+      <el-col :span="12" v-if="shouldShow('departmentDist')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -108,8 +108,10 @@
           <v-chart class="echart-container" :option="donutOption" autoresize />
         </el-card>
       </el-col>
+    </el-row>
 
-      <el-col :span="6" v-if="shouldShow('spaceDistribution')">
+    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;">
+      <el-col :span="8" v-if="shouldShow('spaceDistribution')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -117,11 +119,23 @@
               <el-button link :icon="FullScreen" @click="zoomWidget('spaceDistribution')" />
             </div>
           </template>
-          <v-chart class="echart-container" :option="spaceOption" autoresize />
+          <v-chart class="echart-container small" :option="spaceOption" autoresize />
         </el-card>
       </el-col>
 
-      <el-col :span="6" v-if="shouldShow('myWorkflow')">
+      <el-col :span="8" v-if="shouldShow('storageBreakdown')">
+        <el-card shadow="hover" class="chart-card">
+          <template #header>
+            <div class="card-header">
+              <span>{{ t('dashboard.storageBreakdown') }}</span>
+              <small>{{ storageInfo.total_size_mb }} MB</small>
+            </div>
+          </template>
+          <v-chart class="echart-container small" :option="storageOption" autoresize />
+        </el-card>
+      </el-col>
+
+      <el-col :span="8" v-if="shouldShow('myWorkflow')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -139,6 +153,46 @@
               <div class="val">{{ myStats.pending }}</div>
             </div>
           </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- Row for Insights: Full width for users, Split for Admins -->
+    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;">
+      <el-col :span="isAdmin ? 12 : 24" v-if="shouldShow('trendingDocs')">
+        <el-card shadow="hover" class="chart-card">
+          <template #header>
+            <div class="card-header">
+              <span>{{ t('dashboard.trendingDocs', 'Trending Documents (Top 5)') }}</span>
+              <el-button link :icon="FullScreen" @click="zoomWidget('trendingDocs')" />
+            </div>
+          </template>
+          <div class="trending-list" :class="{ 'is-wide': !isAdmin }">
+            <div v-for="(doc, i) in trendingDocs" :key="doc.id" class="trending-item">
+              <div class="rank">{{ i + 1 }}</div>
+              <div class="info">
+                <el-link class="title" @click="$router.push(`/doc/${doc.id}`)">{{ doc.title }}</el-link>
+                <div class="hits">{{ doc.hits }} {{ t('dashboard.hits', 'views') }}</div>
+              </div>
+              <el-progress 
+                :percentage="calculatePercentage(doc.hits)" 
+                :show-text="false" 
+                :stroke-width="6"
+                :style="{ width: isAdmin ? '80px' : '200px' }"
+              />
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="12" v-if="isAdmin && shouldShow('activityHeatmap')">
+        <el-card shadow="hover" class="chart-card">
+          <template #header>
+            <div class="card-header">
+              <span>{{ t('dashboard.activityHeatmap', 'User Activity Heatmap') }}</span>
+            </div>
+          </template>
+          <v-chart class="echart-container" :option="heatmapOption" autoresize />
         </el-card>
       </el-col>
     </el-row>
@@ -268,12 +322,14 @@ import { useAuthStore } from "@/stores/auth";
 // ECharts imports
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import { PieChart, LineChart } from "echarts/charts";
+import { PieChart, LineChart, HeatmapChart } from "echarts/charts";
 import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
   GridComponent,
+  VisualMapComponent,
+  CalendarComponent,
 } from "echarts/components";
 import VChart from "vue-echarts";
 
@@ -282,10 +338,13 @@ use([
   CanvasRenderer,
   PieChart,
   LineChart,
+  HeatmapChart,
   TitleComponent,
   TooltipComponent,
   LegendComponent,
   GridComponent,
+  VisualMapComponent,
+  CalendarComponent,
 ]);
 
 const { t } = useI18n();
@@ -298,6 +357,9 @@ const deptData = ref<{ name: string; count: number }[]>([]);
 const spaceData = ref<{ name: string; count: number }[]>([]);
 const trendData = ref<{ date: string; docs: number; approvals: number }[]>([]);
 const activities = ref<any[]>([]);
+const trendingDocs = ref<any[]>([]);
+const storageInfo = ref({ total_size_mb: 0, by_type: [] });
+const heatmapData = ref<any[]>([]);
 const myStats = ref({ docs: 0, pending: 0 });
 
 const authStore = useAuthStore();
@@ -513,11 +575,64 @@ const spaceOption = computed(() => {
   };
 });
 
+const storageOption = computed(() => {
+    return {
+        tooltip: { trigger: 'item', formatter: '{b}: {c} MB ({d}%)' },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+            label: { show: false },
+            emphasis: { label: { show: true, fontSize: '14', fontWeight: 'bold' } },
+            data: storageInfo.value.by_type
+        }]
+    };
+});
+
+const heatmapOption = computed(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    return {
+        tooltip: { position: 'top' },
+        visualMap: {
+            min: 0,
+            max: 10,
+            type: 'piecewise',
+            orient: 'horizontal',
+            left: 'center',
+            top: 0,
+            textStyle: { fontSize: 10 },
+            inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] }
+        },
+        calendar: {
+            top: 40,
+            left: 30,
+            right: 10,
+            cellSize: ['auto', 13],
+            range: [new Date(today.getTime() - 90 * 24 * 3600 * 1000), today],
+            itemStyle: { borderWidth: 0.5 },
+            yearLabel: { show: false },
+            dayLabel: { fontSize: 10 },
+            monthLabel: { fontSize: 10 }
+        },
+        series: {
+            type: 'heatmap',
+            coordinateSystem: 'calendar',
+            data: heatmapData.value
+        }
+    };
+});
+
+function calculatePercentage(hits: number) {
+    const max = trendingDocs.value.length > 0 ? trendingDocs.value[0].hits : 1;
+    return Math.round((hits / max) * 100);
+}
+
 async function loadData() {
   loading.value = true;
   try {
     const { data } = await api.get("/dashboard/stats");
-    console.log("[DEBUG] Dashboard API response:", data);
     totalDocs.value = data.total_docs;
     totalUsers.value = data.total_users;
     statusData.value = data.status_data;
@@ -526,6 +641,10 @@ async function loadData() {
     myStats.value = data.my_stats || { docs: 0, pending: 0 };
     trendData.value = data.trend_data || [];
     activities.value = data.activities || [];
+    trendingDocs.value = data.trending_docs || [];
+    storageInfo.value = data.storage_info || { total_size_mb: 0, by_type: [] };
+    heatmapData.value = data.heatmap_data || [];
+    console.log("[DEBUG] Loaded data extensions:", data);
   } catch (err) {
     console.error("[DEBUG] Dashboard API Error:", err);
   } finally {
@@ -674,9 +793,64 @@ onMounted(() => {
   width: 100%;
   height: 350px;
 }
+.echart-container.small {
+  height: 250px;
+}
 .timeline-container {
   height: 400px;
   overflow-y: auto;
   padding-right: 20px;
+}
+
+.trending-list {
+  height: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 0;
+}
+.trending-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.trending-item .rank {
+  width: 24px;
+  height: 24px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+}
+.trending-item .info {
+  flex: 1;
+  min-width: 0;
+}
+.trending-item .title {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trending-item .hits {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.trending-list.is-wide {
+    height: auto;
+    padding: 10px 0;
+}
+.trending-list.is-wide .trending-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.trending-list.is-wide .trending-item:last-child {
+    border-bottom: none;
 }
 </style>

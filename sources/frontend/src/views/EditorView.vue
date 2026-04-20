@@ -709,16 +709,7 @@ async function loadDoc(silent = false) {
       docId.value, 
       ydoc, 
       awareness, 
-      { name: auth.user?.display_name || auth.user?.login_name || "User", color: userColor },
-      (statusData) => {
-        console.log("[DEBUG] Received status_change event via socket:", statusData);
-        if (statusData.status) {
-          meta.value.status = statusData.status;
-          meta.value.can_edit = !!statusData.can_edit;
-          editor.value?.setEditable(meta.value.can_edit);
-          ElMessage.info(t("editor.statusChanged", { status: statusData.status }));
-        }
-      }
+      { name: auth.user?.display_name || auth.user?.login_name || "User", color: userColor }
     );
     awareness.on("update", refreshCollabList);
     
@@ -982,6 +973,9 @@ const onStatusChanged = (e: any) => {
     meta.value.status = data.status;
     meta.value.can_edit = data.can_edit;
     editor.value?.setEditable(data.can_edit);
+    if (data.status) {
+      ElMessage.info(t("editor.statusChanged", { status: data.status }));
+    }
   }
 };
 

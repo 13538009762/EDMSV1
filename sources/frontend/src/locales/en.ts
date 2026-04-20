@@ -127,6 +127,8 @@ export default {
     share: "Sharing",
     wikiTree: "Wiki Directory",
     createFailed: "Failed to create document",
+    showToolbar: "Show Filters & Actions",
+    hideToolbar: "Hide Toolbar",
   },
   import: {
     title: "Master data import (XLSX)",

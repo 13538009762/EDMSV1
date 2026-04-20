@@ -121,6 +121,8 @@ export default {
     share: "共享",
     wikiTree: "文档目录",
     createFailed: "创建失败",
+    showToolbar: "展开工具栏与筛选",
+    hideToolbar: "收起工具栏",
   },
   import: {
     title: "主数据导入 (XLSX)",

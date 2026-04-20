@@ -9,6 +9,11 @@ from app.extensions import db, jwt, socketio
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+    
+    # 💡 告诉 Flask 信任前面的 1 层反向代理 (Nginx)
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+    
     CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
     db.init_app(app)

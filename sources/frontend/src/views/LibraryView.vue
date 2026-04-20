@@ -5,88 +5,117 @@
     </div>
 
     <el-container class="library-layout">
-      <el-aside width="200px" class="tree-sidebar">
-        <el-card shadow="sm" class="tree-card" :body-style="{ padding: '12px 4px' }">
+      <el-aside :width="sidebarCollapsed ? '64px' : '280px'" class="tree-sidebar" :class="{ 'is-collapsed': sidebarCollapsed }">
+        <el-card shadow="sm" class="tree-card" :body-style="{ padding: sidebarCollapsed ? '12px 8px' : '12px 4px' }">
           <div class="tree-header">
-            <el-icon><Folder /></el-icon> {{ t("library.wikiTree", "Wiki Directory") }}
-          </div>
-          <el-tree
-            :data="treeData"
-            :props="defaultProps"
-            @node-click="handleNodeClick"
-            highlight-current
-            :expand-on-click-node="false"
-            class="custom-tree"
-          >
-            <template #default="{ node, data }">
-              <span class="custom-tree-node">
-                <el-icon v-if="data.is_space"><Connection /></el-icon>
-                <el-icon v-else><Document /></el-icon>
-                <span class="node-label" :title="node.label">{{ node.label }}</span>
-              </span>
+            <template v-if="!sidebarCollapsed">
+              <div class="header-title">
+                <el-icon><Folder /></el-icon> {{ t("library.wikiTree", "Wiki Directory") }}
+              </div>
+              <el-button link @click="toggleSidebar" class="collapse-btn">
+                <el-icon><Fold /></el-icon>
+              </el-button>
             </template>
-          </el-tree>
+            <template v-else>
+              <el-button link @click="toggleSidebar" class="expand-btn">
+                <el-icon><Expand /></el-icon>
+              </el-button>
+            </template>
+          </div>
+          
+          <div v-show="!sidebarCollapsed" class="tree-content">
+            <el-tree
+              :data="treeData"
+              :props="defaultProps"
+              @node-click="handleNodeClick"
+              highlight-current
+              :expand-on-click-node="false"
+              class="custom-tree"
+            >
+              <template #default="{ node, data }">
+                <span class="custom-tree-node">
+                  <el-icon v-if="data.is_space"><Connection /></el-icon>
+                  <el-icon v-else><Document /></el-icon>
+                  <span class="node-label" :title="node.label">{{ node.label }}</span>
+                </span>
+              </template>
+            </el-tree>
+          </div>
+          
+          <div v-if="sidebarCollapsed" class="collapsed-indicator">
+            <div class="vertical-text">{{ t("library.wikiTree", "Wiki Directory") }}</div>
+          </div>
         </el-card>
       </el-aside>
 
       <el-main class="library-main">
         <el-card shadow="sm" class="table-card">
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <el-button type="primary" :icon="Plus" @click="createDoc">{{ t("library.newDoc") }}</el-button>
-          <el-tag v-if="currentSpaceId" closable @close="clearSpaceFilter" type="info" size="large" effect="plain" style="margin-left: 10px; font-weight: 600;">
-            <el-icon><Folder /></el-icon> {{ currentSpaceName }}
-          </el-tag>
-          <el-upload
-            :show-file-list="false"
-            accept=".docx"
-            :before-upload="onImportDocx"
-            style="display: inline-flex;"
-          >
-            <el-button :icon="Upload">{{ t("library.importDocx") }}</el-button>
-          </el-upload>
+      <div class="toolbar-container" :class="{ 'is-collapsed': toolbarCollapsed }">
+        <div class="toolbar" v-show="!toolbarCollapsed">
+          <div class="toolbar-left">
+            <el-button type="primary" :icon="Plus" @click="createDoc">{{ t("library.newDoc") }}</el-button>
+            <el-tag v-if="currentSpaceId" closable @close="clearSpaceFilter" type="info" size="large" effect="plain" style="margin-left: 10px; font-weight: 600;">
+              <el-icon><Folder /></el-icon> {{ currentSpaceName }}
+            </el-tag>
+            <el-upload
+              :show-file-list="false"
+              accept=".docx"
+              :before-upload="onImportDocx"
+              style="display: inline-flex;"
+            >
+              <el-button :icon="Upload">{{ t("library.importDocx") }}</el-button>
+            </el-upload>
+          </div>
+          
+          <div class="toolbar-right">
+            <el-button-group v-if="selectedIds.length > 0" style="margin-right: 12px;">
+              <el-button type="danger" @click="batchDelete">{{ t('common.delete', 'Batch Delete') }} ({{ selectedIds.length }})</el-button>
+              <el-button type="warning" @click="batchShare(true)">{{ t('common.share', 'Share All') }}</el-button>
+              <el-button type="info" @click="batchShare(false)">{{ t('common.unshare', 'Unshare All') }}</el-button>
+            </el-button-group>
+  
+            <el-input
+              v-model="searchQuery"
+              :placeholder="t('editor.searchPlaceholder')"
+              :prefix-icon="Search"
+              clearable
+              style="width: 200px"
+            />
+            <el-select
+              v-model="scope"
+              clearable
+              style="width: 200px"
+              :placeholder="t('library.scopePlaceholder')"
+              @change="load"
+            >
+              <el-option :label="t('library.scopeAll')" value="" />
+              <el-option :label="t('library.scopeMine')" value="mine" />
+              <el-option :label="t('library.scopeCollab')" value="collab" />
+              <el-option :label="t('library.scopeDepartment')" value="department" />
+            </el-select>
+            <el-select
+              v-model="statusFilter"
+              clearable
+              style="width: 180px"
+              :placeholder="t('library.statusFilter')"
+              @change="load"
+            >
+              <el-option :label="t('library.statusAll')" value="" />
+              <el-option :label="t('library.statusDraft')" value="draft" />
+              <el-option :label="t('library.statusInApproval')" value="in_approval" />
+              <el-option :label="t('library.statusApproved')" value="approved" />
+              <el-option :label="t('library.statusRejected')" value="rejected" />
+            </el-select>
+            <el-button @click="load" :icon="Refresh">{{ t("library.refresh") }}</el-button>
+          </div>
         </div>
         
-        <div class="toolbar-right">
-          <el-button-group v-if="selectedIds.length > 0" style="margin-right: 12px;">
-            <el-button type="danger" @click="batchDelete">{{ t('common.delete', 'Batch Delete') }} ({{ selectedIds.length }})</el-button>
-            <el-button type="warning" @click="batchShare(true)">{{ t('common.share', 'Share All') }}</el-button>
-            <el-button type="info" @click="batchShare(false)">{{ t('common.unshare', 'Unshare All') }}</el-button>
-          </el-button-group>
-
-          <el-input
-            v-model="searchQuery"
-            :placeholder="t('editor.searchPlaceholder')"
-            :prefix-icon="Search"
-            clearable
-            style="width: 200px"
-          />
-          <el-select
-            v-model="scope"
-            clearable
-            style="width: 200px"
-            :placeholder="t('library.scopePlaceholder')"
-            @change="load"
-          >
-            <el-option :label="t('library.scopeAll')" value="" />
-            <el-option :label="t('library.scopeMine')" value="mine" />
-            <el-option :label="t('library.scopeCollab')" value="collab" />
-            <el-option :label="t('library.scopeDepartment')" value="department" />
-          </el-select>
-          <el-select
-            v-model="statusFilter"
-            clearable
-            style="width: 180px"
-            :placeholder="t('library.statusFilter')"
-            @change="load"
-          >
-            <el-option :label="t('library.statusAll')" value="" />
-            <el-option :label="t('library.statusDraft')" value="draft" />
-            <el-option :label="t('library.statusInApproval')" value="in_approval" />
-            <el-option :label="t('library.statusApproved')" value="approved" />
-            <el-option :label="t('library.statusRejected')" value="rejected" />
-          </el-select>
-          <el-button @click="load" :icon="Refresh">{{ t("library.refresh") }}</el-button>
+        <div class="toolbar-toggle">
+          <el-button link @click="toggleToolbar" class="toggle-btn">
+            <el-icon v-if="!toolbarCollapsed"><ArrowUp /></el-icon>
+            <el-icon v-else><ArrowDown /></el-icon>
+            <span v-if="toolbarCollapsed" style="margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary)">{{ t('library.showToolbar', 'Show Filters & Actions') }}</span>
+          </el-button>
         </div>
       </div>
 
@@ -107,6 +136,7 @@
             {{ t('dept.' + row.owner_department, row.owner_department) }}
           </template>
         </el-table-column>
+        <el-table-column prop="my_role" :label="t('library.colRole')" width="100" />
         <el-table-column prop="updated_at" :label="t('library.colUpdatedAt')" width="170">
           <template #default="{ row }">
             <div v-if="row.updated_at" style="font-size: 13px; color: var(--el-text-color-secondary);">
@@ -115,7 +145,6 @@
             <span v-else style="color: var(--el-text-color-placeholder);">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="my_role" :label="t('library.colRole')" width="100" />
         <el-table-column :label="t('library.colActions')" width="260" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="open(row.id)">
@@ -186,7 +215,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Plus, Upload, Refresh, Search, Folder, Document, Connection } from "@element-plus/icons-vue"; // 引入图标
+import { Plus, Upload, Refresh, Search, Folder, Document, Connection, Fold, Expand, ArrowUp, ArrowDown } from "@element-plus/icons-vue"; // 引入图标
 import { formatLocalDate } from "@/utils/date";
 import { Editor } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
@@ -222,6 +251,18 @@ const searchQuery = ref("");
 const currentSpaceId = ref<string | null>(null);
 const currentSpaceName = ref("");
 const selectedIds = ref<number[]>([]);
+
+// Sidebar and Toolbar collapse states
+const sidebarCollapsed = ref(false);
+const toolbarCollapsed = ref(false);
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+}
+
+function toggleToolbar() {
+  toolbarCollapsed.value = !toolbarCollapsed.value;
+}
 
 function handleSelectionChange(selection: DocRow[]) {
   selectedIds.value = selection.map(row => row.id);
@@ -430,8 +471,9 @@ onMounted(() => {
 }
 .page-container {
   padding: 24px 32px;
-  max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .page-header {
@@ -474,11 +516,18 @@ onMounted(() => {
 }
 .tree-sidebar {
   overflow: hidden;
+  transition: width 0.3s ease;
+}
+.tree-sidebar.is-collapsed {
+  border-right: none;
 }
 .tree-card {
   height: 100%;
   border-radius: 12px;
   border: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
 }
 .tree-header {
   font-weight: 600;
@@ -488,11 +537,80 @@ onMounted(() => {
   padding: 0 8px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  height: 32px;
 }
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.collapse-btn, .expand-btn {
+  padding: 4px;
+  font-size: 18px;
+}
+.expand-btn {
+  margin: 0 auto;
+}
+.tree-content {
+  flex: 1;
+  overflow-y: auto;
+}
+.collapsed-indicator {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 20px;
+}
+.vertical-text {
+  writing-mode: vertical-lr;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
 .library-main {
   padding: 0;
   overflow: hidden;
+}
+
+.toolbar-container {
+  margin-bottom: 10px;
+  transition: all 0.3s ease;
+}
+.toolbar-container.is-collapsed {
+  margin-bottom: 0px;
+}
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+  padding: 4px 0;
+  transition: all 0.3s ease;
+}
+.toolbar-toggle {
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--el-border-color-extra-light);
+  margin-top: 4px;
+}
+.toggle-btn {
+  width: 100%;
+  height: 24px;
+  font-size: 14px;
+  color: var(--el-text-color-placeholder);
+}
+.toggle-btn:hover {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-color-primary);
 }
  
 .custom-tree {

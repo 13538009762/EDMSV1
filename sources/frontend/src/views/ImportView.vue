@@ -210,7 +210,7 @@ async function upload() {
 
 // --- User Management Logic ---
 const searchQuery = ref("");
-const users = ref([]);
+const users = ref<any[]>([]);
 const totalUsers = ref(0);
 const currentPage = ref(1);
 const userLoading = ref(false);
@@ -229,7 +229,7 @@ const addForm = ref({
   department_id: null,
   is_manager: false
 });
-const departments = ref([]);
+const departments = ref<any[]>([]);
 
 async function loadUsers() {
   userLoading.value = true;

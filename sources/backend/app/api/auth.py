@@ -40,6 +40,7 @@ def login():
                 "id": user.id,
                 "login_name": user.login_name,
                 "display_name": user.display_name(),
+                "employee_no": user.employee_no,
                 "is_manager": user.is_manager,
             },
         }
