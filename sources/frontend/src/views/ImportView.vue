@@ -339,7 +339,7 @@ async function handleDeleteUser(user: any) {
   }
   try {
     await ElMessageBox.confirm(
-      t('common.deleteConfirm', 'Are you sure you want to delete this user? This cannot be undone.'),
+      t('editor.deleteUserConfirm', 'Are you sure you want to delete this user? This cannot be undone.'),
       t('common.warning', 'Warning'),
       { type: 'warning', confirmButtonClass: 'el-button--danger' }
     );

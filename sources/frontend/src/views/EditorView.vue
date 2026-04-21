@@ -1152,7 +1152,7 @@ async function saveTitle() { await api.patch(`/documents/${docId.value}`, { titl
 async function confirmDeleteDoc() {
   try {
     await ElMessageBox.confirm(
-      t("editor.deleteConfirm"),
+      t("editor.deleteDocConfirm"),
       t("common.warning", "Warning"),
       {
         confirmButtonText: t("common.ok", "OK"),

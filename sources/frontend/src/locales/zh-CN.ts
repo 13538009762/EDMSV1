@@ -300,8 +300,8 @@ export default {
     roleComment: "可批注",
     sharingSaved: "权限已保存",
     delete: "批量删除",
-    deleteConfirm: "确定要删除指定的成员吗？此操作不可撤销。",
-    deleteConfirm: "确定要永久删除这篇文档吗？此操作不可撤销。",
+    deleteUserConfirm: "确定要删除指定的成员吗？此操作不可撤销。",
+    deleteDocConfirm: "确定要永久删除这篇文档吗？此操作不可撤销。",
     deleteSuccess: "文档已删除",
     deleteFailed: "删除失败",
     toolbar: {

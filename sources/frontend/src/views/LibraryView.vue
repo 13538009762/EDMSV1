@@ -291,7 +291,7 @@ function handleSelectionChange(selection: DocRow[]) {
 async function batchDelete() {
   try {
     await ElMessageBox.confirm(
-      t("editor.deleteConfirm"),
+      t("editor.deleteDocConfirm"),
       t("common.warning"),
       { type: "warning" }
     );

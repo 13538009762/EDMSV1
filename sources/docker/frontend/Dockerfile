@@ -12,7 +12,7 @@ COPY frontend/package*.json ./
 
 # Install dependencies using clean install
 # (Ensure package-lock.json is used for reproducible builds)
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Copy the rest of the frontend source code
 COPY frontend/ ./

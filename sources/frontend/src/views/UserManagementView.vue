@@ -226,7 +226,7 @@ function handleSelectionChange(items: any[]) {
 async function handleBatchDelete() {
   try {
     await ElMessageBox.confirm(
-      t('editor.deleteConfirm'),
+      t('editor.deleteUserConfirm'),
       t('common.warning'),
       { type: 'warning' }
     );
