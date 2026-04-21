@@ -22,7 +22,7 @@ npm run dev
 Production build:
 
 ```bash
-cnpm run build
+npm run build
 ```
 
 Static files are emitted to `frontend/dist/`. Serve them behind any static host and proxy `/api` and `/socket.io` to the Flask server.
