@@ -151,7 +151,11 @@ def update_user(user_id: int):
         if "is_manager" in data: target_user.is_manager = data["is_manager"]
         if "position_short" in data: target_user.position_short = data["position_short"]
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Update failed: {str(e)}"}), 500
     return jsonify({"message": "Updated successfully"})
 
 @bp.delete("/<int:user_id>")
@@ -261,6 +265,11 @@ def reset_password(user_id: int):
     if not new_password:
         return jsonify({"error": "New password is required"}), 400
         
-    target_user.set_password(new_password)
-    db.session.commit()
+    try:
+        target_user.set_password(new_password)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Reset failed: {str(e)}"}), 500
+        
     return jsonify({"message": "Password reset successfully"})

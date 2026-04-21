@@ -76,18 +76,9 @@ def create_app(config_class=Config):
     with app.app_context():
         # 💡 增加：检测并修复不匹配的数据库结构
         try:
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            if 'users' in inspector.get_table_names():
-                columns = [c['name'] for c in inspector.get_columns('users')]
-                if 'password_hash' not in columns:
-                    print("[Bootstrap] Detected outdated database schema (missing password_hash). DROPPING ALL TABLES...")
-                    db.drop_all()
-            
             db.create_all()
         except Exception as e:
-            print(f"[Bootstrap] Error during schema check/creation: {e}")
-            db.create_all() # Fallback to standard creation
+            print(f"[Bootstrap] Error during schema creation: {e}")
         
         # 💡 自动引导超级管理员账号
         def _bootstrap_admin():

@@ -279,19 +279,24 @@ def create_document():
     else:
         doc_number = f"{today_str}001"
     
-    doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number, space_id=space_id)
-    db.session.add(doc)
-    db.session.flush()
-    ver = DocumentVersion(
-        document_id=doc.id,
-        version_no=1,
-        content_json=DocumentVersion.default_content_json(),
-        created_by_id=user.id,
-    )
-    db.session.add(ver)
-    db.session.flush()
-    doc.current_version_id = ver.id
-    db.session.commit()
+    try:
+        doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number, space_id=space_id)
+        db.session.add(doc)
+        db.session.flush()
+        ver = DocumentVersion(
+            document_id=doc.id,
+            version_no=1,
+            content_json=DocumentVersion.default_content_json(),
+            created_by_id=user.id,
+        )
+        db.session.add(ver)
+        db.session.flush()
+        doc.current_version_id = ver.id
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to create document: {str(e)}"}), 500
+        
     return jsonify(_doc_to_summary(doc, user)), 201
 
 
@@ -457,7 +462,12 @@ def put_content(doc_id: int):
         ver.yjs_state = base64.b64decode(data["yjs_state_b64"])
     
     doc.updated_at = datetime.utcnow()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Autosave failed: {str(e)}"}), 500
+        
     return jsonify({"ok": True})
 
 

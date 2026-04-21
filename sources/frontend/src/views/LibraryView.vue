@@ -393,9 +393,14 @@ async function createDoc() {
     }
     
     const { data } = await api.post("/documents", payload);
-    router.push({ name: "editor", params: { id: data.id } });
-  } catch {
-    ElMessage.error(t("library.createFailed"));
+    if (data && data.id) {
+        router.push({ name: "editor", params: { id: data.id } });
+    } else {
+        throw new Error("Invalid document ID received");
+    }
+  } catch (err: any) {
+    console.error("Document creation failed:", err);
+    ElMessage.error(err.response?.data?.error || t("library.createFailed"));
   }
 }
 

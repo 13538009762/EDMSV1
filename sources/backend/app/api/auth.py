@@ -157,7 +157,11 @@ def change_password():
     if not user.check_password(old_password):
         return jsonify({"error": "Invalid current password"}), 401
         
-    user.set_password(new_password)
-    db.session.commit()
+    try:
+        user.set_password(new_password)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Update failed: {str(e)}"}), 500
     
     return jsonify({"message": "Password updated successfully"})

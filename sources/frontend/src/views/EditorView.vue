@@ -1134,6 +1134,10 @@ async function loadDoc(silent = false) {
 
 async function saveNow() {
   if (!editor.value || !meta.value.can_edit) return;
+  if (!docId.value || isNaN(docId.value)) {
+    console.error("[DEBUG] Attempted to save document with invalid ID:", docId.value);
+    return;
+  }
   saving.value = true;
   try {
     const content_json = editor.value.getJSON();
@@ -1143,11 +1147,21 @@ async function saveNow() {
     
     // 💡 Clear history on save as requested
     undoManager.clear();
-  } catch { saveHint.value = t("editor.saveFailed"); }
+  } catch (err) { 
+    console.error("Save failed:", err);
+    saveHint.value = t("editor.saveFailed"); 
+  }
   finally { saving.value = false; }
 }
 
-async function saveTitle() { await api.patch(`/documents/${docId.value}`, { title: title.value }); }
+async function saveTitle() { 
+  if (!docId.value || isNaN(docId.value)) return;
+  try {
+    await api.patch(`/documents/${docId.value}`, { title: title.value }); 
+  } catch (err) {
+    console.error("Title save failed:", err);
+  }
+}
 
 async function confirmDeleteDoc() {
   try {
