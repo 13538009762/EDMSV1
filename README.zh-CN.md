@@ -64,9 +64,9 @@ API 默认运行在 `http://127.0.0.1:5000`。
 
 如果登录时提示"无效的用户名"，说明数据库中没有员工数据。
 
-1. 在浏览器中打开 **`/admin`**（例如开发环境中为 `http://localhost:5173/admin`）。
-2. 上传你的 **Input Data.xlsx**（或相同格式的文件：`Departments`、`Positions`、`Managers`、`Employees`）。
-3. 在登录页面使用电子表格中的任意 **登录名**（例如 `user1`、`ruk1`）。
+1. 系统预留admin账号和密码123456 
+2. 登录后可在主数据上传所有人的信息、也可管理员手动添加
+3. 成功导入可登录
 
 如果服务器上设置了 `ADMIN_IMPORT_TOKEN`，请在管理页面输入它（或发送 `X-Admin-Token`）。
 
