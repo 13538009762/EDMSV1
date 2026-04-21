@@ -15,8 +15,8 @@ If `npm` is slow or unavailable, use **cnpm** (same `package.json`):
 
 ```bash
 cd frontend
-cnpm install
-cnpm run dev
+npm install
+npm run dev
 ```
 
 Production build:
