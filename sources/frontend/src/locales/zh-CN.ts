@@ -31,6 +31,9 @@ export default {
     noPermission: "没有权限执行此操作",
     notifyRecipients: "通知被共享人",
     warning: "警告",
+    edit: "编辑",
+    delete: "删除",
+    actions: "操作",
   },
   nav: {
     library: "文档库",
@@ -67,6 +70,10 @@ export default {
     confirmImport: "确认导入",
     tryLogin: "尝试使用管理人员登录：",
     addDept: "添加部门",
+    resetPass: "重置密码",
+    resetPassTitle: "重置用户密码",
+    newPassHint: "请输入该用户的新密码",
+    addUser: "添加成员",
   },
 
   login: {
@@ -162,6 +169,12 @@ export default {
     mgr: "管理权限",
     saveSuccess: "资料已更新",
     editUser: "编辑员工信息",
+    changePass: "修改密码",
+    oldPass: "当前密码",
+    newPass: "新密码",
+    confirmPass: "确认新密码",
+    passMismatch: "两次输入的新密码不一致",
+    passSuccess: "密码修改成功",
   },
   inbox: {
     title: "待办审批",
@@ -299,7 +312,6 @@ export default {
     roleEdit: "可编辑",
     roleComment: "可批注",
     sharingSaved: "权限已保存",
-    delete: "批量删除",
     deleteUserConfirm: "确定要删除指定的成员吗？此操作不可撤销。",
     deleteDocConfirm: "确定要永久删除这篇文档吗？此操作不可撤销。",
     deleteSuccess: "文档已删除",

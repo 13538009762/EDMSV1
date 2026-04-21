@@ -137,3 +137,27 @@ def me():
             "position": user.position_short
         }
     )
+
+
+@bp.post("/change-password")
+@jwt_required()
+def change_password():
+    from app.extensions import db
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json(silent=True) or {}
+    old_password = data.get("old_password")
+    new_password = data.get("new_password")
+    
+    if not old_password or not new_password:
+        return jsonify({"error": "Current and new passwords are required"}), 400
+        
+    if not user.check_password(old_password):
+        return jsonify({"error": "Invalid current password"}), 401
+        
+    user.set_password(new_password)
+    db.session.commit()
+    
+    return jsonify({"message": "Password updated successfully"})

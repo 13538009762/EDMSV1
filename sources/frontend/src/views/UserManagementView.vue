@@ -53,6 +53,13 @@
             <el-tag v-else type="info" size="small">{{ t('common.no') }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column :label="t('common.actions')" width="240" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="editUser(row)">{{ t('common.edit') }}</el-button>
+            <el-button type="warning" link @click="handleResetPassword(row)">{{ t('admin.resetPass') }}</el-button>
+            <el-button v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" type="danger" link @click="handleDeleteUser(row)">{{ t('common.delete') }}</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="pagination">
@@ -85,7 +92,7 @@
     </el-dialog>
 
     <!-- Add User Dialog -->
-    <el-dialog v-model="userDialogVisible" :title="t('admin.addUser', 'Add New Member')" width="600px" custom-class="spacious-dialog">
+    <el-dialog v-model="userDialogVisible" :title="isEdit ? t('profile.editUser') : t('admin.addUser')" width="600px" custom-class="spacious-dialog">
       <el-form :model="userForm" label-width="140px" style="padding: 10px 20px;">
         <el-form-item :label="t('profile.loginName')">
           <el-input v-model="userForm.login_name" />
@@ -147,12 +154,36 @@ const formatDeptName = (name: string, nameEn?: string) => {
   // Fallback to raw values
   return locale.value === 'zh-CN' ? name : (nameEn || name);
 };
+
+async function handleResetPassword(user: any) {
+  try {
+    const { value: newPassword } = await ElMessageBox.prompt(
+      t('admin.newPassHint'),
+      t('admin.resetPassTitle'),
+      {
+        confirmButtonText: t('common.ok'),
+        cancelButtonText: t('common.cancel'),
+        inputType: 'password'
+      }
+    );
+    
+    if (newPassword) {
+      await api.post(`/users/${user.id}/reset-password`, { password: newPassword });
+      ElMessage.success(t('common.success'));
+    }
+  } catch (err) {
+    // Cancelled
+  }
+}
+
 const total = ref(0);
 const loading = ref(false);
 const currentPage = ref(1);
 const pageSize = ref(15);
 const selectedIds = ref<number[]>([]);
 
+const isEdit = ref(false);
+const editingUserId = ref<number | null>(null);
 const deptDialogVisible = ref(false);
 const deptLoading = ref(false);
 const newDeptName = ref("");
@@ -177,6 +208,8 @@ async function loadDepts() {
 }
 
 function openAddUser() {
+  isEdit.value = false;
+  editingUserId.value = null;
   userForm.value = {
     login_name: "",
     password: "",
@@ -189,13 +222,45 @@ function openAddUser() {
   userDialogVisible.value = true;
 }
 
+function editUser(row: any) {
+  isEdit.value = true;
+  editingUserId.value = row.id;
+  userForm.value = {
+    login_name: row.login_name,
+    password: "", // Leave blank to keep existing
+    employee_no: row.employee_no,
+    first_name: row.display_name.split(' ')[1] || row.display_name,
+    last_name: row.display_name.split(' ')[0] || "",
+    department_id: row.department_id,
+    is_manager: row.is_manager || false
+  };
+  userDialogVisible.value = true;
+}
+
+async function handleDeleteUser(user: any) {
+  try {
+    await ElMessageBox.confirm(
+      t('editor.deleteUserConfirm'),
+      t('common.warning'),
+      { type: 'warning', confirmButtonClass: 'el-button--danger' }
+    );
+    await api.delete(`/users/${user.id}`);
+    ElMessage.success(t('common.success'));
+    loadUsers();
+  } catch {}
+}
+
 async function createUser() {
-  if (!userForm.value.login_name || !userForm.value.password || !userForm.value.department_id) {
+  if (!userForm.value.login_name || (!isEdit.value && !userForm.value.password) || !userForm.value.department_id) {
     return ElMessage.warning("Please fill required fields");
   }
   userLoading.value = true;
   try {
-    await api.post("/users", userForm.value);
+    if (isEdit.value && editingUserId.value) {
+      await api.patch(`/users/${editingUserId.value}`, userForm.value);
+    } else {
+      await api.post("/users", userForm.value);
+    }
     ElMessage.success(t('common.success'));
     userDialogVisible.value = false;
     loadUsers();

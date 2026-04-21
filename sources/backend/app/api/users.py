@@ -240,3 +240,27 @@ def create_department():
     db.session.add(dept)
     db.session.commit()
     return jsonify({"id": dept.id, "name": dept.name, "name_en": dept.name_en}), 201
+
+@bp.post("/<int:user_id>/reset-password")
+@jwt_required()
+def reset_password(user_id: int):
+    admin = current_user()
+    if not admin or not admin.is_manager:
+        return jsonify({"error": "Admin access required"}), 403
+        
+    target_user = db.session.get(User, user_id)
+    if not target_user:
+        return jsonify({"error": "User not found"}), 404
+        
+    # 💡 范围校验：部门经理仅能重置本部门人员密码
+    if admin.login_name != 'admin' and target_user.department_id != admin.department_id:
+        return jsonify({"error": "Forbidden: User belongs to another department"}), 403
+        
+    data = request.get_json(silent=True) or {}
+    new_password = data.get("password")
+    if not new_password:
+        return jsonify({"error": "New password is required"}), 400
+        
+    target_user.set_password(new_password)
+    db.session.commit()
+    return jsonify({"message": "Password reset successfully"})

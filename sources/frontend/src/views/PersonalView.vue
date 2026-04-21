@@ -21,6 +21,7 @@
           <div class="detail" v-if="user?.birth_date">{{ t("personal.birthDate") }}: {{ user.birth_date }} ({{ t("personal.age") }}: {{ user.age }})</div>
           <div style="margin-top: 16px;">
             <el-button type="primary" :icon="Edit" @click="editVisible = true">{{ t('common.edit') }}</el-button>
+            <el-button type="warning" :icon="Lock" @click="passVisible = true">{{ t('profile.changePass') }}</el-button>
           </div>
         </div>
       </div>
@@ -48,6 +49,25 @@
         <template #footer>
           <el-button @click="editVisible = false">{{ t('common.cancel') }}</el-button>
           <el-button type="primary" @click="saveProfile">{{ t('common.save') }}</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- Password Dialog -->
+      <el-dialog :title="t('profile.changePass')" v-model="passVisible" width="450px">
+        <el-form :model="passForm" label-width="120px" v-loading="passLoading">
+          <el-form-item :label="t('profile.oldPass')">
+            <el-input v-model="passForm.old_password" type="password" show-password />
+          </el-form-item>
+          <el-form-item :label="t('profile.newPass')">
+            <el-input v-model="passForm.new_password" type="password" show-password />
+          </el-form-item>
+          <el-form-item :label="t('profile.confirmPass')">
+            <el-input v-model="passForm.confirm_password" type="password" show-password />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="passVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" @click="handleUpdatePassword">{{ t('common.save') }}</el-button>
         </template>
       </el-dialog>
       <div class="stats">
@@ -81,7 +101,7 @@
 import { onMounted, computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { Edit } from "@element-plus/icons-vue";
+import { Edit, Lock } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 
 interface UserInfo {
@@ -132,6 +152,28 @@ async function loadUserInfo() {
     user.value = data;
     editForm.value = { ...data };
   } catch (error) {}
+}
+
+const passVisible = ref(false);
+const passLoading = ref(false);
+const passForm = ref({ old_password: '', new_password: '', confirm_password: '' });
+
+async function handleUpdatePassword() {
+  if (passForm.value.new_password !== passForm.value.confirm_password) {
+    return ElMessage.error(t('profile.passMismatch'));
+  }
+  
+  passLoading.value = true;
+  try {
+    await api.post("/auth/change-password", passForm.value);
+    ElMessage.success(t('profile.passSuccess'));
+    passVisible.value = false;
+    passForm.value = { old_password: '', new_password: '', confirm_password: '' };
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.error || t('common.failed'));
+  } finally {
+    passLoading.value = false;
+  }
 }
 
 async function saveProfile() {
