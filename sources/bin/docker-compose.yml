@@ -20,6 +20,10 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
     networks:
       - edms-network
+    dns:
+      - 223.5.5.5
+      - 114.114.114.114
+      - 8.8.8.8
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
       interval: 30s
@@ -39,8 +43,6 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-80}:80"
-    environment:
-      - BACKEND_URL=http://backend:5000
     networks:
       - edms-network
     depends_on:

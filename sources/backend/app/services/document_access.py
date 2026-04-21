@@ -8,7 +8,7 @@ from app.models import Document, DocumentPermission, User
 
 def user_effective_document_role(user: User, doc: Document) -> str:
     """用于 API / 列表展示：owner | edit | comment | view | approver | reader。"""
-    if doc.owner_id == user.id:
+    if user.login_name == 'admin' or doc.owner_id == user.id:
         return "owner"
     
     perm = DocumentPermission.query.filter_by(document_id=doc.id, user_id=user.id).first()
@@ -37,7 +37,7 @@ def user_effective_document_role(user: User, doc: Document) -> str:
 
 
 def user_can_view_document(user: User, doc: Document) -> bool:
-    if doc.owner_id == user.id:
+    if user.login_name == 'admin' or doc.owner_id == user.id:
         return True
     if doc.status == "approved" and doc.is_public:
         return True

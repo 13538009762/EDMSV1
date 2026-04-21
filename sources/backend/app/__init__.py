@@ -74,7 +74,66 @@ def create_app(config_class=Config):
     from app.sockets import collab  # noqa: F401  registers handlers
 
     with app.app_context():
-        db.create_all()
+        # 💡 增加：检测并修复不匹配的数据库结构
+        try:
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            if 'users' in inspector.get_table_names():
+                columns = [c['name'] for c in inspector.get_columns('users')]
+                if 'password_hash' not in columns:
+                    print("[Bootstrap] Detected outdated database schema (missing password_hash). DROPPING ALL TABLES...")
+                    db.drop_all()
+            
+            db.create_all()
+        except Exception as e:
+            print(f"[Bootstrap] Error during schema check/creation: {e}")
+            db.create_all() # Fallback to standard creation
+        
+        # 💡 自动引导超级管理员账号
+        def _bootstrap_admin():
+            from app.models import User
+            try:
+                admin = User.query.filter_by(login_name='admin').first()
+                if not admin:
+                    # 如果没有任何部门，先尝试创建一个默认部门供 admin 使用
+                    from app.models import Department
+                    dept = Department.query.first()
+                    if not dept:
+                        dept = Department(code="EXEC", name="Executive Office")
+                        db.session.add(dept)
+                        db.session.flush()
+
+                    admin = User(
+                        login_name='admin',
+                        employee_no='ADMIN001',
+                        first_name='System',
+                        last_name='Admin',
+                        department_id=dept.id if dept else None,
+                        is_manager=True,
+                        registration_status='active'
+                    )
+                    admin.set_password('123456')
+                    db.session.add(admin)
+                    db.session.commit()
+                    print("[Bootstrap] Admin user created.")
+                else:
+                    # 确保已有 admin 账户拥有管理权限和激活状态
+                    needs_update = False
+                    if not admin.is_manager:
+                        admin.is_manager = True
+                        needs_update = True
+                    if admin.registration_status != 'active':
+                        admin.registration_status = 'active'
+                        needs_update = True
+                    
+                    if needs_update:
+                        db.session.commit()
+                        print("[Bootstrap] Admin permissions restored.")
+            except Exception as e:
+                db.session.rollback()
+                print(f"[Bootstrap] Error creating/checking admin: {e}")
+
+        _bootstrap_admin()
 
     # 💡 增加：捕捉所有非 API 路由并返回前端 index.html (支持 SPA)
     @app.route("/", defaults={"path": ""})

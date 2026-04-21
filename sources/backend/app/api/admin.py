@@ -38,44 +38,52 @@ def admin_status():
 
 @bp.post("/master-data/import")
 def admin_import_master_data():
-    """
-    Import XLSX (clears documents and master data).
-    If no managers exist: allow import without auth.
-    If managers exist: require manager authentication.
-    """
+    """Import XLSX (clears or appends documents and master data)."""
+    # 💡 增加：请求诊断日志
+    print(f"[DEBUG] Import request received. Content-Type: {request.content_type}")
+    print(f"[DEBUG] Files in request: {list(request.files.keys())}")
+    
     # Check if there are any managers in the database
     has_managers = _has_managers()
     
     if has_managers:
-        # Verify JWT token and check if user is a manager
         try:
             verify_jwt_in_request()
             user = current_user()
-            if not user or not user.is_manager:
+            # 💡 优化：仅允许超级管理员（login_name 为 admin）进行 Excel 全量导入
+            if not user or user.login_name != 'admin':
                 return jsonify({
-                    "error": "Authorization required. Please sign in as a manager to import master data."
+                    "error": "Access denied. Only the super admin can import master data via Excel."
                 }), 403
         except Exception:
             return jsonify({
                 "error": "Authorization required. Please sign in as a manager to import master data."
             }), 403
-    # If no managers exist, allow import without authentication
 
     if "file" not in request.files:
+        print("[DEBUG] 400 ERROR: 'file' key missing in request.files")
         return jsonify({"error": "file required"}), 400
+    
     f = request.files["file"]
     raw = f.read()
     if not raw:
+        print("[DEBUG] 400 ERROR: File is empty")
         return jsonify({"error": "empty file"}), 400
 
+    # Get overwrite and table_type flags
+    overwrite = request.form.get("overwrite") != "false"
+    table_type = request.form.get("table_type", "all") # 'all', 'departments', 'positions', 'employees'
+    print(f"[DEBUG] Overwrite flag: {overwrite}, Table Type: {table_type}")
+
     try:
-        # We perform the import in a single transaction.
-        # import_master_data_xlsx does NOT commit internally now.
-        stats = import_master_data_xlsx(raw)
+        stats = import_master_data_xlsx(raw, overwrite=overwrite, table_type=table_type)
         db.session.commit()
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
-        return jsonify({"error": f"Import failed: {exc}"}), 400
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[DEBUG] 400 ERROR (Import Failed): {exc}\n{error_trace}")
+        return jsonify({"error": f"Import failed: {str(exc)}"}), 400
 
     try:
         logins = [
@@ -139,4 +147,47 @@ def admin_list_audit_logs():
             "created_at": lg.created_at.isoformat() + "Z" if lg.created_at else None
         })
 
-    return jsonify({"total": total, "items": items})
+    return jsonify({"total": total, "items": items}), 200
+
+
+@bp.get("/master-data/template")
+def admin_get_import_template():
+    """Generate a sample XLSX template for the user."""
+    from openpyxl import Workbook
+    from io import BytesIO
+    from flask import send_file
+
+    wb = Workbook()
+    
+    # Sheet 1: Departments
+    ws1 = wb.active
+    ws1.title = "Departments"
+    ws1.append(["部门编号 (Dept Code)", "部门名称 (Dept Name)", "部门英文名 (Dept Name EN)"])
+    ws1.append(["D001", "研发部", "Research & Development"])
+    ws1.append(["D002", "人力资源部", "Human Resources"])
+
+    # Sheet 2: Positions
+    ws2 = wb.create_sheet("Positions")
+    ws2.append(["职务简称 (Short Name)", "职务全称 (Full Name)", "职务英文全称 (Full Name EN)"])
+    ws2.append(["DEV", "开发工程师", "Software Developer"])
+    ws2.append(["MGR", "经理", "Manager"])
+
+    # Sheet 3: Employees
+    ws3 = wb.create_sheet("Employees")
+    ws3.append([
+        "登录名 (Login Name)", "员工编号 (Emp No)", "姓 (Last Name)", "名 (First Name)", 
+        "部门编号 (Dept Code)", "职务简称 (Position)", "直属上级员工编号 (Manager No)", "性别 (Gender)"
+    ])
+    ws3.append(["user1", "E001", "张", "三", "D001", "DEV", "AD001", "男"])
+    ws3.append(["mgr1", "E002", "李", "四", "D001", "MGR", "AD001", "女"])
+
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+    
+    return send_file(
+        out,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="edms_import_template.xlsx"
+    )

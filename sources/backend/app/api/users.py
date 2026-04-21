@@ -31,7 +31,7 @@ def create_user():
         first_name=data["first_name"],
         last_name=data["last_name"],
         patronymic=data.get("patronymic", ""),
-        department_id=data["department_id"],
+        department_id=admin.department_id if admin.login_name != 'admin' else data["department_id"],
         position_short=data.get("position_short", ""),
         gender=data.get("gender", ""),
         is_manager=data.get("is_manager", False),
@@ -72,6 +72,14 @@ def list_users():
         return jsonify({"error": "Unauthorized"}), 401
     
     query = User.query.filter_by(registration_status='active')
+    
+    # 💡 优化：普通部门经理仅能看到自己本部门的成员
+    if user.login_name != 'admin' and user.is_manager:
+        query = query.filter(User.department_id == user.department_id)
+    elif user.login_name != 'admin':
+        # 非管理且非 admin 理论上不应访问列表，或仅能看自己
+        query = query.filter(User.id == user.id)
+
     search = request.args.get("search")
 
     if search:
@@ -112,8 +120,14 @@ def update_user(user_id: int):
         return jsonify({"error": "User not found"}), 404
     
     is_admin = c_user and c_user.is_manager
+    is_super = c_user and c_user.login_name == 'admin'
     is_self = c_user and c_user.id == target_user.id
     
+    # 💡 校验范围：部门经理仅能编辑自己部门的人员
+    if not is_super and is_admin:
+        if target_user.department_id != c_user.department_id:
+            return jsonify({"error": "Forbidden: User belongs to another department"}), 403
+
     if not is_admin and not is_self:
         return jsonify({"error": "Forbidden"}), 403
     
@@ -130,7 +144,10 @@ def update_user(user_id: int):
         
     # Fields ONLY admin can change
     if is_admin:
-        if "department_id" in data: target_user.department_id = data["department_id"]
+        # 💡 限制：仅超级管理员（admin）可以修改员工所属部门
+        if is_super and "department_id" in data: 
+            target_user.department_id = data["department_id"]
+        
         if "is_manager" in data: target_user.is_manager = data["is_manager"]
         if "position_short" in data: target_user.position_short = data["position_short"]
 
@@ -150,6 +167,10 @@ def delete_user(user_id: int):
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
+    
+    # 💡 范围校验：仅超级管理员可以删除所有人，经理仅能删除本部门人员
+    if admin.login_name != 'admin' and user.department_id != admin.department_id:
+        return jsonify({"error": "Forbidden: User is in another department"}), 403
     
     try:
         db.session.delete(user)
@@ -180,6 +201,11 @@ def batch_delete_users():
     for uid in user_ids:
         u = db.session.get(User, uid)
         if u:
+            # 💡 优化：对于部门经理，跳过不属于其部门的用户
+            if admin.login_name != 'admin' and u.department_id != admin.department_id:
+                errors.append(f"User ID {uid} belongs to another department - skipped")
+                continue
+            
             try:
                 db.session.delete(u)
                 deleted_count += 1

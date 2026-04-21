@@ -712,8 +712,17 @@ function insertChatToEditor(content: string) {
   }
 
   try {
-    const html = (editor.value.storage as any).markdown.getHtml(cleanContent);
-    editor.value.chain().focus().insertContent(html).run();
+    const mdStorage = (editor.value.storage as any).markdown;
+    // 💡 适配：tiptap-markdown 在不同版本中可能使用 getHtml 或 getHTML
+    const parseFn = mdStorage?.getHtml || mdStorage?.getHTML;
+    
+    if (parseFn) {
+      const html = parseFn.call(mdStorage, cleanContent);
+      editor.value.chain().focus().insertContent(html).run();
+    } else {
+      // 💡 兜底：如果扩展未暴露解析方法，则直接插入
+      editor.value.chain().focus().insertContent(cleanContent).run();
+    }
   } catch (e) {
     console.error("Markdown parse failed", e);
     editor.value.chain().focus().insertContent(cleanContent).run();

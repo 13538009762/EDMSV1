@@ -32,10 +32,6 @@
               <el-button type="primary" link @click="router.push({ name: 'register' })">{{
                 t("login.register", "Register Account")
               }}</el-button>
-              <el-divider direction="vertical" />
-              <el-button type="primary" link @click="router.push({ name: 'admin' })">{{
-                t("login.goAdmin")
-              }}</el-button>
             </div>
           </el-form>
         </el-card>

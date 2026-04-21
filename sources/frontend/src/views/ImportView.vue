@@ -6,9 +6,24 @@
     </div>
 
     <el-tabs type="border-card" class="master-tabs">
-      <!-- Tab 1: XLSX Import -->
-      <el-tab-pane :label="t('import.title')">
+      <!-- Tab 1: XLSX Import (Only for System Admin) -->
+      <el-tab-pane v-if="isSystemAdmin" :label="t('import.title')">
         <div class="upload-section">
+          <div class="template-download">
+            <el-button :icon="Download" @click="downloadTemplate" plain>
+              {{ t('import.downloadTemplate') }}
+            </el-button>
+          </div>
+
+          <div class="type-selector">
+            <el-radio-group v-model="importType">
+              <el-radio-button label="all">{{ t('import.typeAll') }}</el-radio-button>
+              <el-radio-button label="departments">{{ t('import.typeDepts') }}</el-radio-button>
+              <el-radio-button label="positions">{{ t('import.typePos') }}</el-radio-button>
+              <el-radio-button label="employees">{{ t('import.typeUsers') }}</el-radio-button>
+            </el-radio-group>
+          </div>
+
           <el-upload
             class="upload-area"
             drag
@@ -28,6 +43,18 @@
               </div>
             </template>
           </el-upload>
+
+          <div class="mode-selector">
+            <el-switch
+              v-model="overwrite"
+              :active-text="t('import.overwrite')"
+              active-color="#ff4949"
+            />
+            <div class="mode-hint">
+              <el-icon><Warning /></el-icon>
+              {{ overwrite ? t('import.warning') : t('import.overwriteWarn') }}
+            </div>
+          </div>
 
           <div class="action-bar">
             <el-button
@@ -78,7 +105,7 @@
             <el-table-column :label="t('common.actions')" width="180" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link @click="editUser(row)">{{ t('common.edit') }}</el-button>
-                <el-button v-if="isSystemAdmin" type="danger" link @click="handleDeleteUser(row)">{{ t('common.delete', 'Delete') }}</el-button>
+                <el-button v-if="isSystemAdmin || authStore.user?.is_manager" type="danger" link @click="handleDeleteUser(row)">{{ t('common.delete', 'Delete') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -121,7 +148,7 @@
           <el-input v-model="addForm.password" type="password" show-password />
         </el-form-item>
         <el-form-item :label="t('profile.dept')" required>
-          <el-select v-model="addForm.department_id" style="width: 100%">
+          <el-select v-model="addForm.department_id" :disabled="!isSystemAdmin" style="width: 100%">
             <el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
@@ -139,7 +166,7 @@
     <el-dialog :title="t('profile.editUser')" v-model="editDialogVisible" width="500px">
       <el-form :model="editForm" label-width="100px" v-loading="dialogLoading">
         <el-form-item :label="t('profile.dept')">
-          <el-select v-model="editForm.department_id" style="width: 100%">
+          <el-select v-model="editForm.department_id" :disabled="!isSystemAdmin" style="width: 100%">
             <el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
@@ -161,7 +188,7 @@ import type { UploadFile } from "element-plus";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Upload, UploadFilled, InfoFilled, Search, Plus } from "@element-plus/icons-vue"; // 引入图标
+import { Upload, UploadFilled, InfoFilled, Search, Plus, Warning, Download } from "@element-plus/icons-vue"; // 引入图标
 import { useAuthStore } from "@/stores/auth";
 
 const { t } = useI18n();
@@ -171,6 +198,8 @@ const file = ref<File | null>(null);
 const loading = ref(false);
 const result = ref<unknown>(null);
 const isError = ref(false); // 跟踪是否为报错信息
+const overwrite = ref(true); // 默认覆盖
+const importType = ref("all");
 
 function onFile(f: UploadFile) {
   file.value = f.raw || null;
@@ -196,6 +225,8 @@ async function upload() {
   
   const fd = new FormData();
   fd.append("file", file.value);
+  fd.append("overwrite", String(overwrite.value));
+  fd.append("table_type", importType.value);
   try {
     const { data } = await api.post("/admin/master-data/import", fd);
     result.value = data;
@@ -209,6 +240,10 @@ async function upload() {
   }
 }
 
+function downloadTemplate() {
+  window.open(api.defaults.baseURL + "/admin/master-data/template", "_blank");
+}
+
 // --- User Management Logic ---
 const searchQuery = ref("");
 const users = ref<any[]>([]);
@@ -217,7 +252,7 @@ const currentPage = ref(1);
 const userLoading = ref(false);
 const editDialogVisible = ref(false);
 const dialogLoading = ref(false);
-const editForm = ref({ id: 0, department_id: null, is_manager: false });
+const editForm = ref({ id: 0, department_id: null as number | null, is_manager: false });
 
 const addDialogVisible = ref(false);
 const addLoading = ref(false);
@@ -227,7 +262,7 @@ const addForm = ref({
   employee_no: "",
   first_name: "",
   last_name: "",
-  department_id: null,
+  department_id: null as number | null,
   is_manager: false
 });
 const departments = ref<any[]>([]);
@@ -247,7 +282,7 @@ async function loadDepts() {
 }
 
 function editUser(user: any) {
-  editForm.value = { id: user.id, department_id: null, is_manager: user.is_manager };
+  editForm.value = { id: user.id, department_id: user.department_id, is_manager: user.is_manager };
   editDialogVisible.value = true;
   loadDepts();
 }
@@ -274,7 +309,7 @@ function openAddUser() {
     employee_no: "",
     first_name: "",
     last_name: "",
-    department_id: null,
+    department_id: isSystemAdmin.value ? null : (authStore.user?.department_id ?? null),
     is_manager: false
   };
   addDialogVisible.value = true;
@@ -298,7 +333,7 @@ async function createUser() {
 }
 
 async function handleDeleteUser(user: any) {
-  if (!isSystemAdmin.value) {
+  if (!isSystemAdmin.value && !authStore.user?.is_manager) {
       ElMessage.error(t('common.noPermission', 'No permission'));
       return;
   }
@@ -351,8 +386,13 @@ onMounted(loadUsers);
 .upload-area { width: 100%; max-width: 600px; }
 .el-upload__tip { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 12px; color: var(--el-text-color-secondary); font-size: 13px; }
 .action-bar { margin-top: 32px; width: 100%; display: flex; justify-content: center; }
+.template-download { margin-bottom: 24px; }
+.type-selector { margin-bottom: 16px; }
 .submit-btn { width: 200px; border-radius: 6px; font-weight: 600; letter-spacing: 1px; }
 .result-section { margin-top: 24px; }
+.mode-selector { margin-top: 24px; display: flex; flex-direction: column; align-items: center; border: 1px solid var(--el-border-color-lighter); padding: 16px; border-radius: 8px; background: var(--el-fill-color-blank); }
+.mode-hint { margin-top: 12px; font-size: 13px; color: var(--el-text-color-secondary); display: flex; align-items: center; gap: 6px; text-align: center; max-width: 400px; }
+.mode-hint .el-icon { color: var(--el-color-warning); font-size: 16px; }
 .result-alert { margin-bottom: 16px; border-radius: 6px; }
 .json-viewer { background: var(--el-bg-color-page); border: 1px solid var(--el-border-color-lighter); border-radius: 6px; padding: 16px; overflow-x: auto; }
 .json-viewer pre { margin: 0; font-family: 'Consolas', 'Courier New', Courier, monospace; font-size: 13px; color: var(--el-text-color-primary); line-height: 1.6; }

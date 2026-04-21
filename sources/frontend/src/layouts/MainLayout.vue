@@ -26,6 +26,10 @@
           <el-icon><User /></el-icon>
           <span>{{ t("nav.users", "Member Management") }}</span>
         </el-menu-item>
+        <el-menu-item v-if="auth.user?.login_name === 'admin'" index="/import">
+          <el-icon><Setting /></el-icon>
+          <span>{{ t("nav.masterData", "Master Data") }}</span>
+        </el-menu-item>
         <el-menu-item v-if="auth.user?.login_name === 'admin'" index="/audit-log">
           <el-icon><Monitor /></el-icon>
           <span>{{ t("nav.auditLog", "Audit Log") }}</span>

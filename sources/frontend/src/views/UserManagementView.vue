@@ -4,10 +4,10 @@
       <h2>{{ t('nav.users', 'Member Management') }}</h2>
       <div class="actions">
         <el-button 
-          v-if="auth.user?.login_name === 'admin'" 
+          v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" 
           type="primary" 
           :icon="Plus" 
-          @click="userDialogVisible = true"
+          @click="openAddUser"
         >
           {{ t('admin.addUser', 'Add Member') }}
         </el-button>
@@ -103,7 +103,7 @@
           <el-input v-model="userForm.last_name" />
         </el-form-item>
         <el-form-item :label="t('profile.dept')">
-          <el-select v-model="userForm.department_id" style="width: 100%">
+          <el-select v-model="userForm.department_id" :disabled="auth.user?.login_name !== 'admin'" style="width: 100%">
             <el-option 
               v-for="d in deptOptions" 
               :key="d.id" 
@@ -176,6 +176,19 @@ async function loadDepts() {
   deptOptions.value = data;
 }
 
+function openAddUser() {
+  userForm.value = {
+    login_name: "",
+    password: "",
+    employee_no: "",
+    first_name: "",
+    last_name: "",
+    department_id: auth.user?.login_name === 'admin' ? null : (auth.user?.department_id ?? null),
+    is_manager: false
+  };
+  userDialogVisible.value = true;
+}
+
 async function createUser() {
   if (!userForm.value.login_name || !userForm.value.password || !userForm.value.department_id) {
     return ElMessage.warning("Please fill required fields");
@@ -185,8 +198,6 @@ async function createUser() {
     await api.post("/users", userForm.value);
     ElMessage.success(t('common.success'));
     userDialogVisible.value = false;
-    // Reset form
-    userForm.value = { login_name: "", password: "", employee_no: "", first_name: "", last_name: "", department_id: null, is_manager: false };
     loadUsers();
   } catch (err: any) {
     ElMessage.error(err.response?.data?.error || t('common.failed'));

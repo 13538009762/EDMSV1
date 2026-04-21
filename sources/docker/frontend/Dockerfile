@@ -4,11 +4,18 @@ FROM node:20-alpine as build-stage
 
 WORKDIR /app
 
-# Copy all frontend source code
-COPY frontend/ ./
+# Set npm mirror for faster downloads
+RUN npm config set registry https://registry.npmmirror.com
 
-# Install dependencies
-RUN npm install
+# Copy dependency files first to leverage Docker layer caching
+COPY frontend/package*.json ./
+
+# Install dependencies using clean install
+# (Ensure package-lock.json is used for reproducible builds)
+RUN npm ci
+
+# Copy the rest of the frontend source code
+COPY frontend/ ./
 
 # Build the application
 RUN npm run build
