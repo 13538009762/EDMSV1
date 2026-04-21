@@ -75,6 +75,45 @@ API 默认运行在 `http://127.0.0.1:5000`。
 - 选择存储在 `localStorage` 的 `edms_locale` 中。
 - Element Plus 组件语言跟随相同设置。
 
+## 手动部署（替代方案）
+
+当 Docker 不可用或用于开发时，可以使用项目根目录下提供的手动部署脚本：
+
+### Windows 脚本
+
+- **`backend_start.bat`** - 启动 Flask 后端服务（端口 5000）
+- **`frontend_start.bat`** - 启动 Vue 前端服务（端口 5173）  
+- **`start_manual.bat`** - 同时启动前后端服务
+- **`stop_manual.bat`** - 停止所有运行的服务
+
+### 使用方法
+
+#### 选项 A：分别启动服务
+```cmd
+# 在 D:\HHH\EDMSV1 目录中：
+backend_start.bat
+# 在另一个终端中：
+frontend_start.bat
+```
+
+#### 选项 B：一键启动/停止
+```cmd
+# 启动两个服务
+start_manual.bat
+
+# 停止所有服务
+stop_manual.bat
+```
+
+### 服务访问地址
+- **前端**: http://localhost:5173
+- **后端 API**: http://127.0.0.1:5000
+
+这些脚本会自动处理：
+- Python 虚拟环境创建和依赖安装
+- Node.js 依赖安装（支持 cnpm/npm 自动切换）
+- 正确的服务启动和清理
+
 ## Docker 部署（推荐）
 
 生产环境部署，使用 Docker 是最简单的方式：

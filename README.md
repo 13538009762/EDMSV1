@@ -62,7 +62,7 @@ Environment variables (optional):
 
 ## First-time setup (no users yet)
 
-If login fails with “invalid login name”, the database has no employees yet.
+If login fails with "invalid login name", the database has no employees yet.
 
 1. Open **`/admin`** in the browser (e.g. `http://localhost:5173/admin` in dev).
 2. Upload your **Input Data.xlsx** (or the same layout: `Departments`, `Positions`, `Managers`, `Employees`).
@@ -78,6 +78,45 @@ Once users exist and `ADMIN_IMPORT_TOKEN` is **not** set, importing again requir
 - Users can switch to **中文** (`zh-CN`) via **Language** in the header (or on the login page).
 - Choice is stored in `localStorage` under `edms_locale`.
 - Element Plus component locale follows the same setting.
+
+## Manual Deployment (Alternative)
+
+For development or when Docker is not available, you can use the manual deployment scripts provided in the project root directory:
+
+### Windows Scripts
+
+- **`backend_start.bat`** - Start the Flask backend service (port 5000)
+- **`frontend_start.bat`** - Start the Vue frontend service (port 5173)  
+- **`start_manual.bat`** - Start both backend and frontend services simultaneously
+- **`stop_manual.bat`** - Stop all running services
+
+### Usage
+
+#### Option A: Start services separately
+```cmd
+# In D:\HHH\EDMSV1 directory:
+backend_start.bat
+# In another terminal:
+frontend_start.bat
+```
+
+#### Option B: One-click start/stop
+```cmd
+# Start both services
+start_manual.bat
+
+# Stop all services
+stop_manual.bat
+```
+
+### Service Access
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://127.0.0.1:5000
+
+These scripts automatically handle:
+- Python virtual environment creation and dependency installation
+- Node.js dependency installation (with cnpm/npm fallback)
+- Proper service startup and cleanup
 
 ## Docker Deployment (Recommended)
 
