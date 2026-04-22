@@ -28,6 +28,10 @@ class Document(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # === 区块链存证字段 ===
+    file_hash = db.Column(db.String(256), nullable=True)
+    tx_hash = db.Column(db.String(256), nullable=True)
+
     owner = db.relationship("User", back_populates="documents_owned", foreign_keys=[owner_id])
     current_version = db.relationship(
         "DocumentVersion",

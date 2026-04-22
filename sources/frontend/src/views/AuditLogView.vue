@@ -36,9 +36,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="user_login" :label="t('auditLog.colUser', 'User')" width="120" />
-        <el-table-column prop="action" :label="t('auditLog.colAction', 'Action')" width="130">
+        <el-table-column prop="action" :label="t('auditLog.colAction', 'Action')" width="160">
           <template #default="{ row }">
-            <el-tag :type="getActionTagType(row.action)">{{ row.action }}</el-tag>
+            <el-tag :type="getActionTagType(row.action)" class="action-tag">{{ row.action }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="document_id" :label="t('auditLog.colDocId', 'Doc ID')" width="100" />
@@ -86,7 +86,7 @@ function getActionTagType(action: string) {
   if (!action) return "info";
   if (action === "VIEW") return "success";
   if (action.startsWith("EXPORT")) return "warning";
-  if (action === "DELETE") return "danger";
+  if (action === "DELETE" || action === "ALERT_TAMPER") return "danger";
   return "info";
 }
 
@@ -154,5 +154,14 @@ onMounted(() => {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+.action-tag {
+  white-space: normal;
+  height: auto;
+  line-height: 1.2;
+  padding: 4px;
+  text-align: center;
+  word-break: break-all;
 }
 </style>

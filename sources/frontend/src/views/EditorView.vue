@@ -5,6 +5,17 @@
         <el-input v-model="title" style="width: 240px" :disabled="!meta.can_edit" @blur="saveTitle" />
         <el-tag :type="statusTag" class="status-tag">{{ statusLabel }}</el-tag>
         <span class="hint">{{ saveHint }}</span>
+        <el-button 
+          v-if="meta.status === 'approved' || meta.status === 'ARCHIVED'" 
+          type="success" 
+          plain 
+          size="small"
+          icon="Shield" 
+          :loading="isVerifying"
+          @click="handleBlockchainVerify"
+          style="margin-left: 12px;">
+          区块链确权审计
+        </el-button>
       </div>
       
       <div class="header-right">
@@ -484,7 +495,7 @@ import api from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { attachDocCollab } from "@/composables/useDocSocket";
 import { fixPunctuation } from "@/utils/punctuation";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
 import mammoth from "mammoth";
 import { Markdown } from "tiptap-markdown";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
@@ -507,7 +518,7 @@ const CustomImage = Image.extend({
 }).configure({ allowBase64: true });
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const auth = useAuthStore();
 const docId = computed(() => Number(route.params.id));
 
@@ -523,6 +534,55 @@ const meta = ref<any>({
   doc_type: "rich_text",
   file_path: null,
 });
+
+const isVerifying = ref(false);
+
+const handleBlockchainVerify = async () => {
+  isVerifying.value = true;
+  try {
+    const res = await api.get(`/documents/${docId.value}/verify`);
+    
+    if (res.data.safe) {
+      ElNotification({
+        title: '审计通过 (Audit Passed)',
+        message: `
+          <div style="margin-top: 5px;">
+            <p style="color: #67C23A; font-weight: bold; margin-bottom: 8px; display:flex; align-items:center; gap:4px">
+              <span style="font-size: 16px;">✔</span> 当前数据与区块链存证完全一致
+            </p>
+            <div style="padding: 8px; background: rgba(0,0,0,0.03); border-radius: 4px;">
+              <p style="font-size: 12px; color: #909399; margin: 0; word-break: break-all;">
+                <b>交易凭证 TxHash:</b><br/>${res.data.tx_hash}
+              </p>
+            </div>
+          </div>
+        `,
+        dangerouslyUseHTMLString: true,
+        type: 'success',
+        duration: 5000
+      });
+    } else {
+      ElNotification({
+        title: '零信任拦截 (Zero-Trust Alert)',
+        message: `
+          <div style="margin-top: 5px;">
+            <p style="color: #F56C6C; font-weight: bold; margin-bottom: 8px; display:flex; align-items:center; gap:4px">
+              <span style="font-size: 16px;">❌</span> ${res.data.msg}
+            </p>
+            <p style="font-size: 12px; color: #606266; margin: 0;">系统已拦截该脏数据，并记录安全审计日志。</p>
+          </div>
+        `,
+        dangerouslyUseHTMLString: true,
+        type: 'error',
+        duration: 0 
+      });
+    }
+  } catch (err: any) {
+    ElMessage.error(err.response?.data?.error || "验证请求失败");
+  } finally {
+    isVerifying.value = false;
+  }
+};
 
 const showShare = ref(false);
 const comments = ref<Array<any>>([]);
@@ -603,7 +663,7 @@ async function runAutoTag() {
   tagging.value = true;
   try {
     const text = editor.value.getText().slice(0, 500);
-    const response = await api.post("/ai/generate", { action: "auto_tag", prompt: text });
+    const response = await api.post("/ai/generate", { action: "auto_tag", prompt: text, lang: locale.value });
     if (response.data?.content) {
       aiTags.value = response.data.content.split(",").map((s: string) => s.trim());
     }
@@ -630,7 +690,7 @@ async function askAi() {
      const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
-      body: JSON.stringify({ action: "chat", prompt: fullPrompt })
+      body: JSON.stringify({ action: "chat", prompt: fullPrompt, lang: locale.value })
     });
     
     if (!response.ok) throw new Error("AI request failed");
@@ -929,7 +989,7 @@ async function fixPunc() {
     const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
-      body: JSON.stringify({ action: "fix_punctuation", prompt: fullText })
+      body: JSON.stringify({ action: "fix_punctuation", prompt: fullText, lang: locale.value })
     });
     
     if (!response.ok) throw new Error("AI request failed");
@@ -1338,7 +1398,7 @@ async function handleAiAction(action: string) {
     const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
-      body: JSON.stringify({ prompt: text, action })
+      body: JSON.stringify({ prompt: text, action, lang: locale.value })
     });
     if (!response.body) throw new Error("No response body");
     const reader = response.body.getReader();

@@ -73,12 +73,8 @@ def list_users():
     
     query = User.query.filter_by(registration_status='active')
     
-    # 💡 优化：普通部门经理仅能看到自己本部门的成员
-    if user.login_name != 'admin' and user.is_manager:
-        query = query.filter(User.department_id == user.department_id)
-    elif user.login_name != 'admin':
-        # 非管理且非 admin 理论上不应访问列表，或仅能看自己
-        query = query.filter(User.id == user.id)
+    # Allow all users to see the full list of active users for approval selection
+
 
     search = request.args.get("search")
 

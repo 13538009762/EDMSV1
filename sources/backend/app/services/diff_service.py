@@ -128,35 +128,117 @@ def side_by_side_diff(old_json: str, new_json: str) -> str:
     return f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;background:#f5f5f5;padding:20px;"><div style="background:white;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.1);"><div style="color:#888;font-size:12px;margin-bottom:10px;border-bottom:1px solid #eee;">OLD VERSION</div>{h_o}</div><div style="background:white;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.1);"><div style="color:#888;font-size:12px;margin-bottom:10px;border-bottom:1px solid #eee;">NEW VERSION</div>{h_n}</div></div>'
 
 def blame_html(versions_data: list[dict[str, Any]]) -> str:
+    """
+    Generate a 'Blame' view like Git, but optimized for TipTap JSON blocks.
+    Groups consecutive blocks from the same author into 'modules'.
+    """
     if not versions_data: return ""
     versions = sorted(versions_data, key=lambda x: x.get("version_no", 0))
-    # Track authors for each block of the LATEST version
-    latest_content = json.loads(versions[-1].get("content_json", "{}")).get("content", [])
-    blame_map = [] # list of (node, author_name, author_color)
     
-    # Initialize with the oldest version
-    first_content = json.loads(versions[0].get("content_json", "{}")).get("content", [])
-    for n in first_content:
-        blame_map.append({"text": _node_to_text(n), "author": versions[0].get("author_name", "Unknown"), "color": versions[0].get("author_color", "#888")})
+    # Use the LATEST version as the template for display
+    latest_doc = json.loads(versions[-1].get("content_json", "{}"))
+    latest_content = latest_doc.get("content", [])
+    if not latest_content: return '<div style="padding:40px;text-align:center;color:#999;">No content to trace.</div>'
+
+    # Track attribution for each block in the latest content
+    # We use stable JSON fingerprint instead of pure text to catch formatting changes (bold, color, etc.)
+    def get_fingerprint(n):
+        return json.dumps(n, sort_keys=True)
+
+    # Progression: Start from v0, then apply changes from v1, v2...
+    current_blame = [] # list of {"fingerprint": str, "author": str, "color": str}
     
-    # Iteratively update blame map through versions
+    # Initialize with V0
+    v0 = versions[0]
+    v0_content = json.loads(v0.get("content_json", "{}")).get("content", [])
+    for n in v0_content:
+        current_blame.append({
+            "fingerprint": get_fingerprint(n),
+            "author": v0.get("author_name", "Unknown"),
+            "color": v0.get("author_color", "#888")
+        })
+
+    # Progressively update based on each new version
     for i in range(1, len(versions)):
         v = versions[i]
-        curr_content = json.loads(v.get("content_json", "{}")).get("content", [])
-        curr_texts = [_node_to_text(n) for n in curr_content]
-        prev_texts = [m["text"] for m in blame_map]
+        v_content = json.loads(v.get("content_json", "{}")).get("content", [])
+        v_fingerprints = [get_fingerprint(n) for n in v_content]
+        prev_fingerprints = [m["fingerprint"] for m in current_blame]
         
-        new_map = []
-        sm = difflib.SequenceMatcher(None, prev_texts, curr_texts)
+        new_blame = []
+        sm = difflib.SequenceMatcher(None, prev_fingerprints, v_fingerprints)
         for tag, i1, i2, j1, j2 in sm.get_opcodes():
-            if tag == "equal": new_map.extend(blame_map[i1:i2])
+            if tag == "equal":
+                # Content is identical to previous version, preserve original attribution
+                new_blame.extend(current_blame[i1:i2])
             else:
+                # Content changed or added, attribute to current version's author
                 for idx in range(j1, j2):
-                    new_map.append({"text": curr_texts[idx], "author": v.get("author_name", "Unknown"), "color": v.get("author_color", "#888")})
-        blame_map = new_map
+                    new_blame.append({
+                        "fingerprint": v_fingerprints[idx],
+                        "author": v.get("author_name", "Unknown"),
+                        "color": v.get("author_color", "#888")
+                    })
+        current_blame = new_blame
 
-    out = ['<div class="blame-doc" style="background:#f9f9f9;padding:20px;">']
-    for i, node in enumerate(latest_content):
-        info = blame_map[i] if i < len(blame_map) else {"author": "Unknown", "color": "#888"}
-        out.append(f'<div style="display:flex;margin-bottom:4px;"><div style="width:120px;flex-shrink:0;font-size:11px;color:#aaa;padding:8px;border-right:3px solid {info["color"]};background:white;">{info["author"]}</div><div style="flex:1;background:white;padding:8px 20px;font-size:14px;color:#333;">{_render_simple(node)}</div></div>')
+    # --- Grouping into Modules ---
+    # Merge consecutive blocks with the same author
+    modules = []
+    if current_blame:
+        # Note: We must ensure we align with latest_content exactly
+        # current_blame size should match latest_content because it was derived from versions[-1] in the last loop
+        
+        # Start the first module
+        first_info = current_blame[0] if len(current_blame) > 0 else {"author": "Unknown", "color": "#888"}
+        curr_mod = {
+            "author": first_info["author"],
+            "color": first_info["color"],
+            "nodes": [latest_content[0]]
+        }
+        
+        for i in range(1, len(latest_content)):
+            info = current_blame[i] if i < len(current_blame) else {"author": "Unknown", "color": "#888"}
+            if info["author"] == curr_mod["author"]:
+                curr_mod["nodes"].append(latest_content[i])
+            else:
+                modules.append(curr_mod)
+                curr_mod = {
+                    "author": info["author"],
+                    "color": info["color"],
+                    "nodes": [latest_content[i]]
+                }
+        modules.append(curr_mod)
+
+    # --- Render High-End Module UI ---
+    out = [f'''
+    <style>
+        .blame-container {{ font-family: "Inter", -apple-system, sans-serif; background: #f4f7f9; padding: 30px; }}
+        .blame-module {{ display: flex; margin-bottom: 20px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05); background: #fff; }}
+        .blame-sidebar {{ width: 150px; flex-shrink: 0; padding: 15px; background: #fff; border-right: 4px solid var(--bar-color); display: flex; flex-direction: column; justify-content: flex-start; }}
+        .blame-author {{ font-size: 13px; font-weight: 700; color: #2c3e50; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+        .blame-tag {{ font-size: 10px; color: #aeb9c7; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }}
+        .blame-content {{ flex: 1; padding: 20px 30px; line-height: 1.6; color: #34495e; min-width: 0; }}
+        .blame-content p {{ margin: 0 0 12px 0; }}
+        .blame-content p:last-child {{ margin-bottom: 0; }}
+        .blame-content table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
+        .blame-content td, .blame-content th {{ border: 1px solid #edf2f7; padding: 10px; }}
+    </style>
+    <div class="blame-container">
+    ''']
+
+    for mod in modules:
+        bar_color = mod["color"]
+        out.append(f'''
+        <div class="blame-module" style="--bar-color: {bar_color}">
+            <div class="blame-sidebar">
+                <div class="blame-author" title="{mod["author"]}">{mod["author"]}</div>
+                <div class="blame-tag">Last Modified By</div>
+            </div>
+            <div class="blame-content">
+                {''.join(_render_simple(n) for n in mod["nodes"])}
+            </div>
+        </div>
+        ''')
+
     return "".join(out) + "</div>"
+

@@ -31,10 +31,18 @@ def ai_generate():
     instruction = SYSTEM_PROMPTS.get(action, "You are a helpful assistant.")
 
     # Standard OpenAI-compatible message structure for better instruction following
+    lang = data.get("lang", "en")
+    lang_map = {"zh": "Chinese", "en": "English", "ru": "Russian"}
+    target_lang = lang_map.get(lang, "English")
+
+    # Force language instruction
+    lang_instruction = f" IMPORTANT: Your entire response MUST be in {target_lang}."
+    full_instruction = instruction + lang_instruction
+
     payload = {
         "model": "lite",
         "messages": [
-            {"role": "system", "content": instruction},
+            {"role": "system", "content": full_instruction},
             {"role": "user", "content": prompt}
         ],
         "stream": True

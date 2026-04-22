@@ -15,6 +15,50 @@
         />
       </div>
     </div>
+ 
+    <!-- 🔗 区块链核心安全监控 -->
+    <div v-if="!loading" class="blockchain-section">
+      <div class="section-title cyber">
+        <el-icon><Connection /></el-icon> 区块链底层安全监控中心
+      </div>
+      <el-row :gutter="20" class="blockchain-kpi-row">
+        <el-col :span="8">
+          <el-card shadow="hover" class="kpi-card blockchain cyber-blue">
+            <div class="kpi-icon blue"><el-icon><Cpu /></el-icon></div>
+            <div class="kpi-info">
+              <div class="kpi-label">已存证确权文档 (On-chain)</div>
+              <div class="kpi-value glow clickable" @click="handleMetricClick('blockchain_docs')">{{ blockchainStats.on_chain_count }}</div>
+            </div>
+            <div class="blockchain-status-tag">REAL-TIME</div>
+          </el-card>
+        </el-col>
+        <el-col :span="8">
+          <el-card shadow="hover" class="kpi-card blockchain cyber-red">
+            <div class="kpi-icon orange"><el-icon><Lock /></el-icon></div>
+            <div class="kpi-info">
+              <div class="kpi-label">零信任系统拦截次数</div>
+              <div class="kpi-value glow-red clickable" @click="handleMetricClick('tamper_alerts')">{{ blockchainStats.tamper_alerts }}</div>
+            </div>
+            <div class="blockchain-status-tag danger">GUARDED</div>
+          </el-card>
+        </el-col>
+        <el-col :span="8">
+          <el-card shadow="hover" class="kpi-card blockchain cyber-green">
+            <div class="kpi-icon green"><el-icon><Box /></el-icon></div>
+            <div class="kpi-info">
+              <div class="kpi-label">模拟区块高度 (Block Height)</div>
+              <div class="kpi-value">{{ blockchainStats.block_height }}</div>
+            </div>
+            <div class="blockchain-status-tag success">STABLE</div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <div class="section-title">
+      <el-icon><DataLine /></el-icon> 基础业务数据统计
+    </div>
+
 
     <el-row :gutter="20" class="kpi-row">
       <el-col :span="4">
@@ -251,7 +295,7 @@
       destroy-on-close
     >
       <div v-loading="metricLoading" style="min-height: 300px">
-        <el-table v-if="metricType === 'docs'" :data="metricData" stripe style="width: 100%" max-height="500">
+        <el-table v-if="metricType === 'docs' || metricType === 'blockchain_docs'" :data="metricData" stripe style="width: 100%" max-height="500">
           <el-table-column prop="doc_number" :label="t('library.colId')" width="140" />
           <el-table-column prop="title" :label="t('library.colTitle')" min-width="180">
             <template #default="{ row }">
@@ -287,8 +331,66 @@
             </template>
           </el-table-column>
         </el-table>
+        
+        <el-table v-else-if="metricType === 'tamper_alerts'" :data="metricData" stripe style="width: 100%" max-height="500">
+          <el-table-column prop="created_at" label="拦截时间" width="180">
+            <template #default="{ row }">
+              {{ formatLocalDate(row.created_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="user_name" label="操作用户" width="120" />
+          <el-table-column prop="ip_address" label="来源 IP" width="140" />
+          <el-table-column prop="description" label="拦截描述" min-width="200" />
+        </el-table>
       </div>
     </el-dialog>
+    <el-row :gutter="20" class="chart-row" style="margin-top: 20px;" v-if="!loading">
+      <el-col :span="14">
+        <el-card shadow="hover" class="chart-card blockchain-card">
+          <template #header>
+            <div class="card-header cyber">
+              <span><el-icon><Link /></el-icon> 实时确权哈希流 (Live Blockchain Feed)</span>
+              <el-tag type="success" effect="dark" size="small" class="pulse-tag">CONNECTED</el-tag>
+            </div>
+          </template>
+          <div class="hash-feed-container">
+            <div v-for="item in blockchainHistory" :key="item.id" class="hash-item">
+               <div class="hash-time">{{ formatLocalDate(item.time) }}</div>
+               <div class="hash-content">
+                  文档 <strong>"{{ item.title }}"</strong> 已确权固化
+               </div>
+               <div class="hash-value">交易凭证: <span>{{ item.tx_hash }}</span></div>
+            </div>
+            <div v-if="blockchainHistory.length === 0" class="empty-state">暂无上链记录</div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="10">
+        <el-card shadow="hover" class="chart-card security-card">
+          <template #header>
+            <div class="card-header danger">
+              <span><el-icon><WarnTriangleFilled /></el-icon> 零信任安全雷达 (Security Alerts)</span>
+            </div>
+          </template>
+          <div class="security-radar-container">
+            <div v-if="securityAlerts.length > 0" class="alert-list">
+              <div v-for="alert in securityAlerts" :key="alert.id" class="alert-item animate__animated animate__headShake">
+                <div class="alert-header">
+                  <el-tag type="danger" size="small" effect="dark">非法篡改拦截</el-tag>
+                  <span class="alert-time">{{ formatLocalDate(alert.time) }}</span>
+                </div>
+                <div class="alert-body">{{ alert.description }}</div>
+                <div class="alert-footer">来源 IP: {{ alert.ip }} | 用户: {{ alert.user }}</div>
+              </div>
+            </div>
+            <div v-else class="secure-state">
+               <el-result icon="success" title="系统安全运行中" sub-title="底层物理指纹哈希校验一致"></el-result>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <el-row class="feed-row" style="margin-top: 20px;">
       <el-col :span="24">
@@ -321,7 +423,10 @@
 import { ref, onMounted, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen, Folder } from "@element-plus/icons-vue";
+import { 
+  Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen, Folder,
+  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine
+} from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 
@@ -367,6 +472,9 @@ const trendingDocs = ref<any[]>([]);
 const storageInfo = ref({ total_size_mb: 0, by_type: [] });
 const heatmapData = ref<any[]>([]);
 const myStats = ref({ docs: 0, pending: 0 });
+const blockchainStats = ref({ on_chain_count: 0, tamper_alerts: 0, block_height: 15000 });
+const blockchainHistory = ref<any[]>([]);
+const securityAlerts = ref<any[]>([]);
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.is_manager);
@@ -395,16 +503,24 @@ async function handleMetricClick(type: string, status?: string) {
     metricTitle.value = t('dashboard.totalDocs');
   } else if (type === 'users') {
     metricTitle.value = t('dashboard.totalUsers');
+  } else if (type === 'blockchain_docs') {
+    metricTitle.value = '已上链存证文档明细';
+  } else if (type === 'tamper_alerts') {
+    metricTitle.value = '零信任安全拦截日志详情';
   }
 
   try {
-    if (type === 'docs') {
+    if (type === 'docs' || type === 'blockchain_docs') {
       const params: any = { scope: 'all' };
       if (status) params.status = status;
+      if (type === 'blockchain_docs') params.on_chain = 'true';
       const { data } = await api.get("/documents", { params });
       metricData.value = data.items;
     } else if (type === 'users') {
       const { data } = await api.get("/users", { params: { pageSize: 1000 } });
+      metricData.value = data.items;
+    } else if (type === 'tamper_alerts') {
+      const { data } = await api.get("/dashboard/tamper-alerts");
       metricData.value = data.items;
     }
   } catch (err) {
@@ -540,7 +656,7 @@ const lineOption = computed(() => {
       data: trendData.value.map((t) => {
         const d = new Date(t.date);
         return `${d.getMonth() + 1}/${d.getDate()}`;
-      }).reverse(),
+      }),
     },
     yAxis: [
       { type: "value", name: t('dashboard.documents') },
@@ -553,7 +669,7 @@ const lineOption = computed(() => {
         areaStyle: { color: "rgba(64, 158, 255, 0.2)" },
         itemStyle: { color: "#409eff" },
         smooth: true,
-        data: trendData.value.map((t) => t.docs).reverse(),
+        data: trendData.value.map((t) => t.docs),
       },
       {
         name: t('dashboard.completedApprovals'),
@@ -561,7 +677,7 @@ const lineOption = computed(() => {
         yAxisIndex: 1,
         itemStyle: { color: "#67C23A" },
         smooth: true,
-        data: trendData.value.map((t) => t.approvals).reverse(),
+        data: trendData.value.map((t) => t.approvals),
       },
     ],
   };
@@ -688,6 +804,9 @@ async function loadData() {
     trendingDocs.value = data.trending_docs || [];
     storageInfo.value = data.storage_info || { total_size_mb: 0, by_type: [] };
     heatmapData.value = data.heatmap_data || [];
+    blockchainStats.value = data.blockchain_stats || { on_chain_count: 0, tamper_alerts: 0, block_height: 15000 };
+    blockchainHistory.value = data.blockchain_history || [];
+    securityAlerts.value = data.security_alerts || [];
     console.log("[DEBUG] Loaded data extensions:", data);
   } catch (err) {
     console.error("[DEBUG] Dashboard API Error:", err);
@@ -900,4 +1019,119 @@ onMounted(() => {
 .trending-list.is-wide .trending-item:last-child {
     border-bottom: none;
 }
+
+/* Blockchain & Cyber Styles */
+.blockchain-section {
+  margin-bottom: 30px;
+  background: rgba(64, 158, 255, 0.02);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(64, 158, 255, 0.1);
+}
+.section-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--el-text-color-primary);
+}
+.section-title.cyber {
+  color: #409eff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.blockchain-kpi-row {
+  margin-bottom: 24px;
+}
+.kpi-card.blockchain {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(64, 158, 255, 0.2);
+}
+.kpi-card.blockchain.cyber-blue { background: linear-gradient(135deg, #f0f7ff 0%, #e6f1ff 100%); }
+.kpi-card.blockchain.cyber-red { background: linear-gradient(135deg, #fff5f5 0%, #fff0f0 100%); }
+.kpi-card.blockchain.cyber-green { background: linear-gradient(135deg, #f6ffed 0%, #f0f9eb 100%); }
+
+.kpi-icon.blue { color: #409eff; }
+.kpi-icon.orange { color: #e6a23c; }
+.kpi-icon.green { color: #67c23a; }
+
+.kpi-value.glow {
+  text-shadow: 0 0 8px rgba(64, 158, 255, 0.3);
+  color: #409eff;
+}
+.kpi-value.glow-red {
+  text-shadow: 0 0 8px rgba(245, 108, 108, 0.3);
+  color: #f56c6c;
+}
+
+.blockchain-status-tag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 10px;
+  padding: 2px 8px;
+  background: rgba(64, 158, 255, 0.1);
+  color: #409eff;
+  border-bottom-left-radius: 8px;
+  font-weight: bold;
+}
+.blockchain-status-tag.danger { background: rgba(245, 108, 108, 0.1); color: #f56c6c; }
+.blockchain-status-tag.success { background: rgba(103, 194, 58, 0.1); color: #67c23a; }
+
+.blockchain-card, .security-card {
+  min-height: 400px;
+}
+
+.hash-feed-container {
+  height: 320px;
+  overflow-y: auto;
+}
+.hash-item {
+  padding: 12px;
+  border-bottom: 1px dashed var(--el-border-color-lighter);
+  transition: all 0.3s;
+}
+.hash-item:hover { background: #f9fbff; }
+.hash-time { font-size: 11px; color: var(--el-text-color-secondary); }
+.hash-content { font-size: 13px; margin: 4px 0; color: var(--el-text-color-primary); }
+.hash-value { font-size: 11px; color: var(--el-color-primary); font-family: monospace; }
+.hash-value span { word-break: break-all; opacity: 0.8; }
+
+.security-radar-container {
+  height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.alert-item {
+  background: #fff5f5;
+  border-left: 4px solid #f56c6c;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+.alert-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.alert-time { font-size: 11px; color: #f56c6c; }
+.alert-body { font-size: 13px; color: #303133; font-weight: bold; }
+.alert-footer { font-size: 11px; color: #909399; margin-top: 8px; }
+
+.secure-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.card-header.cyber { color: #409eff; }
+.card-header.danger { color: #f56c6c; }
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+.pulse-tag { animation: pulse 2s infinite; }
 </style>

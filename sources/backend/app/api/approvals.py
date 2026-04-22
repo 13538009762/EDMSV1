@@ -107,8 +107,24 @@ def decide(participant_id: int):
         return jsonify({"error": str(e)}), 400
     db.session.commit()
 
-    # 💡 如果文档审批完成（通过），通知所有编辑者
+    # 💡 如果文档审批完成（通过），执行上链存证并通知所有编辑者
     if doc and doc.status == "approved":
+        # === 零信任区块链确权：自动化防篡改上链 ===
+        from app.services.mock_blockchain import MockBlockchainService
+        from app.models.document import DocumentVersion
+        
+        current_version = DocumentVersion.query.get(doc.current_version_id)
+        if current_version:
+            # 1. 算哈希
+            doc_hash = MockBlockchainService.calculate_hash(current_version.content_json)
+            # 2. 模拟上链
+            tx_hash = MockBlockchainService.mock_notarize_to_chain()
+            # 3. 固化凭证
+            doc.file_hash = doc_hash
+            doc.tx_hash = tx_hash
+            db.session.commit()
+            print(f"[Blockchain] Notarized Document {doc.id} with tx: {tx_hash}")
+
         from app.models.notification import Notification
         members_to_notify = []
         # 文署的所有者

@@ -182,6 +182,7 @@ def list_documents():
     scope = request.args.get("scope")
     space_id = request.args.get("space_id")
     status_filter = request.args.get("status")
+    on_chain = request.args.get("on_chain")
 
     if not scope:
         scope = "all"
@@ -190,6 +191,9 @@ def list_documents():
     print(f"[DEBUG] User {user.id} ({user.login_name}) listing docs with scope={scope}, space_id={space_id}")
 
     q = Document.query.filter(Document.is_template == False, Document.deleted_at == None)
+    
+    if on_chain == "true":
+        q = q.filter(Document.tx_hash != None)
     
     # ── Admin Super Access ────────────────────────────────────────────────
     # If admin, show everything by default unless a specific space is filtered
@@ -1049,3 +1053,75 @@ def batch_share_documents():
         
     db.session.commit()
     return jsonify({"message": f"Shared {success_count} documents", "errors": errors})
+
+@bp.route('/<int:doc_id>/archive', methods=['POST'])
+@jwt_required()
+def archive_document(doc_id):
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    doc = db.session.get(Document, doc_id)
+    if not doc:
+        return jsonify({"error": "Not found"}), 404
+        
+    from app.services.mock_blockchain import MockBlockchainService
+    current_version = doc.current_version
+    
+    # 1. 算哈希
+    doc_hash = MockBlockchainService.calculate_hash(current_version.content_json if current_version else '')
+    
+    # 2. 模拟上链
+    tx_hash = MockBlockchainService.mock_notarize_to_chain()
+    
+    # 3. 固化凭证到 documents 主表
+    doc.status = 'approved' 
+    doc.file_hash = doc_hash
+    doc.tx_hash = tx_hash
+    db.session.commit()
+    
+    return jsonify({"msg": "归档并上链成功", "tx_hash": tx_hash})
+
+@bp.route('/<int:doc_id>/verify', methods=['GET'])
+@jwt_required()
+def verify_document(doc_id):
+    doc = db.session.get(Document, doc_id)
+    if not doc:
+        return jsonify({"error": "Not found"}), 404
+        
+    from app.services.mock_blockchain import MockBlockchainService
+    import time
+    
+    current_version = doc.current_version
+    
+    # 重新计算当前数据库里文本的哈希
+    current_hash = MockBlockchainService.calculate_hash(current_version.content_json if current_version else '')
+    
+    time.sleep(0.8) # 模拟正在全网广播查询的延迟
+    
+    # 核心拦截逻辑：拿现在的哈希 vs 归档时存的哈希
+    if current_hash == doc.file_hash:
+        return jsonify({
+            "safe": True, 
+            "msg": "链上指纹匹配，数据未被篡改！", 
+            "tx_hash": doc.tx_hash
+        })
+    else:
+        # ======= 新增：真正把内鬼行为写入数据库 =======
+        from app.models.workflow import AuditLog
+        from flask import request
+        user = current_user()
+        
+        tamper_log = AuditLog(
+            user_id=user.id if user else None,
+            document_id=doc.id,             
+            action='ALERT_TAMPER',          
+            ip_address=request.remote_addr, 
+            summary='【零信任拦截】用户发起确权审计，系统比对发现底层物理数据已被未知来源非法篡改，已阻断！' 
+        )
+        db.session.add(tamper_log)
+        db.session.commit()
+        # ===============================================
+        return jsonify({
+            "safe": False, 
+            "msg": "致命警告：底层数据哈希异常，文件已遭非法篡改！"
+        })
