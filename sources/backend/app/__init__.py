@@ -1,6 +1,7 @@
-"""EDMS Flask application factory."""
 from flask import Flask
 from flask_cors import CORS
+from dotenv import load_dotenv
+load_dotenv()
 
 from app.config import Config
 from app.extensions import db, jwt, socketio
@@ -79,7 +80,9 @@ def create_app(config_class=Config):
         try:
             db.create_all()
         except Exception as e:
-            print(f"[Bootstrap] Error during schema creation: {e}")
+            print(f"❌ [Bootstrap] 数据库表创建失败! 请确保数据库已存在。 Error: {e}")
+            if "Unknown database" in str(e):
+                print("💡 提示：请先在 MySQL 中手动创建名为 'edms_db' 的空数据库。")
         
         # 💡 自动引导超级管理员账号
         def _bootstrap_admin():
