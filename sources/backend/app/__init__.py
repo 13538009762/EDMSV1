@@ -25,13 +25,14 @@ def create_app(config_class=Config):
     # 💡 核心并发优化：开启 SQLite WAL 模式并增加超时
     from sqlalchemy import event
     with app.app_context():
-        @event.listens_for(db.engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=10000")  # 10秒超时等待
-            cursor.close()
+        if app.config.get("SQLALCHEMY_DATABASE_URI", "").startswith("sqlite"):
+            @event.listens_for(db.engine, "connect")
+            def set_sqlite_pragma(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=10000")  # 10秒超时等待
+                cursor.close()
 
     # 💡 增加：健康检查接口 (放在最前面确保不被拦截)
     @app.route("/api/health")
@@ -103,7 +104,7 @@ def create_app(config_class=Config):
                         is_manager=True,
                         registration_status='active'
                     )
-                    admin.set_password('123456')
+                    admin.set_password('123')
                     db.session.add(admin)
                     db.session.commit()
                     print("[Bootstrap] Admin user created.")

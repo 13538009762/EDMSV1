@@ -42,7 +42,7 @@ class User(db.Model):
     position_short = db.Column(db.String(128), default="")
     manager_employee_no = db.Column(db.String(64), default="")
     is_manager = db.Column(db.Boolean, default=False)
-    password_hash = db.Column(db.String(128), nullable=True)
+    password_hash = db.Column(db.String(256), nullable=True)
     # Status: active, pending_dept, pending_admin, rejected
     registration_status = db.Column(db.String(32), default="active", index=True)
 

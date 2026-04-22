@@ -12,6 +12,8 @@ import os
 
 # Ensure the backend package is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from dotenv import load_dotenv
+load_dotenv()
 
 from app import create_app
 from app.extensions import db
@@ -255,6 +257,7 @@ def run_seed():
             is_manager=is_mgr,
             position_short="manager" if is_mgr else "staff",
         )
+        u.set_password('123')
         db.session.add(u)
         db.session.flush()
         user_map[login] = u
