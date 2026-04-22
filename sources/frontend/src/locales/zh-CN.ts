@@ -34,6 +34,7 @@ export default {
     edit: "编辑",
     delete: "删除",
     actions: "操作",
+    send: "发送",
   },
   nav: {
     library: "文档库",
@@ -237,6 +238,7 @@ export default {
       actionConfirmBtn: "确认并执行",
       actionCancelBtn: "忽略建议",
       approverNotFound: "未找到用户：'{name}'",
+      insertToDoc: "插入到文档",
     },
     actions: "操作",
     save: "保存",

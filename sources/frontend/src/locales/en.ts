@@ -35,6 +35,7 @@ export default {
     noPermission: "No permission to perform this action",
     notifyRecipients: "Notify Recipients",
     warning: "Warning",
+    send: "Send",
   },
   nav: {
     library: "Library",

@@ -33,6 +33,7 @@ export default {
     yes: "Да",
     no: "Нет",
     noPermission: "Нет прав для выполнения этого действия",
+    send: "Отправить",
   },
   nav: {
     library: "Библиотека",
@@ -191,6 +192,7 @@ export default {
       actionConfirmBtn: "Подтвердить исполнение",
       actionCancelBtn: "Отклонить",
       approverNotFound: "Пользователь '{name}' не найден",
+      insertToDoc: "Вставить в документ",
     },
     actions: "Действия",
     save: "Сохранить",

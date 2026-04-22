@@ -17,7 +17,7 @@ SYSTEM_PROMPTS = {
     "translate_zh": "请将以下文本翻译成简体中文。保持原有的文档结构（使用 Markdown 语法：标题、列表、加粗等）。只输出翻译结果，不要输出原文或解释。",
     "translate_ru": "Переведите следующий текст на русский язык. Сохраняйте структуру документа с помощью Markdown (заголовки, списки, жирный шрифт). Выводите ТОЛЬКО перевод.",
     "fix_punctuation": "Fix the punctuation in the following text. Correct mixed Chinese/English punctuation usage, normalize full-width/half-width marks, and fix spacing. Output ONLY the corrected text.",
-    "chat": "You are a professional document specialist. Answer queries based ONLY on context. Use Markdown for structure. CRITICAL: 1. THE DOCUMENT CONTENT MUST BE PLAIN TEXT/MARKDOWN OUTSIDE ANY BLOCKS. 2. NEVER put the document text inside the JSON. 3. JSON is ONLY for metadata: ```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"Name\"]}} ```. 4. If you output JSON, append it at the VERY END after your normal text response.",
+    "chat": "You are a professional document specialist. Answer queries based ONLY on context. Use Markdown for structure. \n\nCRITICAL LOGIC (核心逻辑):\n0. LANGUAGE RULE (语言规则): The entire output (outside JSON) MUST be in the SAME LANGUAGE as the User's Question.\n1. DRAFT FIRST: If the user asks to 'draft', 'write', or 'summarize', PROVIDE THE CONTENT. (如果用户要求起草或编写文档，请直接输出正文内容。)\n2. NO NAME, NO ACTION: Only suggest 'start_approval' IF the user specifically mentions a REAL NAME from the context. (只有在用户提到了上下文中的真实姓名时，才建议发起审批。)\n3. NO PLACEHOLDERS: NEVER suggest names like 'Zhang San' (张三) or 'Placeholder'. If no real name is found, DO NOT output any JSON. (严禁杜撰姓名如“张三”。如果没有真实姓名，严禁输出 JSON。)\n\nACTION FORMAT (only if name exists):\n```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"<ACTUAL_NAME>\"], \"type\": \"parallel\"}} ```.\nAppend it at the VERY END. NEVER put draft text inside JSON.",
     "auto_tag": "Analyze the text and provide 1-3 short category tags like [Finance], [HR]. Output ONLY the tags separated by commas, no explanations."
 }
 
@@ -28,20 +28,14 @@ def ai_generate():
     prompt = data.get("prompt", "")
     action = data.get("action", "")
 
-    # For Lite models, merging instruction with user content is more reliable
     instruction = SYSTEM_PROMPTS.get(action, "You are a helpful assistant.")
-    
-    # 💡 Optimization: Use Chinese wrappers for Chinese-target tasks to reduce English bias
-    if action in ['translate_zh', 'auto_tag'] or '请' in instruction:
-        user_content = f"指令: {instruction}\n\n目标文本:\n{prompt}"
-    else:
-        user_content = f"Instruction: {instruction}\n\nTarget Text:\n{prompt}"
-    
-    # Spark Lite (OpenAI Compatible) construction
+
+    # Standard OpenAI-compatible message structure for better instruction following
     payload = {
         "model": "lite",
         "messages": [
-            {"role": "user", "content": user_content}
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": prompt}
         ],
         "stream": True
     }

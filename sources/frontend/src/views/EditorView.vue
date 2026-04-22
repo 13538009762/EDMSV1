@@ -1572,6 +1572,26 @@ watch(() => route.params.id, () => loadDoc());
   border-left: 1px solid var(--el-border-color);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+:deep(.el-tabs) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+}
+:deep(.el-tabs__content) {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+:deep(.el-tab-pane) {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .comments-header {
   padding: 8px 16px;
@@ -1727,8 +1747,10 @@ watch(() => route.params.id, () => loadDoc());
 .ai-panel {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 200px);
+  flex: 1;
+  height: 100%;
   padding: 12px;
+  overflow: hidden;
 }
 
 .ai-tags-section {
