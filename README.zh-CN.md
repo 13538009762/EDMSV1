@@ -34,6 +34,7 @@ cd backend
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+# 首次设置：pip install pymysql cryptography
 python wsgi.py
 ```
 
