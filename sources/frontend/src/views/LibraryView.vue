@@ -1,6 +1,6 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
+  <div class="page-wrapper">
+    <div class="card-header">
       <h2>{{ t("nav.library", "Document Library") }}</h2>
     </div>
 

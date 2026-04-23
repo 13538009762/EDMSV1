@@ -1,19 +1,17 @@
 <template>
-  <div class="dashboard-page" v-loading="loading">
-    <div class="header">
-      <div class="header-left">
-        <h2>{{ t('dashboard.title', 'Data Dashboard') }}</h2>
-        <p class="subtitle">{{ t('dashboard.subtitle', 'Overview of your document management system statistics.') }}</p>
-      </div>
-      <div class="header-right">
-        <el-input
+  <div class="page-wrapper" v-loading="loading">
+    <div class="card-header">
+       <div>
+         <h2>{{ t('dashboard.title', 'Data Dashboard') }}</h2>
+         <p class="subtitle" style="margin: 4px 0 0; font-size: 0.9rem; color: var(--el-text-color-secondary)">{{ t('dashboard.subtitle', 'Overview of your document management system statistics.') }}</p>
+       </div>
+       <el-input
           v-model="widgetSearch"
           :placeholder="t('dashboard.searchCharts')"
-          prefix-icon="Search"
+          :prefix-icon="Search"
           clearable
           style="width: 250px"
         />
-      </div>
     </div>
  
     <!-- 🔗 区块链核心安全监控 -->

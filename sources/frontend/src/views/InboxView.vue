@@ -1,10 +1,10 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
+  <div class="page-wrapper">
+    <div class="card-header">
       <h2>{{ t("inbox.title") }}</h2>
     </div>
     
-    <el-card shadow="sm" class="table-card">
+    <div class="edms-content-card">
       <el-tabs v-model="activeTab" class="custom-tabs">
         <el-tab-pane :label="t('inbox.pendingMyApproval')" name="pending">
           <div class="toolbar">
@@ -196,7 +196,7 @@
           </div>
         </el-tab-pane>
       </el-tabs>
-    </el-card>
+    </div>
 
     <el-dialog v-model="rejectDlg" :title="t('inbox.rejectTitle')" width="420px" class="custom-dialog">
       <div style="margin-bottom: 8px;">{{ t("inbox.reasonPrompt", "Please provide a reason for rejection:") }}</div>

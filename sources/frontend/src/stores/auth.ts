@@ -20,6 +20,7 @@ export const useAuthStore = defineStore("auth", () => {
     const { data } = await api.post("/auth/login", { login_name: loginName, password });
     setToken(data.access_token);
     user.value = data.user;
+    applyThemeByRole();
     return data;
   }
 
@@ -27,6 +28,23 @@ export const useAuthStore = defineStore("auth", () => {
     if (!token.value) return;
     const { data } = await api.get("/auth/me");
     user.value = data;
+    applyThemeByRole();
+  }
+
+  function applyThemeByRole() {
+    const htmlEl = document.documentElement;
+    if (!user.value) {
+      htmlEl.removeAttribute("data-theme");
+      return;
+    }
+
+    if (user.value.login_name === "admin") {
+      htmlEl.setAttribute("data-theme", "admin");
+    } else if (user.value.is_manager) {
+      htmlEl.setAttribute("data-theme", "manager");
+    } else {
+      htmlEl.removeAttribute("data-theme");
+    }
   }
 
   function logout() {
@@ -34,5 +52,5 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = null;
   }
 
-  return { token, user, isAuthenticated, login, fetchMe, logout, setToken };
+  return { token, user, isAuthenticated, login, fetchMe, logout, setToken, applyThemeByRole };
 });

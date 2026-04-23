@@ -1,0 +1,177 @@
+/* src/assets/theme.css */
+
+/* 全局动画过渡，确保切号时背景颜色平滑呼吸渐变 */
+* {
+  transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* ==========================================
+   1. 普通员工 (Standard) - 护眼薄荷绿 / 清新生态
+========================================== */
+:root {
+  /* 主色调：翡翠绿 (Emerald) - 极其清新且充满活力的按钮颜色 */
+  --el-color-primary: #10b981; 
+  --el-color-primary-light-3: #6ee7b7;
+  --el-color-primary-dark-2: #059669;
+  
+  /* 🌟 核心修改：极其清爽、低饱和度的护眼浅绿底色 */
+  --edms-body-bg: #f0fdf4; 
+  
+  --edms-card-bg: #ffffff; /* 卡片依然保持纯白，保证文字阅读的高对比度 */
+  --edms-sidebar-bg: #ffffff;
+  --edms-sidebar-text: #1f2937;
+  
+  /* 侧边栏选中时的背景色，也改成微弱的浅绿色呼应 */
+  --edms-sidebar-active-bg: #dcfce7; 
+  --edms-sidebar-active-text: var(--el-color-primary); /* 浅色背景下，保持原样即可 */
+  --edms-header-bg: rgba(255, 255, 255, 0.85);
+  
+  /* 🌟 环境光同步升级：顶部打下一束极其柔和的薄荷绿微光 */
+  --edms-ambient-glow: radial-gradient(circle at 50% -20%, rgba(10, 185, 129, 0.08) 0%, transparent 60%);
+  --edms-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  --edms-border: 1px solid rgba(16, 185, 129, 0.05); /* 边框也带上一丝丝极淡的绿意 */
+}
+
+/* ==========================================
+   2. 部门经理 (Manager) - 香槟金 / 商务暗灰
+========================================== */
+html[data-theme='manager'] {
+  --el-color-primary: #d97706;
+  --el-color-primary-light-3: #fcd34d;
+  --el-color-primary-dark-2: #b45309;
+  
+  --edms-body-bg: #fcfaf8;
+  --edms-card-bg: #ffffff;
+  --edms-sidebar-bg: #0f172a; /* 侧边栏变黑 */
+  --edms-sidebar-text: #f8fafc;
+  --edms-sidebar-active-bg: #1e293b;
+  --edms-sidebar-active-text: var(--el-color-primary);
+  --edms-header-bg: rgba(255, 255, 255, 0.9);
+  
+  /* 🌟 顶部金色环境光 */
+  --edms-ambient-glow: radial-gradient(circle at 50% -20%, rgba(217, 119, 6, 0.06) 0%, transparent 60%);
+  --edms-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.05);
+  --edms-border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* ==========================================
+   3. 管理员 (Admin) - 极客深藏青 / 安全审计中心 (修正版)
+========================================== */
+html[data-theme='admin'] {
+  /* 主色调：深邃靛蓝 (Indigo)，比紫色更专业，代表安全、权威与冷静 */
+  --el-color-primary: #4f46e5;
+  --el-color-primary-light-3: #818cf8;
+  --el-color-primary-dark-2: #3730a3;
+  
+  /* 【核心修正】主画布回归浅色，确保报表、审计日志和文档的阅读体验 */
+  --edms-body-bg: #f1f5f9;
+  --edms-card-bg: #ffffff;
+  
+  /* 侧边栏采用极暗的“深渊蓝/藏青色”，与主内容区形成强烈的“控制台”反差 */
+  --edms-sidebar-bg: #020617;
+  --edms-sidebar-text: #cbd5e1; /* 将未选中的默认文字提升为明亮的雪蓝色 */
+  --edms-sidebar-active-bg: #1e293b;
+  --edms-sidebar-active-text: #818cf8; /* 专属解绑：在极暗背景下，高亮文字使用亮紫色 */
+  
+  /* 顶栏保持清透的毛玻璃白，与卡片呼应 */
+  --edms-header-bg: rgba(255, 255, 255, 0.9);
+  
+  /* 🌟 极其克制的冷色调环境光，带来一种机房/服务器冷气的质感 */
+  --edms-ambient-glow: radial-gradient(circle at 50% -20%, rgba(79, 70, 229, 0.06) 0%, transparent 60%);
+  --edms-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --edms-border: 1px solid rgba(0, 0, 0, 0.04);
+  
+  /* 恢复 Element 默认文字颜色，解决之前暗黑模式下文字看不清的问题 */
+  --el-text-color-primary: #303133;
+  --el-text-color-regular: #606266;
+  --el-bg-color-overlay: #ffffff; 
+}
+
+/* ==========================================
+   全局通用布局类
+========================================== */
+.page-wrapper {
+  padding: 24px;
+  max-width: 1400px; 
+  margin: 0 auto;
+}
+
+.edms-content-card {
+  background-color: var(--edms-card-bg);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--edms-shadow);
+  border: var(--edms-border);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+}
+
+/* ==========================================
+   全局滚动条与字体优化
+========================================== */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--app-font-title, 'Inter', sans-serif);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* ==========================================
+   强制接管 Element Plus 菜单渲染权 (解决状态残留Bug)
+========================================== */
+
+/* 1. 强行渲染侧边栏底色 */
+.edms-sidebar {
+  background-color: var(--edms-sidebar-bg) !important;
+}
+
+/* 2. 把菜单背景掏空，直接透出侧边栏底色 */
+.edms-menu, 
+.edms-menu .el-menu {
+  background-color: transparent !important;
+  border-right: none !important;
+}
+
+/* 3. 强行接管文字颜色 */
+.edms-menu .el-menu-item,
+.edms-menu .el-sub-menu__title {
+  color: var(--edms-sidebar-text) !important;
+}
+
+/* 4. 强行接管悬浮效果 */
+.edms-menu .el-menu-item:hover,
+.edms-menu .el-sub-menu__title:hover {
+  background-color: var(--edms-sidebar-active-bg) !important;
+  color: var(--edms-sidebar-active-text) !important;
+}
+
+/* 5. 强行接管激活状态 (封神细节：加一个右侧高亮条) */
+.edms-menu .el-menu-item.is-active {
+  color: var(--edms-sidebar-active-text) !important;
+  background-color: var(--edms-sidebar-active-bg) !important;
+  font-weight: 600 !important;
+  border-right: 3px solid var(--el-color-primary) !important;
+}
