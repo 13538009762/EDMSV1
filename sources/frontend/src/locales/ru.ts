@@ -355,6 +355,18 @@ export default {
     myWorkflow: "Мой рабочий процесс",
     myDocs: "Мои документы",
     myPending: "Ожидают моего одобрения",
+    blockchainTitle: "Центр мониторинга безопасности блокчейна",
+    notarizedDocs: "Документы в блокчейне",
+    tamperAlerts: "Перехваты Zero-Trust",
+    blockHeight: "Высота блока (имитация)",
+    businessStats: "Базовая бизнес-статистика",
+    storage: {
+      richText: "Текст (JSON)",
+      realtime: "Real-time данные",
+      binary: "Бинарные файлы",
+      meta: "Метаданные",
+      ready: "Система готова"
+    }
   },
   auditLog: {
     title: "Журнал аудита",
@@ -369,6 +381,7 @@ export default {
     colDocTitle: "Заголовок",
     colIp: "IP-адрес",
     colSummary: "Описание",
+    tamperAlert: "[Блокировка Zero-Trust] Пользователь инициировал аудит; сравнение системы выявило несанкционированное изменение физических данных из неизвестного источника. Доступ заблокирован!",
   },
   templates: {
     title: "Галерея шаблонов",
@@ -403,5 +416,11 @@ export default {
     "Accountant": "Бухгалтер",
     "Specialist": "Специалист",
     "Assistant": "Ассистент",
+  },
+  space: {
+    "Company Policies": "Корпоративные правила",
+    "Tech Specifications": "Технические спецификации",
+    "HR Documents": "Кадровые документы",
+    "Personal Documents": "Личные документы",
   }
 };

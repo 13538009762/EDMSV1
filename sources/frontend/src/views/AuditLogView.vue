@@ -44,7 +44,13 @@
         <el-table-column prop="document_id" :label="t('auditLog.colDocId', 'Doc ID')" width="100" />
         <el-table-column prop="document_title" :label="t('auditLog.colDocTitle', 'Document Title')" min-width="200" show-overflow-tooltip />
         <el-table-column prop="ip_address" :label="t('auditLog.colIp', 'IP Address')" width="140" />
-        <el-table-column prop="summary" :label="t('auditLog.colSummary', 'Summary')" min-width="250" show-overflow-tooltip />
+        <el-table-column :label="t('auditLog.colSummary', 'Summary')" min-width="300">
+          <template #default="{ row }">
+            <div class="summary-wrapper">
+              {{ formatSummary(row) }}
+            </div>
+          </template>
+        </el-table-column>
       </el-table>
     </div>
 
@@ -88,6 +94,13 @@ function getActionTagType(action: string) {
   if (action.startsWith("EXPORT")) return "warning";
   if (action === "DELETE" || action === "ALERT_TAMPER") return "danger";
   return "info";
+}
+
+function formatSummary(row: any) {
+  if (row.action === 'ALERT_TAMPER') {
+    return t('auditLog.tamperAlert');
+  }
+  return row.summary;
 }
 
 async function loadData() {
@@ -163,5 +176,12 @@ onMounted(() => {
   padding: 4px;
   text-align: center;
   word-break: break-all;
+}
+
+.summary-wrapper {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 13px;
 }
 </style>

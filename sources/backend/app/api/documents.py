@@ -101,12 +101,15 @@ def list_document_tree():
         return jsonify({"error": "Unauthorized"}), 401
     
     from app.models.space import Space
+    from app.models.core import Department
+    
     spaces = Space.query.all()
+    depts = Department.query.all()
     
     tree = []
     
+    # 1. Spaces (Project/Topic Groups)
     for s in spaces:
-        from sqlalchemy import or_
         docs = Document.query.filter(
             Document.space_id == s.id,
             Document.is_template == False,
@@ -140,6 +143,48 @@ def list_document_tree():
             "is_space": True,
             "children": roots
         })
+
+    # 2. Departments (Organizational Groups)
+    for dpt in depts:
+        # Show documents owned by users in this department that are NOT in a space
+        # and are either public or owned by current user
+        docs = Document.query.join(User).filter(
+            User.department_id == dpt.id,
+            Document.space_id == None,
+            Document.is_template == False,
+            Document.deleted_at == None,
+            or_(
+                Document.owner_id == user.id,
+                Document.is_public == True
+            )
+        ).all()
+
+        if not docs and dpt.id != user.department_id:
+            continue
+
+        doc_map = {d.id: {
+            "id": d.id,
+            "title": d.title,
+            "status": d.status,
+            "parent_id": d.parent_id,
+            "children": []
+        } for d in docs}
+        
+        roots = []
+        for d_id, d_data in doc_map.items():
+            parent_id = d_data["parent_id"]
+            if parent_id and parent_id in doc_map:
+                doc_map[parent_id]["children"].append(d_data)
+            else:
+                roots.append(d_data)
+
+        tree.append({
+            "id": f"dept_{dpt.id}",
+            "name": dpt.name,
+            "is_dept": True,
+            "is_space": True, # Use space icon for departments too
+            "children": roots
+        })
         
     orphan_docs = Document.query.filter(
         Document.space_id == None,
@@ -148,29 +193,9 @@ def list_document_tree():
         Document.owner_id == user.id
     ).all()
     
-    if orphan_docs:
-        orphan_roots = []
-        doc_map = {d.id: {
-            "id": d.id,
-            "title": d.title,
-            "status": d.status,
-            "parent_id": d.parent_id,
-            "children": []
-        } for d in orphan_docs}
-        for d_id, d_data in doc_map.items():
-            parent_id = d_data["parent_id"]
-            if parent_id and parent_id in doc_map:
-                doc_map[parent_id]["children"].append(d_data)
-            else:
-                orphan_roots.append(d_data)
-                
-        tree.append({
-            "id": "space_unassigned",
-            "name": "Personal Documents",
-            "is_space": True,
-            "children": orphan_roots
-        })
-        
+    # Filter out docs already included in departments to avoid duplicates for the user
+    # Actually, keep "Personal Documents" as a catch-all if needed, but usually dept is enough.
+    
     return jsonify({"items": tree})
 
 @bp.get("")
@@ -181,6 +206,7 @@ def list_documents():
         return jsonify({"error": "Unauthorized"}), 401
     scope = request.args.get("scope")
     space_id = request.args.get("space_id")
+    dept_id = request.args.get("dept_id")
     status_filter = request.args.get("status")
     on_chain = request.args.get("on_chain")
 
@@ -250,6 +276,9 @@ def list_documents():
             q = q.filter(Document.space_id == None)
         else:
             q = q.filter(Document.space_id == space_id)
+
+    if dept_id:
+        q = q.join(User).filter(User.department_id == dept_id, Document.space_id == None)
 
     docs = q.order_by(Document.updated_at.desc()).all()
     print(f"[DEBUG] Query found {len(docs)} documents")
@@ -487,10 +516,9 @@ def delete_document(doc_id: int):
     if not doc:
         return jsonify({"error": "Not found"}), 404
     
-    # Only owner or admin
-    is_admin = user.login_name == 'admin'
-    if doc.owner_id != user.id and not is_admin:
-        return jsonify({"error": "Forbidden: Only creator or admin can delete"}), 403
+    # Only owner
+    if doc.owner_id != user.id:
+        return jsonify({"error": "Forbidden: Only creator can delete"}), 403
     
     # Only draft, approved or rejected (basically not in_approval)
     if doc.status not in ("draft", "approved", "rejected"):

@@ -387,6 +387,18 @@ export default {
     activityHeatmap: "User Activity Heatmap",
     hits: "views",
     activityUnit: "activities",
+    blockchainTitle: "Blockchain Security Monitoring",
+    notarizedDocs: "On-chain Notarized Docs",
+    tamperAlerts: "Zero-Trust Interceptions",
+    blockHeight: "Simulated Block Height",
+    businessStats: "Business Statistics",
+    storage: {
+      richText: "Rich Text (JSON)",
+      realtime: "Real-time States",
+      binary: "Binary Assets",
+      meta: "System Meta",
+      ready: "System Ready"
+    }
   },
   auditLog: {
     title: "Operation Trail",
@@ -401,6 +413,7 @@ export default {
     colDocTitle: "Document Title",
     colIp: "IP Address",
     colSummary: "Summary",
+    tamperAlert: "[Zero-Trust Block] User initiated notarization audit; system comparison detected unauthorized tampering of physical data from an unknown source. Access blocked!",
   },
   templates: {
     title: "Template Gallery",
@@ -435,5 +448,11 @@ export default {
     "Accountant": "Accountant",
     "Specialist": "Specialist",
     "Assistant": "Assistant",
+  },
+  space: {
+    "Company Policies": "Company Policies",
+    "Tech Specifications": "Tech Specifications",
+    "HR Documents": "HR Documents",
+    "Personal Documents": "Personal Documents",
   }
 };

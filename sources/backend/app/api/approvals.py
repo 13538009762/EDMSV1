@@ -125,6 +125,20 @@ def decide(participant_id: int):
             db.session.commit()
             print(f"[Blockchain] Notarized Document {doc.id} with tx: {tx_hash}")
 
+            # === Stage 1: 核心减负 —— CRDT 状态剪裁 (CRDT State Pruning) ===
+            # 当文档审批通过后，它已进入归档状态，不再需要保留复杂的协同编辑二进制历史
+            # 仅保留 content_json 用于展示，清空占用空间巨大的 yjs_state (BLOB)
+            from app.models.document import DocumentVersion
+            doc_versions = DocumentVersion.query.filter_by(document_id=doc.id).all()
+            pruned_count = 0
+            for v in doc_versions:
+                if v.yjs_state is not None:
+                    v.yjs_state = None
+                    pruned_count += 1
+            if pruned_count > 0:
+                db.session.commit()
+                print(f"[Optimization] Pruned {pruned_count} CRDT states for Doc {doc.id}")
+
         from app.models.notification import Notification
         members_to_notify = []
         # 文署的所有者

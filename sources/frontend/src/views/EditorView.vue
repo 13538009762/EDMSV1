@@ -255,11 +255,12 @@
                     <div class="msg-content">{{ msg.content }}</div>
                     
                     <div v-if="msg.role === 'ai'" class="msg-footer" style="margin-top: 8px;">
-                      <el-button 
+                        <el-button 
                         size="small" 
                         type="primary" 
                         plain 
                         icon="MagicStick" 
+                        :disabled="!meta.can_edit"
                         @click="insertChatToEditor(msg.content)"
                       >
                         ✨ {{ t('editor.ai.insertToDoc') }}
@@ -290,7 +291,7 @@
                         </div>
                       </div>
                       <div class="card-actions">
-                        <el-button type="primary" size="small" @click="confirmAiAction(msg.action, idx)">
+                        <el-button type="primary" size="small" :disabled="!meta.can_edit" @click="confirmAiAction(msg.action, idx)">
                           {{ t('editor.ai.actionConfirmBtn') }}
                         </el-button>
                         <el-button size="small" @click="msg.action = null">
@@ -432,6 +433,12 @@
         </el-form-item>
         <el-form-item :label="t('editor.showPageNumber')">
           <el-switch v-model="page.showPageNumber" />
+        </el-form-item>
+        <el-form-item :label="t('library.wikiTree')">
+          <el-select v-model="selectedSpaceId" style="width: 100%">
+            <el-option :label="t('library.scopeMine')" value="none" />
+            <el-option v-for="s in spacesOptions" :key="s.id" :label="t('space.' + s.name, s.name)" :value="s.id" />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -594,6 +601,8 @@ const aiQuery = ref("");
 const asking = ref(false);
 const chatHistory = ref<Array<{role: 'user' | 'ai', content: string, action?: any}>>([]);
 const chatScroll = ref<HTMLElement | null>(null);
+const spacesOptions = ref<Array<{ id: any, name: string }>>([]);
+const selectedSpaceId = ref<any>(null);
 
 // AI Agent Action Resolver
 function resolveApproverIds(names: any = []) {
@@ -972,9 +981,13 @@ function doReplaceAll() {
 
 async function savePageSettings() {
   try {
-    await api.patch(`/documents/${docId.value}`, { page_settings_json: JSON.stringify(page.value) });
+    await api.patch(`/documents/${docId.value}`, { 
+      page_settings_json: JSON.stringify(page.value),
+      space_id: selectedSpaceId.value === 'none' ? null : selectedSpaceId.value
+    });
     pageSettingsVisible.value = false;
     ElMessage.success(t("editor.pageSettingsSaved"));
+    loadDoc(true);
   } catch { ElMessage.error(t("common.failed", "Failed")); }
 }
 
@@ -1123,6 +1136,15 @@ async function loadDepts() {
   } catch {}
 }
 
+async function loadSpaces() {
+  try {
+    const { data } = await api.get("/documents/tree");
+    spacesOptions.value = data.items
+      .filter((i: any) => i.is_space && !i.is_dept && i.id !== "space_unassigned")
+      .map((i: any) => ({ id: i.space_id, name: i.name }));
+  } catch {}
+}
+
 async function loadDoc(silent = false) {
   if (!silent) loading.value = true;
   isLoadingDoc.value = true; // 🔑 开启同步锁
@@ -1132,6 +1154,7 @@ async function loadDoc(silent = false) {
     console.log("[DEBUG] Doc data loaded, status:", data.status);
     title.value = data.title;
     meta.value = data;
+    selectedSpaceId.value = data.space_id || 'none';
     if (data.page_settings_json) {
         try {
             const ps = typeof data.page_settings_json === 'string' 
@@ -1142,7 +1165,9 @@ async function loadDoc(silent = false) {
             console.error("解析页面设置失败:", e);
         }
     }
-    editor.value?.setEditable(data.can_edit);
+    // 防呆设计：仅在草稿状态下允许 Tiptap 编辑
+    const isEditable = data.can_edit && data.status === 'draft';
+    editor.value?.setEditable(isEditable);
     if (data.yjs_state_b64) {
       Y.applyUpdate(ydoc, Uint8Array.from(atob(data.yjs_state_b64), (c) => c.charCodeAt(0)));
     } else if (data.content_json) {
@@ -1174,6 +1199,7 @@ async function loadDoc(silent = false) {
       loadVersions().catch(e => console.error("Load versions failed", e)),
       loadStaticCollaborators().catch(e => console.error("Load collabs failed", e)),
       loadDepts().catch(e => console.error("Load depts failed", e)),
+      loadSpaces().catch(e => console.error("Load spaces failed", e)),
       // 仅在列表为空时加载用户数据
       userOptions.value.length === 0 
         ? api.get("/users").then(us => { userOptions.value = us.data.items; }).catch(e => console.error("Load users failed", e))

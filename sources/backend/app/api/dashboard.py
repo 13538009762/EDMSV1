@@ -177,32 +177,46 @@ def get_stats():
     except Exception as e:
         print(f"[ERROR] Trending failed: {e}")
 
-    # 9. 存储空间分析
+    # 9. 存储空间分析 (Storage Analytics)
     storage_info = {"total_size_mb": 0, "by_type": []}
     try:
-        # 针对 MySQL 优化：确保使用正确的长度函数并处理空值
+        # 计算数据库中的文本内容大小
         total_content = db.session.query(func.sum(func.length(func.coalesce(DocumentVersion.content_json, "")))).scalar() or 0
+        # 计算 Yjs 二进制状态大小
+        total_yjs = db.session.query(func.sum(func.length(func.coalesce(DocumentVersion.yjs_state, "")))).scalar() or 0
+        
         image_bytes = 0
-        # 兼容不同环境的存储路径
+        upload_bytes = 0
         storage_root = os.environ.get("STORAGE_PATH", os.getcwd())
+        
+        # 计算静态图片大小
         img_dir = os.path.join(storage_root, "static", "images")
         if os.path.exists(img_dir):
             for f in os.listdir(img_dir):
                 fp = os.path.join(img_dir, f)
                 if os.path.isfile(fp): image_bytes += os.path.getsize(fp)
         
-        # 如果 total_content 还是 0，尝试直接查所有版本内容（兜底逻辑）
-        if total_content == 0:
-            all_vers = db.session.query(DocumentVersion.content_json).all()
-            total_content = sum(len(v[0] or "") for v in all_vers)
+        # 计算上传的 PDF/DOCX 文件大小
+        upload_dir = os.path.join(storage_root, "static", "uploads")
+        if os.path.exists(upload_dir):
+            for f in os.listdir(upload_dir):
+                fp = os.path.join(upload_dir, f)
+                if os.path.isfile(fp): upload_bytes += os.path.getsize(fp)
 
-        tb = total_content + image_bytes
+        total_bytes = total_content + total_yjs + image_bytes + upload_bytes
+        # 即使没有文档，系统元数据和日志也会占用一点空间，设置一个极小的底数 0.01MB 确保图表不为空
+        if total_bytes < 10240: # < 10KB
+            total_bytes = 10240 # Force 0.01MB minimum
+
+        total_mb = round(total_bytes / (1024*1024), 2)
+        
         storage_info = {
-            "total_size_mb": round(tb / (1024*1024), 2),
+            "total_size_mb": total_mb,
             "by_type": [
-                {"name": "Rich Text (JSON)", "value": round(total_content * 0.6 / (1024*1024), 2)},
-                {"name": "Images & Assets", "value": round(image_bytes / (1024*1024), 2)},
-                {"name": "System Meta", "value": round(total_content * 0.4 / (1024*1024), 2)},
+                {"name": "Rich Text (JSON)", "value": round(total_content / (1024*1024), 3)},
+                {"name": "Real-time States", "value": round(total_yjs / (1024*1024), 3)},
+                {"name": "Binary Assets", "value": round((image_bytes + upload_bytes) / (1024*1024), 3)},
+                {"name": "System Meta", "value": 0.005}, # 基础系统开销
             ]
         }
     except Exception as e:

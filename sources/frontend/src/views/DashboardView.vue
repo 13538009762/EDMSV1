@@ -19,14 +19,14 @@
     <!-- 🔗 区块链核心安全监控 -->
     <div v-if="!loading" class="blockchain-section">
       <div class="section-title cyber">
-        <el-icon><Connection /></el-icon> 区块链底层安全监控中心
+        <el-icon><Connection /></el-icon> {{ t('dashboard.blockchainTitle') }}
       </div>
       <el-row :gutter="20" class="blockchain-kpi-row">
         <el-col :span="8">
           <el-card shadow="hover" class="kpi-card blockchain cyber-blue">
             <div class="kpi-icon blue"><el-icon><Cpu /></el-icon></div>
             <div class="kpi-info">
-              <div class="kpi-label">已存证确权文档 (On-chain)</div>
+              <div class="kpi-label">{{ t('dashboard.notarizedDocs') }}</div>
               <div class="kpi-value glow clickable" @click="handleMetricClick('blockchain_docs')">{{ blockchainStats.on_chain_count }}</div>
             </div>
             <div class="blockchain-status-tag">REAL-TIME</div>
@@ -36,7 +36,7 @@
           <el-card shadow="hover" class="kpi-card blockchain cyber-red">
             <div class="kpi-icon orange"><el-icon><Lock /></el-icon></div>
             <div class="kpi-info">
-              <div class="kpi-label">零信任系统拦截次数</div>
+              <div class="kpi-label">{{ t('dashboard.tamperAlerts') }}</div>
               <div class="kpi-value glow-red clickable" @click="handleMetricClick('tamper_alerts')">{{ blockchainStats.tamper_alerts }}</div>
             </div>
             <div class="blockchain-status-tag danger">GUARDED</div>
@@ -46,7 +46,7 @@
           <el-card shadow="hover" class="kpi-card blockchain cyber-green">
             <div class="kpi-icon green"><el-icon><Box /></el-icon></div>
             <div class="kpi-info">
-              <div class="kpi-label">模拟区块高度 (Block Height)</div>
+              <div class="kpi-label">{{ t('dashboard.blockHeight') }}</div>
               <div class="kpi-value">{{ blockchainStats.block_height }}</div>
             </div>
             <div class="blockchain-status-tag success">STABLE</div>
@@ -56,74 +56,79 @@
     </div>
 
     <div class="section-title">
-      <el-icon><DataLine /></el-icon> 基础业务数据统计
+      <el-icon><DataLine /></el-icon> {{ t('dashboard.businessStats') }}
     </div>
 
-
-    <el-row :gutter="20" class="kpi-row">
+    <el-row :gutter="16" class="kpi-row">
       <el-col :span="4">
-        <el-card shadow="hover" class="kpi-card">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-blue-soft">
           <div class="kpi-icon total"><el-icon><Document /></el-icon></div>
           <div class="kpi-info">
-            <div class="kpi-label">{{ t('dashboard.totalDocs', 'Total Documents') }}</div>
+            <div class="kpi-label">{{ t('dashboard.totalDocs') }}</div>
             <div class="kpi-value clickable" @click="handleMetricClick('docs')">{{ totalDocs }}</div>
           </div>
+          <div class="blockchain-status-tag">GLOBAL</div>
         </el-card>
       </el-col>
       
       <el-col :span="4">
-        <el-card shadow="hover" class="kpi-card">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-grey">
           <div class="kpi-icon active"><el-icon><EditPen /></el-icon></div>
           <div class="kpi-info">
             <div class="kpi-label">{{ t('common.status.draft') }}</div>
             <div class="kpi-value clickable" @click="handleMetricClick('docs', 'draft')">{{ draftsCount }}</div>
           </div>
+          <div class="blockchain-status-tag info">DRAFTING</div>
         </el-card>
       </el-col>
       
       <el-col :span="4">
-        <el-card shadow="hover" class="kpi-card">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-orange">
           <div class="kpi-icon warning"><el-icon><Stamp /></el-icon></div>
           <div class="kpi-info">
             <div class="kpi-label">{{ t('common.status.in_approval') }}</div>
             <div class="kpi-value clickable" @click="handleMetricClick('docs', 'in_approval')">{{ inApprovalCount }}</div>
           </div>
+          <div class="blockchain-status-tag warning">WAITING</div>
         </el-card>
       </el-col>
 
       <el-col :span="4">
-        <el-card shadow="hover" class="kpi-card">
-          <div class="kpi-icon success" style="background: var(--el-color-success-light-9); color: var(--el-color-success);">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-green-soft">
+          <div class="kpi-icon success">
             <el-icon><CircleCheck /></el-icon>
           </div>
           <div class="kpi-info">
             <div class="kpi-label">{{ t('common.status.approved') }}</div>
             <div class="kpi-value clickable" @click="handleMetricClick('docs', 'approved')">{{ approvedCount }}</div>
           </div>
+          <div class="blockchain-status-tag success">FINALIZED</div>
         </el-card>
       </el-col>
 
       <el-col :span="4">
-        <el-card shadow="hover" class="kpi-card">
-          <div class="kpi-icon danger" style="background: var(--el-color-danger-light-9); color: var(--el-color-danger);">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-red-soft">
+          <div class="kpi-icon danger">
             <el-icon><CircleClose /></el-icon>
           </div>
           <div class="kpi-info">
             <div class="kpi-label">{{ t('common.status.rejected') }}</div>
             <div class="kpi-value clickable" @click="handleMetricClick('docs', 'rejected')">{{ rejectedCount }}</div>
           </div>
+          <div class="blockchain-status-tag danger">RECALLED</div>
         </el-card>
       </el-col>
 
       <el-col :span="4">
-        <el-card shadow="hover" class="kpi-card">
-          <div class="kpi-icon info" style="background: var(--el-color-info-light-9); color: var(--el-color-info);">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-indigo">
+          <div class="kpi-icon info">
             <el-icon><User /></el-icon>
           </div>
           <div class="kpi-info">
-            <div class="kpi-label">{{ t('dashboard.totalUsers', 'Total Users') }}</div>
+            <div class="kpi-label">{{ t('dashboard.totalUsers') }}</div>
             <div class="kpi-value clickable" @click="handleMetricClick('users')">{{ totalUsers }}</div>
           </div>
+          <div class="blockchain-status-tag info">NETWORK</div>
         </el-card>
       </el-col>
     </el-row>
@@ -716,6 +721,21 @@ const spaceOption = computed(() => {
 });
 
 const storageOption = computed(() => {
+    const hasData = storageInfo.value.by_type.some(i => i.value > 0.001);
+    
+    // Map backend names to translation keys
+    const nameMap: Record<string, string> = {
+        "Rich Text (JSON)": t('dashboard.storage.richText'),
+        "Real-time States": t('dashboard.storage.realtime'),
+        "Binary Assets": t('dashboard.storage.binary'),
+        "System Meta": t('dashboard.storage.meta')
+    };
+
+    const translatedData = storageInfo.value.by_type.map(item => ({
+        ...item,
+        name: nameMap[item.name] || item.name
+    }));
+
     return {
         tooltip: { trigger: 'item', formatter: '{b}: {c} MB ({d}%)' },
         legend: { 
@@ -723,15 +743,19 @@ const storageOption = computed(() => {
             left: 'center', 
             textStyle: { fontSize: 10 } 
         },
+        color: ['#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#94a3b8'],
         series: [{
             type: 'pie',
             radius: ['35%', '60%'],
             center: ['50%', '45%'],
+            minAngle: 15,
             avoidLabelOverlap: true,
             itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
             label: { show: false },
             emphasis: { label: { show: true, fontSize: '14', fontWeight: 'bold' } },
-            data: storageInfo.value.by_type
+            data: hasData ? translatedData : [
+                { name: t('dashboard.storage.ready'), value: 1, itemStyle: { color: '#f1f5f9' } }
+            ]
         }]
     };
 });
@@ -836,14 +860,18 @@ onMounted(() => {
 
 .header h2 {
   margin: 0;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
+  font-family: var(--app-font-title);
+  font-size: 28px;
+  font-weight: 800;
+  color: #1e1b4b;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
   margin: 4px 0 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .kpi-row {
@@ -875,16 +903,28 @@ onMounted(() => {
 }
 
 .kpi-icon.total {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
+  background: rgba(99, 102, 241, 0.1);
+  color: #4338ca;
 }
 .kpi-icon.active {
   background: var(--el-bg-color-page);
   color: var(--el-text-color-regular);
 }
 .kpi-icon.warning {
-  background: var(--el-color-warning-light-9);
-  color: var(--el-color-warning);
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+.kpi-icon.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+.kpi-icon.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+.kpi-icon.info {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4338ca;
 }
 
 .kpi-info {
@@ -1028,14 +1068,24 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid rgba(64, 158, 255, 0.1);
 }
+.header h2 {
+  font-family: var(--app-font-title);
+  font-size: 28px;
+  font-weight: 800;
+  color: #1e1b4b;
+  letter-spacing: -0.02em;
+}
+
 .section-title {
-  font-size: 16px;
-  font-weight: bold;
-  margin-bottom: 16px;
+  font-family: var(--app-font-title);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 20px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--el-text-color-primary);
+  gap: 10px;
+  color: #1e293b;
+  letter-spacing: -0.01em;
 }
 .section-title.cyber {
   color: #409eff;
@@ -1053,6 +1103,12 @@ onMounted(() => {
 .kpi-card.blockchain.cyber-blue { background: linear-gradient(135deg, #f0f7ff 0%, #e6f1ff 100%); }
 .kpi-card.blockchain.cyber-red { background: linear-gradient(135deg, #fff5f5 0%, #fff0f0 100%); }
 .kpi-card.blockchain.cyber-green { background: linear-gradient(135deg, #f6ffed 0%, #f0f9eb 100%); }
+.kpi-card.blockchain.cyber-blue-soft { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); }
+.kpi-card.blockchain.cyber-grey { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); }
+.kpi-card.blockchain.cyber-orange { background: linear-gradient(135deg, #fffaf5 0%, #fff4e6 100%); }
+.kpi-card.blockchain.cyber-green-soft { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); }
+.kpi-card.blockchain.cyber-red-soft { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); }
+.kpi-card.blockchain.cyber-indigo { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); }
 
 .kpi-icon.blue { color: #409eff; }
 .kpi-icon.orange { color: #e6a23c; }

@@ -8,7 +8,7 @@ from app.models import Document, DocumentPermission, User
 
 def user_effective_document_role(user: User, doc: Document) -> str:
     """用于 API / 列表展示：owner | edit | comment | view | approver | reader。"""
-    if user.login_name == 'admin' or doc.owner_id == user.id:
+    if doc.owner_id == user.id:
         return "owner"
     
     perm = DocumentPermission.query.filter_by(document_id=doc.id, user_id=user.id).first()
@@ -66,13 +66,13 @@ def user_document_role(user: User, doc: Document) -> Optional[str]:
 
 
 def user_can_edit_metadata(user: User, doc: Document) -> bool:
-    """标题、页面设置等元数据：与正文相同，仅草稿且为所有者或 edit 协作者。"""
+    """标题、页面设置、归类等元数据：允许所有者或管理员在任何阶段修改（用于归档/分类）。"""
+    if user.login_name == 'admin' or doc.owner_id == user.id:
+        return True
     return user_can_edit_content(user, doc)
 
 
 def user_can_edit_content(user: User, doc: Document) -> bool:
-    if user.login_name == 'admin':
-        return True
     if doc.status != "draft":
         return False
     if doc.owner_id == user.id:
@@ -103,8 +103,6 @@ def user_can_comment(user: User, doc: Document) -> bool:
 
 
 def user_can_manage_permissions(user: User, doc: Document) -> bool:
-    if user.login_name == 'admin':
-        return True
     if doc.owner_id == user.id:
         return True
     # 审核过后的文档，审核人也可以管理权限

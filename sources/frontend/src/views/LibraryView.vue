@@ -57,6 +57,9 @@
             <el-tag v-if="currentSpaceId" closable @close="clearSpaceFilter" type="info" size="large" effect="plain" style="margin-left: 10px; font-weight: 600;">
               <el-icon><Folder /></el-icon> {{ currentSpaceName }}
             </el-tag>
+            <el-tag v-if="currentDeptId" closable @close="clearSpaceFilter" type="success" size="large" effect="plain" style="margin-left: 10px; font-weight: 600;">
+              <el-icon><Connection /></el-icon> {{ currentDeptName }}
+            </el-tag>
             <el-upload
               :show-file-list="false"
               accept=".docx"
@@ -271,6 +274,8 @@ const shareDocId = ref<number | null>(null);
 const searchQuery = ref("");
 const currentSpaceId = ref<string | null>(null);
 const currentSpaceName = ref("");
+const currentDeptId = ref<string | null>(null);
+const currentDeptName = ref("");
 const selectedIds = ref<number[]>([]);
 
 const sidebarCollapsed = ref(false);
@@ -335,6 +340,7 @@ async function load() {
     const params: Record<string, string> = { scope: scope.value || "all" };
     if (statusFilter.value) params.status = statusFilter.value;
     if (currentSpaceId.value) params.space_id = currentSpaceId.value;
+    if (currentDeptId.value) params.dept_id = currentDeptId.value;
     const { data } = await api.get("/documents", { params });
     items.value = data.items as DocRow[];
   } finally {
@@ -345,7 +351,11 @@ async function load() {
 const treeData = ref([]);
 const defaultProps = {
   children: "children",
-  label: (data: any) => data.title || data.name,
+  label: (data: any) => {
+    if (data.is_dept) return t('dept.' + data.name, data.name);
+    if (data.is_space) return t('space.' + data.name, data.name);
+    return data.title || data.name;
+  },
 };
 
 async function loadTree() {
@@ -358,17 +368,25 @@ async function loadTree() {
 }
 
 function handleNodeClick(data: any) {
-  if (data.is_space) {
+  if (data.is_dept) {
+    currentSpaceId.value = null;
+    currentSpaceName.value = "";
+    currentDeptId.value = data.id.toString().replace("dept_", "");
+    currentDeptName.value = t('dept.' + data.name, data.name);
+    load();
+  } else if (data.is_space) {
+    currentDeptId.value = null;
+    currentDeptName.value = "";
     const sid = data.id || data.space_id;
     if (sid === "space_unassigned") {
       currentSpaceId.value = "unassigned";
       currentSpaceName.value = t("library.scopeMine");
     } else {
       currentSpaceId.value = sid.toString().replace("space_", "");
-      currentSpaceName.value = data.name || data.title;
+      currentSpaceName.value = t('space.' + data.name, data.name);
     }
     load();
-  } else if (data.id && !data.is_space) {
+  } else if (data.id && !data.is_space && !data.is_dept) {
     open(data.id);
   }
 }
@@ -382,6 +400,8 @@ function handleCommand(cmd: string, row: DocRow) {
 function clearSpaceFilter() {
   currentSpaceId.value = null;
   currentSpaceName.value = "";
+  currentDeptId.value = null;
+  currentDeptName.value = "";
   load();
 }
 
@@ -591,10 +611,25 @@ onMounted(() => {
 
 .page-header h2 {
   margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-  letter-spacing: -0.5px;
+  font-family: var(--app-font-title);
+  font-size: 32px;
+  font-weight: 800;
+  color: #1e1b4b;
+  letter-spacing: -0.03em;
+  position: relative;
+  display: inline-block;
+}
+
+.page-header h2::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 4px;
+  background: var(--app-primary-gradient);
+  border-radius: 2px;
 }
 
 .table-card {
@@ -638,16 +673,18 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 .tree-header {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--el-text-color-primary);
-  margin-bottom: 10px;
+  font-family: var(--app-font-title);
+  font-weight: 700;
+  font-size: 16px;
+  color: #1e1b4b;
+  margin-bottom: 12px;
   padding: 0 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 32px;
+  height: 36px;
+  border-bottom: 2px solid rgba(99, 102, 241, 0.1);
 }
 .header-title {
   display: flex;

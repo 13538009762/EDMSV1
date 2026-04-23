@@ -418,6 +418,18 @@ export default {
     activityHeatmap: "用户活跃热力图",
     hits: "次浏览",
     activityUnit: "项活动",
+    blockchainTitle: "区块链底层安全监控中心",
+    notarizedDocs: "已存证确权文档 (On-chain)",
+    tamperAlerts: "零信任系统拦截次数",
+    blockHeight: "模拟区块高度 (Block Height)",
+    businessStats: "基础业务数据统计",
+    storage: {
+      richText: "富文本内容 (JSON)",
+      realtime: "实时编辑状态",
+      binary: "二进制资源",
+      meta: "系统元数据",
+      ready: "系统就绪"
+    }
   },
   auditLog: {
     title: "合规操作审计",
@@ -432,6 +444,7 @@ export default {
     colDocTitle: "文档标题",
     colIp: "IP 地址",
     colSummary: "摘要",
+    tamperAlert: "【零信任拦截】用户发起确权审计，系统比对发现底层物理数据已被未知来源非法篡改，已阻断！",
   },
   templates: {
     title: "标准模版库",
@@ -466,5 +479,11 @@ export default {
     "Accountant": "会计",
     "Specialist": "专员",
     "Assistant": "助理",
+  },
+  space: {
+    "Company Policies": "公司制度",
+    "Tech Specifications": "技术规范",
+    "HR Documents": "人事文档",
+    "Personal Documents": "个人文档",
   }
 };

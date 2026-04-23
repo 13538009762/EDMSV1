@@ -92,7 +92,6 @@
           size="small"
           effect="dark"
           class="role-badge"
-          :type="auth.user?.login_name === 'admin' ? 'danger' : (auth.user?.is_manager ? 'primary' : 'success')"
         >
           {{ auth.user?.login_name === 'admin' ? t('common.roles.admin') : (auth.user?.is_manager ? t('common.roles.manager') : t('common.roles.user')) }}
         </el-tag>
@@ -223,6 +222,7 @@ html.theme-admin {
   --el-color-primary-light-8: #ede9fe !important;
   --el-color-primary-light-9: #f5f3ff !important;
   --el-color-primary-dark-2: #7c3aed !important;
+  --app-primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #c084fc 100%);
 }
 
 html.theme-manager {
@@ -233,6 +233,7 @@ html.theme-manager {
   --el-color-primary-light-8: #dbeafe !important;
   --el-color-primary-light-9: #eff6ff !important;
   --el-color-primary-dark-2: #1d4ed8 !important;
+  --app-primary-gradient: linear-gradient(135deg, #2563eb 0%, #6366f1 100%);
 }
 
 html.theme-user {
@@ -243,6 +244,7 @@ html.theme-user {
   --el-color-primary-light-8: #ccfbf1 !important;
   --el-color-primary-light-9: #f0fdfa !important;
   --el-color-primary-dark-2: #0f766e !important;
+  --app-primary-gradient: linear-gradient(135deg, #0d9488 0%, #2dd4bf 100%);
 }
 
 /* Transition for smooth theme switching */
@@ -326,9 +328,13 @@ html.theme-user .layout-wrapper > .header {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
 .brand {
-  font-size: 20px;
+  font-family: var(--app-font-title);
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: -0.02em;
+  background: var(--app-primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .menu {
   flex: 0 1 auto;
@@ -371,6 +377,12 @@ html.theme-user .layout-wrapper > .header {
   align-items: center;
   gap: 8px;
   margin: 0 16px 0 12px;
+}
+.role-badge {
+  border: none;
+  background-color: var(--el-color-primary) !important;
+  font-weight: 600;
+  border-radius: 4px;
 }
 .user {
   font-weight: 500;
