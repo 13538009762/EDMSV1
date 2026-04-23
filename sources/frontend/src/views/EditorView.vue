@@ -1202,7 +1202,7 @@ async function loadDoc(silent = false) {
       loadSpaces().catch(e => console.error("Load spaces failed", e)),
       // 仅在列表为空时加载用户数据
       userOptions.value.length === 0 
-        ? api.get("/users").then(us => { userOptions.value = us.data.items; }).catch(e => console.error("Load users failed", e))
+        ? api.get("/users", { params: { size: 1000 } }).then(us => { userOptions.value = us.data.items; }).catch(e => console.error("Load users failed", e))
         : Promise.resolve()
     ]).then(() => {
        console.log("[DEBUG] Parallel tasks complete.");

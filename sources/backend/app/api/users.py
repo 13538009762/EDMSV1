@@ -78,9 +78,10 @@ def list_users():
     
     query = User.query.filter_by(registration_status='active')
     
-    # 💡 修改：非超级管理员（admin）仅能查看自己部门的成员
-    if user.login_name != 'admin':
-        query = query.filter_by(department_id=user.department_id)
+    # 允许根据部门 ID 过滤，如果不传则默认查看全部（支持跨部门审批）
+    dept_id = request.args.get("department_id")
+    if dept_id:
+        query = query.filter_by(department_id=dept_id)
 
     search = request.args.get("search")
 
@@ -224,11 +225,8 @@ def batch_delete_users():
 @bp.get("/departments")
 @jwt_required(optional=True)
 def list_depts():
-    user = current_user()
-    if user and user.login_name != 'admin':
-        depts = Department.query.filter_by(id=user.department_id).all()
-    else:
-        depts = Department.query.all()
+    # 允许所有人查看所有部门列表，以便发起跨部门审批
+    depts = Department.query.all()
     return jsonify([{"id": d.id, "name": d.name, "name_en": d.name_en} for d in depts])
 
 @bp.post("/departments")

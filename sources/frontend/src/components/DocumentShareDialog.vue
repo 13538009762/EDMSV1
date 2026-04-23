@@ -163,7 +163,7 @@ const optionsForComment = computed(() => {
 async function loadAll() {
   if (!props.documentId) return;
   const [{ data: u }, { data: p }, { data: doc }] = await Promise.all([
-    api.get("/users"),
+    api.get("/users", { params: { size: 1000 } }),
     api.get(`/documents/${props.documentId}/permissions`),
     api.get(`/documents/${props.documentId}`),
   ]);

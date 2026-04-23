@@ -474,7 +474,12 @@ const spaceData = ref<{ name: string; count: number }[]>([]);
 const trendData = ref<{ date: string; docs: number; approvals: number }[]>([]);
 const activities = ref<any[]>([]);
 const trendingDocs = ref<any[]>([]);
-const storageInfo = ref({ total_size_mb: 0, by_type: [] });
+interface StorageItem {
+  name: string;
+  value: number;
+}
+
+const storageInfo = ref<{ total_size_mb: number; by_type: StorageItem[] }>({ total_size_mb: 0, by_type: [] });
 const heatmapData = ref<any[]>([]);
 const myStats = ref({ docs: 0, pending: 0 });
 const blockchainStats = ref({ on_chain_count: 0, tamper_alerts: 0, block_height: 15000 });
