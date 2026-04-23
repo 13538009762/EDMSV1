@@ -109,8 +109,8 @@
         <el-form-item :label="t('profile.lastName')">
           <el-input v-model="userForm.last_name" />
         </el-form-item>
-        <el-form-item :label="t('profile.dept')">
-          <el-select v-model="userForm.department_id" :disabled="auth.user?.login_name !== 'admin'" style="width: 100%">
+        <el-form-item v-if="auth.user?.login_name === 'admin'" :label="t('profile.dept')">
+          <el-select v-model="userForm.department_id" style="width: 100%">
             <el-option 
               v-for="d in deptOptions" 
               :key="d.id" 
@@ -251,7 +251,8 @@ async function handleDeleteUser(user: any) {
 }
 
 async function createUser() {
-  if (!userForm.value.login_name || (!isEdit.value && !userForm.value.password) || !userForm.value.department_id) {
+  const isDeptMissing = auth.user?.login_name === 'admin' && !userForm.value.department_id;
+  if (!userForm.value.login_name || (!isEdit.value && !userForm.value.password) || isDeptMissing) {
     return ElMessage.warning("Please fill required fields");
   }
   userLoading.value = true;

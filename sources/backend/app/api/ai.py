@@ -32,11 +32,26 @@ def ai_generate():
 
     # Standard OpenAI-compatible message structure for better instruction following
     lang = data.get("lang", "en")
-    lang_map = {"zh": "Chinese", "en": "English", "ru": "Russian"}
+    lang_map = {
+        "zh": "Chinese", 
+        "zh-CN": "Chinese",
+        "zh-TW": "Chinese",
+        "en": "English", 
+        "ru": "Russian"
+    }
     target_lang = lang_map.get(lang, "English")
 
     # Force language instruction
-    lang_instruction = f" IMPORTANT: Your entire response MUST be in {target_lang}."
+    if action.startswith("translate_"):
+        # Translation actions define their own target language in SYSTEM_PROMPTS
+        lang_instruction = ""
+    elif target_lang == "Chinese":
+        lang_instruction = " 重要提示：您的所有回复必须使用简体中文。"
+    elif target_lang == "Russian":
+        lang_instruction = " ВАЖНО: Весь ваш ответ ДОЛЖЕН быть на русском языке."
+    else:
+        lang_instruction = f" IMPORTANT: Your entire response MUST be in {target_lang}."
+        
     full_instruction = instruction + lang_instruction
 
     payload = {

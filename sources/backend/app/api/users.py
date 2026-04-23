@@ -15,7 +15,12 @@ def create_user():
         return jsonify({"error": "Admin access required"}), 403
 
     data = request.get_json(silent=True) or {}
-    required = ["login_name", "password", "employee_no", "first_name", "last_name", "department_id"]
+    
+    # 💡 修改：department_id 对普通经理是可选的，由后端自动填充
+    required = ["login_name", "password", "employee_no", "first_name", "last_name"]
+    if admin.login_name == 'admin':
+        required.append("department_id")
+
     for f in required:
         if not data.get(f):
             return jsonify({"error": f"{f} is required"}), 400
@@ -73,8 +78,9 @@ def list_users():
     
     query = User.query.filter_by(registration_status='active')
     
-    # Allow all users to see the full list of active users for approval selection
-
+    # 💡 修改：非超级管理员（admin）仅能查看自己部门的成员
+    if user.login_name != 'admin':
+        query = query.filter_by(department_id=user.department_id)
 
     search = request.args.get("search")
 
@@ -216,8 +222,13 @@ def batch_delete_users():
     return jsonify({"message": f"Deleted {deleted_count} users", "errors": errors})
 
 @bp.get("/departments")
+@jwt_required(optional=True)
 def list_depts():
-    depts = Department.query.all()
+    user = current_user()
+    if user and user.login_name != 'admin':
+        depts = Department.query.filter_by(id=user.department_id).all()
+    else:
+        depts = Department.query.all()
     return jsonify([{"id": d.id, "name": d.name, "name_en": d.name_en} for d in depts])
 
 @bp.post("/departments")

@@ -10,6 +10,12 @@ export type LocaleCode = "en" | "zh-CN" | "ru";
 export function getSavedLocale(): LocaleCode {
   const v = localStorage.getItem(STORAGE_KEY);
   if (v === "zh-CN" || v === "en" || v === "ru") return v;
+  
+  // Detect system language
+  const navLang = navigator.language.toLowerCase();
+  if (navLang.startsWith("zh")) return "zh-CN";
+  if (navLang.startsWith("ru")) return "ru";
+  
   return "en";
 }
 
