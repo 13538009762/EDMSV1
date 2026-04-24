@@ -397,7 +397,7 @@
 
     <el-row class="feed-row" style="margin-top: 20px;">
       <el-col :span="24">
-        <el-card shadow="hover">
+        <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
               <span>{{ t('dashboard.recentActivity', 'Recent Document Activity') }}</span>
@@ -588,6 +588,7 @@ const statusDistributionOption = computed(() => {
       'rejected': '#F56C6C'
   };
   return {
+    backgroundColor: 'transparent',
     tooltip: { trigger: "item", confine: true },
     legend: { bottom: "0%", left: "center", textStyle: { fontSize: 11 } },
     series: [
@@ -633,6 +634,7 @@ function statusTagType(status: string) {
 
 const donutOption = computed(() => {
   return {
+    backgroundColor: 'transparent',
     tooltip: { trigger: "item", confine: true },
     legend: { bottom: "5%", left: "center" },
     series: [
@@ -666,6 +668,7 @@ const donutOption = computed(() => {
 
 const lineOption = computed(() => {
   return {
+    backgroundColor: 'transparent',
     legend: { data: [t('dashboard.updatedDoc'), t('dashboard.completedApprovals')] },
     tooltip: { trigger: 'axis', confine: true },
     xAxis: {
@@ -703,6 +706,7 @@ const lineOption = computed(() => {
 
 const spaceOption = computed(() => {
   return {
+    backgroundColor: 'transparent',
     tooltip: { trigger: "item", confine: true },
     legend: { bottom: "0%", left: "center", textStyle: { fontSize: 11 } },
     series: [
@@ -750,6 +754,7 @@ const storageOption = computed(() => {
     }));
 
     return {
+        backgroundColor: 'transparent',
         tooltip: { trigger: 'item', formatter: '{b}: {c} MB ({d}%)' },
         legend: { 
             bottom: '0%', 
@@ -776,6 +781,7 @@ const storageOption = computed(() => {
 const heatmapOption = computed(() => {
     const today = new Date();
     return {
+        backgroundColor: 'transparent',
         tooltip: { 
             position: 'top',
             formatter: (p: any) => {
@@ -971,7 +977,27 @@ onMounted(() => {
 }
 
 .chart-card {
-  border-radius: 8px;
+  border-radius: 16px;
+  background-color: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1) !important;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-card.chart-card) {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+:deep(.chart-card .el-card__header) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:deep(.chart-card .el-card__body) {
+  background: transparent !important;
 }
 
 
