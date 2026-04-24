@@ -27,9 +27,11 @@ body, #app, .edms-layout-wrapper, .edms-sidebar, .edms-content-card, .el-card {
   --edms-sidebar-active-text: var(--el-color-primary); /* 浅色背景下，保持原样即可 */
   --edms-header-bg: rgba(255, 255, 255, 0.85);
   
-  /* 🌟 环境光同步升级：顶部打下一束极其柔和的薄荷绿微光 */
-  --edms-ambient-glow: radial-gradient(circle at 50% -10%, rgba(16, 185, 129, 0.15) 0%, transparent 60%);
-  --edms-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  /* 🌟 环境光同步升级：左右双光源交织，带来极光般的呼吸感 */
+  --edms-ambient-glow: 
+    radial-gradient(circle at 20% 0%, rgba(16, 185, 129, 0.2) 0%, transparent 60%),
+    radial-gradient(circle at 80% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 60%);
+  --edms-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
   --edms-border: 1px solid rgba(16, 185, 129, 0.05); /* 边框也带上一丝丝极淡的绿意 */
 }
 
@@ -49,9 +51,11 @@ html[data-theme='manager'] {
   --edms-sidebar-active-text: var(--el-color-primary);
   --edms-header-bg: rgba(255, 255, 255, 0.9);
   
-  /* 🌟 顶部金色环境光 */
-  --edms-ambient-glow: radial-gradient(circle at 50% -10%, rgba(217, 119, 6, 0.12) 0%, transparent 60%);
-  --edms-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.05);
+  /* 🌟 左右双光源金色极光 */
+  --edms-ambient-glow: 
+    radial-gradient(circle at 20% 0%, rgba(217, 119, 6, 0.2) 0%, transparent 60%),
+    radial-gradient(circle at 80% 0%, rgba(107, 114, 128, 0.15) 0%, transparent 60%);
+  --edms-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
   --edms-border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
@@ -59,30 +63,33 @@ html[data-theme='manager'] {
    3. 管理员 (Admin) - 极客深藏青 / 安全审计中心 (修正版)
 ========================================== */
 html[data-theme='admin'] {
-  /* 主色调：深邃靛蓝 (Indigo)，比紫色更专业，代表安全、权威与冷静 */
-  --el-color-primary: #4f46e5;
-  --el-color-primary-light-3: #818cf8;
-  --el-color-primary-dark-2: #3730a3;
+  /* 🌟 主色调：深邃且极具信任感的深海蓝 */
+  --el-color-primary: #2563eb; 
+  --el-color-primary-light-3: #60a5fa;
+  --el-color-primary-dark-2: #1d4ed8;
   
-  /* 【核心修正】主画布回归浅色，确保报表、审计日志和文档的阅读体验 */
-  --edms-body-bg: #f1f5f9;
-  --edms-card-bg: #ffffff;
+  /* 🌟 底色：一种极其冷静的极光灰蓝，为毛玻璃提供优质底板 */
+  --edms-body-bg: #f1f5f9; 
   
-  /* 侧边栏采用极暗的“深渊蓝/藏青色”，与主内容区形成强烈的“控制台”反差 */
-  --edms-sidebar-bg: #020617;
-  --edms-sidebar-text: #cbd5e1; /* 将未选中的默认文字提升为明亮的雪蓝色 */
-  --edms-sidebar-active-bg: #1e293b;
-  --edms-sidebar-active-text: #818cf8; /* 专属解绑：在极暗背景下，高亮文字使用亮紫色 */
+  /* 🌟 侧边栏：极暗的夜空蓝，稳住整个页面的左侧重心 */
+  --edms-sidebar-bg: #0f172a;
+  --edms-sidebar-text: #94a3b8;
+  --edms-sidebar-active-bg: rgba(37, 99, 235, 0.15); 
+  --edms-sidebar-active-text: #60a5fa; 
   
-  /* 顶栏保持清透的毛玻璃白，与卡片呼应 */
+  /* 🌟 顶栏保持清透的毛玻璃白，与卡片呼应 */
   --edms-header-bg: rgba(255, 255, 255, 0.9);
-  
-  /* 🌟 极其克制的冷色调环境光，带来一种机房/服务器冷气的质感 */
-  --edms-ambient-glow: radial-gradient(circle at 50% -10%, rgba(124, 58, 237, 0.25) 0%, transparent 70%);
-  --edms-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  --edms-border: 1px solid rgba(0, 0, 0, 0.04);
-  
-  /* 恢复 Element 默认文字颜色，解决之前暗黑模式下文字看不清的问题 */
+
+  /* 🌟 双色环境光：左上角冰蓝，右上角深海蓝，交织的高级冷光 */
+  --edms-ambient-glow: 
+    radial-gradient(circle at 20% -10%, rgba(59, 130, 246, 0.22) 0%, transparent 65%),
+    radial-gradient(circle at 80% -10%, rgba(29, 78, 216, 0.18) 0%, transparent 65%);
+    
+  /* 🌟 阴影和边框：带上一丝极其微弱的冷蓝色调 */
+  --edms-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.05);
+  --edms-border: 1px solid rgba(59, 130, 246, 0.12);
+
+  /* 文字颜色恢复 */
   --el-text-color-primary: #303133;
   --el-text-color-regular: #606266;
   --el-bg-color-overlay: #ffffff; 
@@ -98,24 +105,81 @@ html[data-theme='admin'] {
 }
 
 .edms-content-card {
-  background-color: var(--edms-card-bg);
+  /* 1. 把 100% 的纯白，改成 85% 透明度的白 */
+  background-color: rgba(255, 255, 255, 0.85); 
+  
+  /* 2. 🌟 开启毛玻璃滤镜：光线穿过卡片时会被柔和地模糊掉 */
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  
+  /* 3. 增强边缘的高光反射，让卡片看起来像一块悬浮的玻璃板 */
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--edms-shadow);
+  
   border-radius: 12px;
   padding: 24px;
-  box-shadow: var(--edms-shadow);
-  border: var(--edms-border);
 }
 
-.card-header {
+/* 🚀 顶级页面标题：超大、居中、顶级质感 */
+.page-wrapper > .card-header,
+.page-container > .page-header,
+.user-mgmt-page > .card-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 48px;
+  position: relative;
+  min-height: 90px;
+  border: none !important;
+  background: transparent !important;
 }
 
-.card-header h2 {
+.page-wrapper > .card-header h2,
+.page-container > .page-header h2,
+.user-mgmt-page > .card-header h2 {
   margin: 0;
   color: var(--el-text-color-primary);
-  font-weight: 600;
+  font-weight: 900;
+  font-size: 2.5rem; /* 再次加大，满足用户“放大”需求 */
+  letter-spacing: -0.05em;
+  text-align: center;
+  line-height: 1.1;
+  text-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* 统一副标题居中 */
+.page-wrapper > .card-header .subtitle,
+.page-container > .page-header .subtitle {
+  text-align: center;
+  margin: 14px 0 0 0 !important;
+  font-size: 1.15rem;
+  color: var(--el-text-color-secondary);
+  font-weight: 450;
+  max-width: 850px;
+  opacity: 0.85;
+}
+
+/* 🚀 核心：强力保证标题居中，不受两侧按钮/搜索框干扰 */
+.page-wrapper > .card-header > div:first-child,
+.page-container > .page-header > div:first-child,
+.user-mgmt-page > .card-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1;
+}
+
+.page-wrapper > .card-header .header-actions,
+.page-wrapper > .card-header .el-input,
+.page-wrapper > .card-header .el-button:not(.el-button--link),
+.page-container > .page-header .header-actions,
+.page-container > .page-header .el-button:not(.el-button--link),
+.user-mgmt-page > .card-header .header-actions {
+  position: absolute !important;
+  right: 0 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 2;
 }
 
 /* ==========================================
@@ -234,4 +298,79 @@ body, #app {
   0%   { opacity: 0.3; }  /* 收缩到最暗 */
   50%  { opacity: 1; }    /* 释放到最亮 */
   100% { opacity: 0.3; }
+}
+
+/* ==========================================
+   Admin 专属高级质感：打破单色沉闷
+========================================= */
+
+/* 1. 核心按钮：深蓝色系的“液态渐变”与悬浮发光 (排除链接形式的按钮) */
+html[data-theme='admin'] .el-button--primary:not(.is-link) {
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+  transition: all 0.3s ease !important;
+}
+
+html[data-theme='admin'] .el-button--primary:not(.is-link):hover {
+  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%) !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* 2. 侧边栏高亮：深海蓝的“流星拖尾”渐变 */
+html[data-theme='admin'] .edms-menu .el-menu-item.is-active {
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.15) 0%, transparent 100%) !important;
+  color: #60a5fa !important; 
+  font-weight: 600 !important;
+  border-right: 3px solid #2563eb !important;
+}
+
+/* ==========================================
+   Admin 专用补丁：保护顶栏文字对比度
+========================================== */
+html[data-theme='admin'] .edms-header .el-tag {
+  background-color: rgba(37, 99, 235, 0.1) !important;
+  color: #2563eb !important;
+  border: 1px solid rgba(37, 99, 235, 0.2) !important;
+}
+
+html[data-theme='admin'] .edms-header .user-info, 
+html[data-theme='admin'] .edms-header .el-dropdown-link {
+  color: #1e293b !important; 
+}
+
+/* ==========================================
+   深度玻璃化化：砸穿 Element Table 的实心底色
+========================================== */
+/* 1. 确保外层卡片是真正的毛玻璃 */
+.edms-content-card {
+  background-color: rgba(255, 255, 255, 0.65) !important; /* 透明度降到 65% */
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05) !important;
+}
+
+/* 2. 🌟 强制剥夺表格组件内部的所有白底色！ */
+.edms-content-card .el-table,
+.edms-content-card .el-table__expanded-cell,
+.edms-content-card .el-table th,
+.edms-content-card .el-table tr,
+.edms-content-card .el-table td {
+  background-color: transparent !important; 
+  background: transparent !important;
+}
+
+/* 3. 修复表格 hover 时颜色太深的问题 */
+.edms-content-card .el-table tbody tr:hover>td {
+  background-color: rgba(255, 255, 255, 0.4) !important; /* 鼠标悬浮时只加一层淡淡的白纱 */
+}
+
+/* 4. 隐藏表格默认的边框 */
+.edms-content-card .el-table::before,
+.edms-content-card .el-table--border::after,
+.edms-content-card .el-table--group::after,
+.edms-content-card .el-table__inner-fixed::before {
+  display: none !important;
 }

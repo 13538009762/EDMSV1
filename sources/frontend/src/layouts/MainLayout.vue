@@ -41,6 +41,12 @@
           <el-icon><Monitor /></el-icon>
           <span>{{ t("nav.auditLog", "Audit Log") }}</span>
         </el-menu-item>
+        <el-menu-item index="/ai" class="ai-menu-item">
+          <el-icon class="magic-icon"><MagicStick /></el-icon>
+          <template #title>
+            <span class="ai-text">智能 AI 助手</span>
+          </template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -134,6 +140,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAiStore } from "@/stores/ai";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
@@ -143,7 +150,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
 import { 
   Reading, DataLine, Bell, Message, Setting, SwitchButton, 
   Monitor, CopyDocument, User, Star, StarFilled, Delete,
-  Expand, Fold
+  Expand, Fold, MagicStick
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 
@@ -228,6 +235,8 @@ onBeforeUnmount(() => {
 });
 
 function onLogout() {
+  const aiStore = useAiStore();
+  aiStore.clearHistory();
   auth.logout();
   router.push({ name: "login" });
 }
@@ -431,5 +440,27 @@ function onLogout() {
 .op-btn-large {
   padding: 8px !important;
   font-size: 20px !important;
+}
+
+.ai-menu-item {
+  border-left: 3px solid transparent !important;
+  margin-bottom: 4px;
+  transition: all 0.3s ease !important;
+}
+
+.ai-menu-item:hover, .ai-menu-item.is-active {
+  background: linear-gradient(90deg, rgba(64, 158, 255, 0.1) 0%, transparent 100%) !important;
+  border-left: 3px solid var(--el-color-primary) !important;
+}
+
+.ai-menu-item .magic-icon {
+  color: var(--el-color-primary) !important;
+}
+
+.ai-text {
+  font-weight: bold;
+  background: linear-gradient(45deg, var(--el-color-primary), #7367f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 </style>

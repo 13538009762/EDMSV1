@@ -1,9 +1,9 @@
 <template>
   <div class="page-wrapper" v-loading="loading">
     <div class="card-header">
-      <div>
+      <div style="text-align: center;">
         <h2>{{ t("templates.title", "Template Gallery") }}</h2>
-        <p class="subtitle" style="margin: 4px 0 0; font-size: 0.9rem; color: var(--el-text-color-secondary)">{{ t("templates.subtitle", "Start your documentation from a standard template.") }}</p>
+        <p class="subtitle" style="margin: 8px 0 0; font-size: 1rem; color: var(--el-text-color-secondary)">{{ t("templates.subtitle", "Start your documentation from a standard template.") }}</p>
       </div>
     </div>
 

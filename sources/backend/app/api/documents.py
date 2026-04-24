@@ -203,6 +203,21 @@ def list_document_tree():
     
     return jsonify({"items": tree})
 
+@bp.get("/stats")
+@jwt_required()
+def get_stats():
+    """Return system-wide document statistics for AI or dashboard."""
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    # 💡 Currently returns simple count, can be extended later
+    total_count = Document.query.filter(Document.deleted_at == None, Document.is_template == False).count()
+    return jsonify({
+        "total_count": total_count,
+        "status": "healthy"
+    })
+
 @bp.get("")
 @jwt_required()
 def list_documents():

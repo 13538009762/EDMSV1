@@ -1,8 +1,10 @@
 <template>
   <div class="user-mgmt-page">
-    <div class="header">
-      <h2>{{ t('nav.users', 'Member Management') }}</h2>
-      <div class="actions">
+    <div class="card-header">
+      <div>
+        <h2>{{ t('nav.users', 'Member Management') }}</h2>
+      </div>
+      <div class="header-actions">
         <el-button 
           v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" 
           type="primary" 
@@ -334,15 +336,6 @@ onMounted(() => {
 <style scoped>
 .user-mgmt-page {
   padding: 24px;
-}
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-.header h2 {
-  margin: 0;
 }
 .pagination {
   margin-top: 20px;

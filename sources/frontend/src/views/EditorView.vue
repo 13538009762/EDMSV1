@@ -30,6 +30,17 @@
            <el-button type="danger" @click="handleEditorReject">{{ t("inbox.reject") }}</el-button>
         </div>
 
+        <el-button 
+          v-if="meta.can_edit && meta.doc_type !== 'pdf'"
+          :type="isRecording ? 'danger' : 'primary'" 
+          plain
+          @click="isRecording ? stopRecording() : startRecording()"
+          :loading="isProcessingAudio"
+        >
+          <el-icon style="margin-right: 4px;"><Microphone /></el-icon>
+          {{ isRecording ? '停止录音并生成摘要' : '智能会议录音' }}
+        </el-button>
+
         <el-dropdown trigger="click" style="margin-right: 8px;">
           <el-button>{{ t("editor.actions") }} <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
@@ -251,11 +262,11 @@
               <!-- AI Chat Section -->
               <div class="ai-chat-container">
                 <div class="chat-messages" ref="chatScroll">
-                  <div v-for="(msg, idx) in chatHistory" :key="idx" :class="['chat-msg', msg.role]">
+                  <div v-for="(msg, idx) in aiStore.globalMessages" :key="idx" :class="['chat-msg', msg.role]">
                     <div class="msg-content">{{ msg.content }}</div>
                     
-                    <div v-if="msg.role === 'ai'" class="msg-footer" style="margin-top: 8px;">
-                        <el-button 
+                    <div v-if="msg.role === 'ai' || msg.role === 'assistant'" class="msg-footer" style="margin-top: 8px;">
+                      <el-button 
                         size="small" 
                         type="primary" 
                         plain 
@@ -268,26 +279,16 @@
                     </div>
                     
                     <!-- AI Action Card -->
-                    <div v-if="msg.action && msg.action.params" class="ai-action-card">
+                    <div v-if="msg.action" class="ai-action-card">
                       <div class="card-header">
                         <el-icon><MagicStick /></el-icon>
                         <span>{{ t('editor.ai.actionConfirmTitle') }}</span>
                       </div>
                       <div class="card-body">
-                        <div class="action-desc" v-if="msg.action.params?.approvers || msg.action.params?.approver || msg.action.approvers || msg.action.approver">
+                        <div class="action-desc">
                           {{ t('editor.ai.actionStartApproval', { 
-                            names: [
-                              ...(msg.action.params?.approvers || []), 
-                              ...(msg.action.params?.approver ? [msg.action.params.approver] : []),
-                              ...(msg.action.approvers || []),
-                              ...(msg.action.approver ? [msg.action.approver] : [])
-                            ].filter(Boolean).join(', ') 
+                            names: (msg.action.params?.approvers || []).join(', ') 
                           }) }}
-                        </div>
-                        <div class="action-meta">
-                          <el-tag size="small" type="info" effect="dark">
-                            {{ t('editor.ai.actionType', { type: msg.action.params.type || 'parallel' }) }}
-                          </el-tag>
                         </div>
                       </div>
                       <div class="card-actions">
@@ -300,7 +301,7 @@
                       </div>
                     </div>
                   </div>
-                  <div v-if="chatHistory.length === 0" class="chat-placeholder">
+                  <div v-if="aiStore.globalMessages.length === 0" class="chat-placeholder">
                     <el-empty :description="t('editor.ai.aiChatEmpty')" :image-size="40" />
                   </div>
                 </div>
@@ -495,14 +496,16 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { ArrowDown, Back, Right, MagicStick } from "@element-plus/icons-vue";
+import { ArrowDown, Back, Right, MagicStick, Microphone } from "@element-plus/icons-vue";
 
 import { FontSize, LineHeight, Indent, CommentMark, TableExit, SearchAndReplace } from "@/utils/tiptapExtensions";
 import api from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
+import { useAiStore } from "@/stores/ai";
 import { attachDocCollab } from "@/composables/useDocSocket";
 import { fixPunctuation } from "@/utils/punctuation";
-import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
+import { ElMessage, ElMessageBox, ElNotification, ElLoading } from "element-plus";
+import { marked } from 'marked';
 import mammoth from "mammoth";
 import { Markdown } from "tiptap-markdown";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
@@ -598,8 +601,66 @@ const activeSideTab = ref("ai");
 const aiTags = ref<string[]>([]);
 const tagging = ref(false);
 const aiQuery = ref("");
+
+// --- Meeting Recording Logic ---
+const isRecording = ref(false);
+const isProcessingAudio = ref(false);
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
+
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) audioChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      await handleAudioUpload(audioBlob);
+    };
+
+    mediaRecorder.start();
+    isRecording.value = true;
+    ElMessage.info("会议录音开始...");
+  } catch (err) {
+    console.error("麦克风授权失败", err);
+    ElMessage.error("获取麦克风权限失败，请检查设置。");
+  }
+};
+
+const stopRecording = () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    isRecording.value = false;
+  }
+};
+
+const handleAudioUpload = async (blob: Blob) => {
+  isProcessingAudio.value = true;
+  const loadingInstance = ElLoading.service({ text: 'AI 正在转写并生成会议摘要...', background: 'rgba(0, 0, 0, 0.7)' });
+  try {
+    const formData = new FormData();
+    formData.append('audio', blob, 'meeting.webm');
+    const { data } = await api.post('/api/ai/meeting-summary', formData);
+    
+    if (data.code === 200 && editor.value) {
+      const summaryHtml = marked.parse(data.data.summary_markdown);
+      editor.value.commands.insertContent(summaryHtml);
+      ElMessage.success("会议摘要已插入文档");
+    }
+  } catch (err: any) {
+    ElMessage.error(err.response?.data?.error || "音频处理失败");
+  } finally {
+    isProcessingAudio.value = false;
+    loadingInstance.close();
+  }
+};
 const asking = ref(false);
-const chatHistory = ref<Array<{role: 'user' | 'ai', content: string, action?: any}>>([]);
+const aiStore = useAiStore();
 const chatScroll = ref<HTMLElement | null>(null);
 const spacesOptions = ref<Array<{ id: any, name: string }>>([]);
 const selectedSpaceId = ref<any>(null);
@@ -657,7 +718,7 @@ async function confirmAiAction(action: any, msgIdx: number) {
         approvers: ids,
       });
       ElMessage.success(t("editor.messages.sentToApproval"));
-      chatHistory.value[msgIdx].action = null; // Hide card after success
+      aiStore.globalMessages[msgIdx].action = null; // Hide card after success
       loadDoc(true);
     } catch (err) {
       ElMessage.error(t("common.failed"));
@@ -687,25 +748,28 @@ async function askAi() {
   if (!aiQuery.value.trim() || asking.value || !editor.value) return;
   
   const query = aiQuery.value.trim();
-  chatHistory.value.push({ role: 'user', content: query });
+  aiStore.addMessage('user', query);
   aiQuery.value = "";
   asking.value = true;
   
   // Scoped RAG: Send document context + user question
-  const docContext = editor.value.getText().slice(0, 3000); // Send first 3k chars as context
-  const fullPrompt = `Document Context:\n${docContext}\n\nUser Question: ${query}`;
+  const docContext = editor.value.getText().slice(0, 3000);
   
   try {
-     const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
+     const response = await fetch('/api/ai/chat', {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
-      body: JSON.stringify({ action: "chat", prompt: fullPrompt, lang: locale.value })
+      body: JSON.stringify({ 
+        messages: aiStore.globalMessages, 
+        context_url: route.path,
+        doc_context: docContext // Additional context for document-specific chat
+      })
     });
     
     if (!response.ok) throw new Error("AI request failed");
     
-    const aiMsg = { role: 'ai' as const, content: "", action: undefined as any };
-    chatHistory.value.push(aiMsg);
+    const aiMsg: any = { role: 'ai', content: "", action: undefined };
+    aiStore.globalMessages.push(aiMsg);
     
     const reader = response.body?.getReader();
     if (!reader) return;
@@ -717,40 +781,31 @@ async function askAi() {
       const lines = chunk.split("\n");
       for (const line of lines) {
         if (line.startsWith("data: ")) {
-          const raw = line.replace("data: ", "").trim();
+          const raw = line.slice(6).trim();
           if (raw === "[DONE]") break;
           try {
             const data = JSON.parse(raw);
-            if (data.type === "chunk" && data.content) {
+            if (data.content) {
               aiMsg.content += data.content;
             } else if (data.type === "done") {
-              // Extract action from message content with multi-format support
+              // Extract action from message content
               const jsonMatch = aiMsg.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
               if (jsonMatch) {
                 try {
                   let actionData = JSON.parse(jsonMatch[1]);
-                  // 💡 Robustness: Normalize different AI output formats
                   if (actionData.start_approval || actionData.action === "start_approval") {
-                    const normalizedAction = {
+                    aiMsg.action = {
                       action: "start_approval",
-                      params: actionData.params || {
-                        approvers: actionData.approvers || [],
-                        type: actionData.type || "parallel"
-                      }
+                      params: actionData.params || actionData
                     };
-                    aiMsg.action = normalizedAction;
-                    // Remove the raw JSON block from the content for clean UI
-                    aiMsg.content = aiMsg.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
-                  } else if (actionData.action) {
-                    aiMsg.action = actionData;
                     aiMsg.content = aiMsg.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                   }
-                } catch(e) { console.error("Action parsing error", e); }
+                } catch(e) {}
               }
             }
-            // Auto scroll to latest response
-            if (chatScroll.value) {
-              chatScroll.value.scrollTop = chatScroll.value.scrollHeight;
+            if (chatScroll) {
+              await nextTick();
+              chatScroll.value!.scrollTop = chatScroll.value!.scrollHeight;
             }
           } catch(e) {}
         }

@@ -1,116 +1,95 @@
-"""AI Smart Assistant — Real integration with iFlytek Spark Lite (OpenAI Compatible)."""
-from flask import Blueprint, request, Response, stream_with_context
+from flask import Blueprint, request, jsonify, Response, stream_with_context
+from flask_jwt_extended import jwt_required
+from app.services.ai_service import AIService
+from app.utils.auth import current_user
 import json
-import requests
 
 bp = Blueprint("ai", __name__)
 
-# TODO: Replace with your actual APIPassword from iFlytek console
-SPARK_API_PASSWORD = "XyuSepRzbdDVUKvIkpXV:boQXTGszIkfPLZYjOeiz"
-SPARK_API_URL = "https://spark-api-open.xf-yun.com/v1/chat/completions"
-
-SYSTEM_PROMPTS = {
-    "summarize": "Summarize the following text concisely. Use Markdown formatting (bullet points, bold text) where appropriate. Output ONLY the summary.",
-    "expand": "Expand on the following text with more detail and examples. Use Markdown (headings, lists, bold) for better structure. Output ONLY the expanded content.",
-    "polish": "Polish the following text for clarity and professionalism. Keep the existing structure but use Markdown (bold, lists) if it improves readability. Output ONLY the polished version. Crucially, the output MUST be in the SAME LANGUAGE as the input text.",
-    "translate_en": "Translate the following text into English. Preserve the original document structure using Markdown (headings, lists, bold). Output ONLY the translation.",
-    "translate_zh": "请将以下文本翻译成简体中文。保持原有的文档结构（使用 Markdown 语法：标题、列表、加粗等）。只输出翻译结果，不要输出原文或解释。",
-    "translate_ru": "Переведите следующий текст на русский язык. Сохраняйте структуру документа с помощью Markdown (заголовки, списки, жирный шрифт). Выводите ТОЛЬКО перевод.",
-    "fix_punctuation": "Fix the punctuation in the following text. Correct mixed Chinese/English punctuation usage, normalize full-width/half-width marks, and fix spacing. Output ONLY the corrected text.",
-    "chat": "You are a professional document specialist. Answer queries based ONLY on context. Use Markdown for structure. \n\nCRITICAL LOGIC (核心逻辑):\n0. LANGUAGE RULE (语言规则): The entire output (outside JSON) MUST be in the SAME LANGUAGE as the User's Question.\n1. DRAFT FIRST: If the user asks to 'draft', 'write', or 'summarize', PROVIDE THE CONTENT. (如果用户要求起草或编写文档，请直接输出正文内容。)\n2. NO NAME, NO ACTION: Only suggest 'start_approval' IF the user specifically mentions a REAL NAME from the context. (只有在用户提到了上下文中的真实姓名时，才建议发起审批。)\n3. NO PLACEHOLDERS: NEVER suggest names like 'Zhang San' (张三) or 'Placeholder'. If no real name is found, DO NOT output any JSON. (严禁杜撰姓名如“张三”。如果没有真实姓名，严禁输出 JSON。)\n\nACTION FORMAT (only if name exists):\n```json {\"action\": \"start_approval\", \"params\": {\"approvers\": [\"<ACTUAL_NAME>\"], \"type\": \"parallel\"}} ```.\nAppend it at the VERY END. NEVER put draft text inside JSON.",
-    "auto_tag": "Analyze the text and provide 1-3 short category tags like [Finance], [HR]. Output ONLY the tags separated by commas, no explanations."
-}
-
-@bp.post("/generate")
-def ai_generate():
-    """Real AI generation endpoint using Spark Lite via SSE."""
+@bp.post("/chat")
+@jwt_required()
+def ai_chat():
     data = request.get_json() or {}
-    prompt = data.get("prompt", "")
-    action = data.get("action", "")
-
-    instruction = SYSTEM_PROMPTS.get(action, "You are a helpful assistant.")
-
-    # Standard OpenAI-compatible message structure for better instruction following
-    lang = data.get("lang", "en")
-    lang_map = {
-        "zh": "Chinese", 
-        "zh-CN": "Chinese",
-        "zh-TW": "Chinese",
-        "en": "English", 
-        "ru": "Russian"
-    }
-    target_lang = lang_map.get(lang, "English")
-
-    # Force language instruction
-    if action.startswith("translate_"):
-        # Translation actions define their own target language in SYSTEM_PROMPTS
-        lang_instruction = ""
-    elif target_lang == "Chinese":
-        lang_instruction = " 重要提示：您的所有回复必须使用简体中文。"
-    elif target_lang == "Russian":
-        lang_instruction = " ВАЖНО: Весь ваш ответ ДОЛЖЕН быть на русском языке."
-    else:
-        lang_instruction = f" IMPORTANT: Your entire response MUST be in {target_lang}."
-        
-    full_instruction = instruction + lang_instruction
-
-    payload = {
-        "model": "lite",
-        "messages": [
-            {"role": "system", "content": full_instruction},
-            {"role": "user", "content": prompt}
-        ],
-        "stream": True
-    }
+    messages = data.get("messages", [])
+    context_url = data.get("context_url", "")
     
-    headers = {
-        "Authorization": f"Bearer {SPARK_API_PASSWORD}",
-        "Content-Type": "application/json"
-    }
-
-    def generate():
-        try:
-            # Send initial event
-            yield f"data: {json.dumps({'type': 'start'}, ensure_ascii=False)}\n\n"
-
-            response = requests.post(SPARK_API_URL, headers=headers, json=payload, stream=True)
-            
-            if response.status_code != 200:
-                error_msg = f"API Error: {response.status_code} - {response.text}"
-                yield f"data: {json.dumps({'type': 'chunk', 'content': error_msg}, ensure_ascii=False)}\n\n"
-                yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-                return
-
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                    
-                line_text = line.decode('utf-8')
-                if line_text.startswith("data: "):
-                    data_str = line_text[6:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    
-                    try:
-                        resp_json = json.loads(data_str)
-                        content = resp_json['choices'][0]['delta'].get('content', '')
-                        if content:
-                            chunk = json.dumps({"type": "chunk", "content": content}, ensure_ascii=False)
-                            yield f"data: {chunk}\n\n"
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-
-            # Send completion event
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'chunk', 'content': f'Connection error: {str(e)}'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
+    if not messages:
+        return jsonify({"error": "No messages provided"}), 400
+        
     return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        }
+        stream_with_context(AIService.stream_chat(messages, context_url)),
+        mimetype="text/event-stream"
     )
+
+@bp.post("/import-image")
+@jwt_required()
+def import_image():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files["file"]
+    
+    result = AIService.ocr_and_format(file)
+    
+    # Create document in DB (Simplified for now)
+    from app.models import Document, DocumentVersion
+    from app.extensions import db
+    user = current_user()
+    
+    try:
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y%m%d")
+        # Logic to generate doc number if needed, but let's keep it simple
+        doc_number = f"IMG{today_str}{random_str(3)}" 
+        
+        doc = Document(
+            owner_id=user.id,
+            title=result["title"],
+            status="draft",
+            doc_number=doc_number
+        )
+        db.session.add(doc)
+        db.session.flush()
+        
+        ver = DocumentVersion(
+            document_id=doc.id,
+            version_no=1,
+            content_json=json.dumps({"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": result["content"]}]}]}), # Simplified
+            created_by_id=user.id
+        )
+        # Actually it's better to store as Markdown if the system supports it, 
+        # but the current system seems to use Tiptap JSON. 
+        # For simplicity, we'll return the ID and content preview.
+        
+        db.session.add(ver)
+        doc.current_version_id = ver.id
+        db.session.commit()
+        
+        return jsonify({
+            "code": 200,
+            "data": {
+                "document_id": doc.id,
+                "title": doc.title,
+                "content_preview": result["content"][:200]
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@bp.post("/meeting-summary")
+@jwt_required()
+def meeting_summary():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio part"}), 400
+    file = request.files["audio"]
+    
+    result = AIService.process_meeting_audio(file)
+    return jsonify({
+        "code": 200,
+        "data": result
+    })
+
+def random_str(length):
+    import random
+    import string
+    return "".join(random.choices(string.digits, k=length))

@@ -1,8 +1,10 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>{{ t("import.title") }}</h2>
-      <p class="subtitle">{{ t("import.hint") }}</p>
+      <div>
+        <h2>{{ t("import.title") }}</h2>
+        <p class="subtitle">{{ t("import.hint") }}</p>
+      </div>
     </div>
 
     <el-tabs type="border-card" class="master-tabs">

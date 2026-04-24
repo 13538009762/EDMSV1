@@ -3,7 +3,7 @@
     <div class="card-header">
        <div>
          <h2>{{ t('dashboard.title', 'Data Dashboard') }}</h2>
-         <p class="subtitle" style="margin: 4px 0 0; font-size: 0.9rem; color: var(--el-text-color-secondary)">{{ t('dashboard.subtitle', 'Overview of your document management system statistics.') }}</p>
+         <p class="subtitle">{{ t('dashboard.subtitle', 'Overview of your document management system statistics.') }}</p>
        </div>
        <el-input
           v-model="widgetSearch"
@@ -974,13 +974,7 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-.card-header {
-  font-weight: 600;
-  color: var(--el-text-color-regular);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+
 
 .my-workflow-stats {
     display: flex;

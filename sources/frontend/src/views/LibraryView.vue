@@ -1,7 +1,9 @@
 <template>
   <div class="page-wrapper">
     <div class="card-header">
-      <h2>{{ t("nav.library", "Document Library") }}</h2>
+      <div>
+        <h2>{{ t("nav.library", "Document Library") }}</h2>
+      </div>
     </div>
 
     <el-container class="library-layout">
@@ -72,9 +74,17 @@
               :show-file-list="false"
               accept=".pdf"
               :before-upload="onImportPdf"
-              style="display: inline-flex;"
+              style="display: inline-flex; margin-right: 8px;"
             >
               <el-button :icon="Upload">{{ t("library.importPdf") }}</el-button>
+            </el-upload>
+            <el-upload
+              :show-file-list="false"
+              accept="image/*"
+              :before-upload="onImportImage"
+              style="display: inline-flex;"
+            >
+              <el-button :icon="MagicStick">{{ t("library.importImage", "AI 识图建档") }}</el-button>
             </el-upload>
           </div>
           
@@ -232,11 +242,11 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage, ElMessageBox, ElLoading } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Plus, Upload, Refresh, Search, Folder, Document, Connection, Fold, Expand, ArrowUp, ArrowDown, Share, Delete, More } from "@element-plus/icons-vue";
+import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 import { Editor } from "@tiptap/vue-3";
@@ -517,6 +527,24 @@ async function onImportPdf(file: UploadRawFile) {
   return false;
 }
 
+async function onImportImage(file: any) {
+  const loadingInstance = ElLoading.service({ text: 'AI 正在识别并排版...', background: 'rgba(0, 0, 0, 0.7)' });
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post('/api/ai/import-image', formData);
+    if (data.code === 200) {
+      ElMessage.success('识别成功');
+      router.push({ name: 'editor', params: { id: data.data.document_id } });
+    }
+  } catch (err: any) {
+    ElMessage.error(err.response?.data?.error || '识别失败');
+  } finally {
+    loadingInstance.close();
+  }
+  return false;
+}
+
 async function confirmDelete(id: number) {
   try {
     await ElMessageBox.confirm(
@@ -614,33 +642,7 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.page-header {
-  margin-bottom: 32px;
-  text-align: center;
-}
 
-.page-header h2 {
-  margin: 0;
-  font-family: var(--app-font-title);
-  font-size: 32px;
-  font-weight: 800;
-  color: #1e1b4b;
-  letter-spacing: -0.03em;
-  position: relative;
-  display: inline-block;
-}
-
-.page-header h2::after {
-  content: "";
-  position: absolute;
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40px;
-  height: 4px;
-  background: var(--app-primary-gradient);
-  border-radius: 2px;
-}
 
 .table-card {
   border-radius: 12px;
