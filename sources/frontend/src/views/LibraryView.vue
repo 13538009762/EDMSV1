@@ -144,7 +144,7 @@
         <el-table-column prop="owner_name" :label="t('library.colOwner')" min-width="120" />
         <el-table-column prop="owner_department" :label="t('library.colDepartment')" min-width="140">
           <template #default="{ row }">
-            {{ t('dept.' + row.owner_department, row.owner_department) }}
+            {{ formatDeptName(row.owner_department, row.owner_department_en) }}
           </template>
         </el-table-column>
         <el-table-column prop="my_role" :label="t('library.colRole')" width="100" />
@@ -263,7 +263,7 @@ interface DocRow {
 }
 
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale, te } = useI18n();
 const authStore = useAuthStore();
 const items = ref<DocRow[]>([]);
 const loading = ref(false);
@@ -277,6 +277,16 @@ const currentSpaceName = ref("");
 const currentDeptId = ref<string | null>(null);
 const currentDeptName = ref("");
 const selectedIds = ref<number[]>([]);
+
+const formatDeptName = (name: string, nameEn?: string) => {
+  if (!name) return "";
+  // Try translating the primary name (usually Chinese)
+  if (te(`dept.${name}`)) return t(`dept.${name}`);
+  // Try translating the English name if available
+  if (nameEn && te(`dept.${nameEn}`)) return t(`dept.${nameEn}`);
+  // Fallback to raw values based on current locale
+  return locale.value === 'zh-CN' ? name : (nameEn || name);
+};
 
 const sidebarCollapsed = ref(false);
 const toolbarCollapsed = ref(false);
@@ -352,7 +362,7 @@ const treeData = ref([]);
 const defaultProps = {
   children: "children",
   label: (data: any) => {
-    if (data.is_dept) return t('dept.' + data.name, data.name);
+    if (data.is_dept) return formatDeptName(data.name, data.name_en);
     if (data.is_space) return t('space.' + data.name, data.name);
     return data.title || data.name;
   },
@@ -372,7 +382,7 @@ function handleNodeClick(data: any) {
     currentSpaceId.value = null;
     currentSpaceName.value = "";
     currentDeptId.value = data.id.toString().replace("dept_", "");
-    currentDeptName.value = t('dept.' + data.name, data.name);
+    currentDeptName.value = formatDeptName(data.name, data.name_en);
     load();
   } else if (data.is_space) {
     currentDeptId.value = null;

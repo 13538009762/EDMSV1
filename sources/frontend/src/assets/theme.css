@@ -27,7 +27,7 @@
   --edms-header-bg: rgba(255, 255, 255, 0.85);
   
   /* 🌟 环境光同步升级：顶部打下一束极其柔和的薄荷绿微光 */
-  --edms-ambient-glow: radial-gradient(circle at 50% -20%, rgba(10, 185, 129, 0.08) 0%, transparent 60%);
+  --edms-ambient-glow: radial-gradient(circle at 50% -10%, rgba(16, 185, 129, 0.15) 0%, transparent 60%);
   --edms-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
   --edms-border: 1px solid rgba(16, 185, 129, 0.05); /* 边框也带上一丝丝极淡的绿意 */
 }
@@ -49,7 +49,7 @@ html[data-theme='manager'] {
   --edms-header-bg: rgba(255, 255, 255, 0.9);
   
   /* 🌟 顶部金色环境光 */
-  --edms-ambient-glow: radial-gradient(circle at 50% -20%, rgba(217, 119, 6, 0.06) 0%, transparent 60%);
+  --edms-ambient-glow: radial-gradient(circle at 50% -10%, rgba(217, 119, 6, 0.12) 0%, transparent 60%);
   --edms-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.05);
   --edms-border: 1px solid rgba(0, 0, 0, 0.05);
 }
@@ -77,7 +77,7 @@ html[data-theme='admin'] {
   --edms-header-bg: rgba(255, 255, 255, 0.9);
   
   /* 🌟 极其克制的冷色调环境光，带来一种机房/服务器冷气的质感 */
-  --edms-ambient-glow: radial-gradient(circle at 50% -20%, rgba(79, 70, 229, 0.06) 0%, transparent 60%);
+  --edms-ambient-glow: radial-gradient(circle at 50% -10%, rgba(124, 58, 237, 0.25) 0%, transparent 70%);
   --edms-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   --edms-border: 1px solid rgba(0, 0, 0, 0.04);
   
@@ -168,10 +168,51 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--edms-sidebar-active-text) !important;
 }
 
-/* 5. 强行接管激活状态 (封神细节：加一个右侧高亮条) */
+/* 强行接管激活状态 (封神细节：加一个右侧高亮条) */
 .edms-menu .el-menu-item.is-active {
   color: var(--edms-sidebar-active-text) !important;
   background-color: var(--edms-sidebar-active-bg) !important;
   font-weight: 600 !important;
   border-right: 3px solid var(--el-color-primary) !important;
+}
+
+/* ==========================================
+   全局动态背景引擎 (修复版：伪元素分离渲染)
+========================================== */
+
+/* 1. 根节点只负责底色，绝对不加动画 */
+body, #app {
+  min-height: 100vh;
+  background-color: var(--edms-body-bg);
+  transition: background-color 0.4s ease; 
+  margin: 0;
+  position: relative; 
+  z-index: 0; 
+}
+
+/* 2. 创建一个绝对独立的底层“光晕层” */
+#app::before {
+  content: "";
+  position: fixed; /* 固定在视口，不随滚动条滚动 */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: var(--edms-ambient-glow); 
+  background-repeat: no-repeat;
+  background-position: center top;
+  
+  /* 🌟 核心：把它压到所有 UI 组件的下面，且不阻挡鼠标点击 */
+  z-index: -1; 
+  pointer-events: none; 
+  
+  /* 动画只作用于这个独立层 */
+  animation: ambientBreathe 8s ease-in-out infinite; 
+}
+
+/* 3. 只通过透明度控制呼吸深度，不缩放以免产生滚动条 */
+@keyframes ambientBreathe {
+  0%   { opacity: 0.3; }  /* 收缩到最暗 */
+  50%  { opacity: 1; }    /* 释放到最亮 */
+  100% { opacity: 0.3; }
 }

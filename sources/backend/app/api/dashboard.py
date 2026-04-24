@@ -71,12 +71,12 @@ def get_stats():
     # 3. 部门分布
     dept_data = []
     try:
-        dept_counts = db.session.query(Department.name, func.count(Document.id))\
+        dept_counts = db.session.query(Department.name, Department.name_en, func.count(Document.id))\
             .outerjoin(User, Document.owner_id == User.id)\
             .outerjoin(Department, User.department_id == Department.id)\
             .filter(*auth_filter)\
-            .group_by(Department.name).all()
-        dept_data = [{"name": row[0] or "Unknown", "count": row[1]} for row in dept_counts]
+            .group_by(Department.name, Department.name_en).all()
+        dept_data = [{"name": row[0] or "Unknown", "name_en": row[1], "count": row[2]} for row in dept_counts]
     except Exception as e:
         print(f"[ERROR] Dept breakdown failed: {e}")
 

@@ -1,17 +1,16 @@
 <template>
   <el-container class="edms-layout-wrapper">
-    <el-aside width="240px" class="edms-sidebar">
+    <el-aside :width="isCollapse ? '64px' : '240px'" class="edms-sidebar">
       <div class="sidebar-brand">
         <img src="/favicon.png" class="brand-logo" alt="Logo" />
-        <span class="brand">EDMS</span>
+        <span v-if="!isCollapse" class="brand">EDMS</span>
       </div>
       
       <el-menu 
         :default-active="route.path"
         router
-        background-color="var(--edms-sidebar-bg)" 
-        text-color="var(--edms-sidebar-text)"
-        active-text-color="var(--el-color-primary)"
+        :collapse="isCollapse"
+        :collapse-transition="false"
         class="edms-menu"
       >
         <el-menu-item index="/">
@@ -45,9 +44,12 @@
       </el-menu>
     </el-aside>
 
-    <el-container>
+    <el-container class="main-container">
       <el-header class="edms-header">
-        <div class="header-content">
+        <div class="header-left">
+          <el-icon class="collapse-btn" @click="toggleCollapse">
+            <component :is="isCollapse ? Expand : Fold" />
+          </el-icon>
           <span class="logo-text">EDMS 零信任架构</span>
         </div>
         <div class="spacer" />
@@ -140,7 +142,8 @@ import api from "@/api/client";
 import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
 import { 
   Reading, DataLine, Bell, Message, Setting, SwitchButton, 
-  Monitor, CopyDocument, User, Star, StarFilled, Delete 
+  Monitor, CopyDocument, User, Star, StarFilled, Delete,
+  Expand, Fold
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 
@@ -196,15 +199,32 @@ async function deleteNotif(n: any) {
   } catch(e) {}
 }
 
+const isCollapse = ref(false);
+
+const toggleCollapse = () => {
+  isCollapse.value = !isCollapse.value;
+};
+
+const checkWindowSize = () => {
+  if (window.innerWidth < 1024) {
+    isCollapse.value = true;
+  } else {
+    isCollapse.value = false;
+  }
+};
+
 onMounted(() => {
   auth.fetchMe().catch(() => {});
   if (auth.token) {
     loadNotifications();
     notifTimer = setInterval(loadNotifications, 30000); // Poll every 30s
   }
+  checkWindowSize();
+  window.addEventListener('resize', checkWindowSize);
 });
 onBeforeUnmount(() => {
   if (notifTimer) clearInterval(notifTimer);
+  window.removeEventListener('resize', checkWindowSize);
 });
 
 function onLogout() {
@@ -214,23 +234,22 @@ function onLogout() {
 </script>
 
 <style scoped>
-/* 1. 环境光底板 */
+
 .edms-layout-wrapper {
-  height: 100vh;
-  background-color: var(--edms-body-bg);
-  background-image: var(--edms-ambient-glow);
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  height: 100vh !important;
+  overflow: hidden; /* 锁死最外层，禁止全局滚动 */
 }
 
-/* 2. 侧边栏质感 */
+/* 2. 侧边栏：撑满屏幕高度，内部弹性布局 */
 .edms-sidebar {
-  background-color: var(--edms-sidebar-bg);
+  height: 100vh;
+  background-color: var(--edms-sidebar-bg) !important;
   border-right: 1px solid rgba(0, 0, 0, 0.05);
   box-shadow: 2px 0 8px rgba(0,0,0,0.02);
   z-index: 20;
   display: flex;
   flex-direction: column;
+  transition: width 0.3s ease;
 }
 
 .sidebar-brand {
@@ -257,6 +276,14 @@ function onLogout() {
 .edms-menu {
   border-right: none;
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 隐藏侧边栏滚动条 */
+.edms-menu::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
 }
 
 /* 3. 苹果风毛玻璃顶栏 */
@@ -273,9 +300,22 @@ function onLogout() {
   padding: 0 24px;
 }
 
-.header-content {
+.header-left {
   display: flex;
   align-items: center;
+}
+
+.collapse-btn {
+  font-size: 20px;
+  cursor: pointer;
+  margin-right: 16px;
+  color: var(--el-text-color-primary);
+  transition: transform 0.3s ease;
+}
+
+.collapse-btn:hover {
+  transform: scale(1.1);
+  color: var(--el-color-primary);
 }
 
 .logo-text {
@@ -302,9 +342,34 @@ function onLogout() {
   border-radius: 4px;
 }
 
+.main-container {
+  height: 100vh;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .edms-main {
-  padding: 0;
-  overflow: auto;
+  flex: 1;
+  overflow-y: auto; /* 核心：只有内容区域允许滚动 */
+  overflow-x: hidden;
+  padding: 16px;
+}
+
+/* 美化主区域滚动条 */
+.edms-main::-webkit-scrollbar {
+  width: 8px;
+}
+.edms-main::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 4px;
+}
+
+@media (min-width: 1024px) {
+  .edms-main {
+    padding: 24px;
+  }
 }
 
 /* 4. 路由丝滑动画 */

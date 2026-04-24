@@ -20,7 +20,7 @@
         <el-icon><Connection /></el-icon> {{ t('dashboard.blockchainTitle') }}
       </div>
       <el-row :gutter="20" class="blockchain-kpi-row">
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-card shadow="hover" class="kpi-card blockchain cyber-blue">
             <div class="kpi-icon blue"><el-icon><Cpu /></el-icon></div>
             <div class="kpi-info">
@@ -30,7 +30,7 @@
             <div class="blockchain-status-tag">REAL-TIME</div>
           </el-card>
         </el-col>
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-card shadow="hover" class="kpi-card blockchain cyber-red">
             <div class="kpi-icon orange"><el-icon><Lock /></el-icon></div>
             <div class="kpi-info">
@@ -40,7 +40,7 @@
             <div class="blockchain-status-tag danger">GUARDED</div>
           </el-card>
         </el-col>
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-card shadow="hover" class="kpi-card blockchain cyber-green">
             <div class="kpi-icon green"><el-icon><Box /></el-icon></div>
             <div class="kpi-info">
@@ -58,7 +58,7 @@
     </div>
 
     <el-row :gutter="16" class="kpi-row">
-      <el-col :span="4">
+      <el-col :xs="12" :sm="8" :md="4">
         <el-card shadow="hover" class="kpi-card blockchain cyber-blue-soft">
           <div class="kpi-icon total"><el-icon><Document /></el-icon></div>
           <div class="kpi-info">
@@ -69,7 +69,7 @@
         </el-card>
       </el-col>
       
-      <el-col :span="4">
+      <el-col :xs="12" :sm="8" :md="4">
         <el-card shadow="hover" class="kpi-card blockchain cyber-grey">
           <div class="kpi-icon active"><el-icon><EditPen /></el-icon></div>
           <div class="kpi-info">
@@ -80,7 +80,7 @@
         </el-card>
       </el-col>
       
-      <el-col :span="4">
+      <el-col :xs="12" :sm="8" :md="4">
         <el-card shadow="hover" class="kpi-card blockchain cyber-orange">
           <div class="kpi-icon warning"><el-icon><Stamp /></el-icon></div>
           <div class="kpi-info">
@@ -91,7 +91,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="4">
+      <el-col :xs="12" :sm="8" :md="4">
         <el-card shadow="hover" class="kpi-card blockchain cyber-green-soft">
           <div class="kpi-icon success">
             <el-icon><CircleCheck /></el-icon>
@@ -104,7 +104,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="4">
+      <el-col :xs="12" :sm="8" :md="4">
         <el-card shadow="hover" class="kpi-card blockchain cyber-red-soft">
           <div class="kpi-icon danger">
             <el-icon><CircleClose /></el-icon>
@@ -117,7 +117,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="4">
+      <el-col :xs="12" :sm="8" :md="4">
         <el-card shadow="hover" class="kpi-card blockchain cyber-indigo">
           <div class="kpi-icon info">
             <el-icon><User /></el-icon>
@@ -132,7 +132,7 @@
     </el-row>
 
     <el-row :gutter="20" class="chart-row" v-if="!loading">
-      <el-col :span="12" v-if="shouldShow('statusDistribution')">
+      <el-col :xs="24" :md="12" v-if="shouldShow('statusDistribution')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -144,7 +144,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="12" v-if="shouldShow('departmentDist')">
+      <el-col :xs="24" :md="12" v-if="shouldShow('departmentDist')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -158,7 +158,7 @@
     </el-row>
 
     <el-row :gutter="20" class="chart-row" style="margin-top: 20px;" v-if="!loading">
-      <el-col :span="8" v-if="shouldShow('spaceDistribution')">
+      <el-col :xs="24" :sm="12" :md="8" v-if="shouldShow('spaceDistribution')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -170,7 +170,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="8" v-if="shouldShow('storageBreakdown')">
+      <el-col :xs="24" :sm="12" :md="8" v-if="shouldShow('storageBreakdown')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -185,7 +185,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="8" v-if="shouldShow('myWorkflow')">
+      <el-col :xs="24" :sm="12" :md="8" v-if="shouldShow('myWorkflow')">
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
@@ -324,7 +324,7 @@
           <el-table-column prop="login_name" :label="t('profile.loginName')" width="120" />
           <el-table-column prop="department_name" :label="t('profile.dept')" min-width="150">
             <template #default="{ row }">
-              {{ t('dept.' + row.department_name, row.department_name) }}
+              {{ formatDeptName(row.department_name, row.department_name_en) }}
             </template>
           </el-table-column>
           <el-table-column prop="is_manager" :label="t('profile.mgr')" width="100">
@@ -461,13 +461,13 @@ use([
   CalendarComponent,
 ]);
 
-const { t, locale } = useI18n();
+const { t, locale, te } = useI18n();
 
 const loading = ref(true);
 const totalDocs = ref(0);
 const totalUsers = ref(0);
 const statusData = ref<{ status: string; count: number }[]>([]);
-const deptData = ref<{ name: string; count: number }[]>([]);
+const deptData = ref<{ name: string; name_en?: string; count: number }[]>([]);
 const spaceData = ref<{ name: string; count: number }[]>([]);
 const trendData = ref<{ date: string; docs: number; approvals: number }[]>([]);
 const activities = ref<any[]>([]);
@@ -483,6 +483,16 @@ const myStats = ref({ docs: 0, pending: 0 });
 const blockchainStats = ref({ on_chain_count: 0, tamper_alerts: 0, block_height: 15000 });
 const blockchainHistory = ref<any[]>([]);
 const securityAlerts = ref<any[]>([]);
+
+const formatDeptName = (name: string, nameEn?: string) => {
+  if (!name || name === 'Unknown') return t('common.unknown');
+  // Try translating the primary name (usually Chinese)
+  if (te(`dept.${name}`)) return t(`dept.${name}`);
+  // Try translating the English name if available
+  if (nameEn && te(`dept.${nameEn}`)) return t(`dept.${nameEn}`);
+  // Fallback to raw values based on current locale
+  return locale.value === 'zh-CN' ? name : (nameEn || name);
+};
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.is_manager);
@@ -647,7 +657,7 @@ const donutOption = computed(() => {
         labelLine: { length: 15, length2: 10 },
         data: deptData.value.map((s) => ({
           value: s.count,
-          name: t('dept.' + (s.name || ''), s.name || t('common.unknown')),
+          name: formatDeptName(s.name, s.name_en),
         })),
       },
     ],

@@ -469,6 +469,7 @@ export default {
     "Sales": "销售部",
     "Operations": "运营部",
     "Legal": "法务部",
+    "宣传部门": "宣传部门",
   },
   pos: {
     "Manager": "经理",

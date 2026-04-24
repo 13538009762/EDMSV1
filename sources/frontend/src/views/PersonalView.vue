@@ -12,7 +12,7 @@
           <h2>{{ user?.last_name }} {{ user?.first_name }}</h2>
           <div class="detail">
             {{ t("personal.department") }}: 
-            {{ locale === 'zh-CN' ? user?.department_name : (user?.department_name_en || user?.department_name) }}
+            {{ formatDeptName(user?.department_name || '', user?.department_name_en) }}
           </div>
           <div class="detail">{{ t("personal.position") }}: {{ t('pos.' + (user?.position_full_name || user?.position_short)) }}</div>
           <div class="detail">{{ t("personal.login") }}: {{ user?.login_name }}</div>
@@ -126,7 +126,7 @@ interface Stats {
   approved_docs: number;
 }
 
-const { t, locale } = useI18n();
+const { t, locale, te } = useI18n();
 const user = ref<UserInfo | null>(null);
 const stats = ref<Stats | null>(null);
 
@@ -141,6 +141,13 @@ const userInitials = computed(() => {
   const last = user.value.last_name?.charAt(0) || "";
   return (first + last).toUpperCase();
 });
+
+const formatDeptName = (name: string, nameEn?: string) => {
+  if (!name) return "";
+  if (te(`dept.${name}`)) return t(`dept.${name}`);
+  if (nameEn && te(`dept.${nameEn}`)) return t(`dept.${nameEn}`);
+  return locale.value === 'zh-CN' ? name : (nameEn || name);
+};
 
 const editVisible = ref(false);
 const editLoading = ref(false);

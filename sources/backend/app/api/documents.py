@@ -47,6 +47,9 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         owner_name = f"{doc.owner.last_name} {doc.owner.first_name}".strip()
         if doc.owner.department:
             owner_department = doc.owner.department.name
+            owner_department_en = doc.owner.department.name_en
+        else:
+            owner_department_en = None
     # Check if current user is a pending approver for this document
     can_approve = False
     pending_participant_id = None
@@ -75,6 +78,7 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         "owner_id": doc.owner_id,
         "owner_name": owner_name,
         "owner_department": owner_department,
+        "owner_department_en": owner_department_en,
         "is_owner": doc.owner_id == user.id,
         "my_role": user_effective_document_role(user, doc),
         "created_at": doc.created_at.isoformat() + "Z" if doc.created_at else None,
@@ -181,6 +185,7 @@ def list_document_tree():
         tree.append({
             "id": f"dept_{dpt.id}",
             "name": dpt.name,
+            "name_en": dpt.name_en,
             "is_dept": True,
             "is_space": True, # Use space icon for departments too
             "children": roots
