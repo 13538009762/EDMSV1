@@ -125,7 +125,7 @@
       <el-main class="edms-main">
         <router-view v-slot="{ Component }">
           <transition name="fade-slide" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="$route.path" />
           </transition>
         </router-view>
       </el-main>
@@ -372,13 +372,28 @@ function onLogout() {
   }
 }
 
-/* 4. 路由丝滑动画 */
+/* ==========================================
+   路由切换：开启 GPU 硬件加速的丝滑过渡
+========================================== */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  /* 使用贝塞尔曲线，模仿 PPT/iOS那种“起步快，结尾柔和”的阻尼感 */
+  transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), 
+              transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* 🌟 核心：强行通知浏览器将此元素扔给 GPU 渲染，彻底解放 CPU */
+  will-change: transform, opacity; 
 }
-.fade-slide-enter-from { opacity: 0; transform: translateY(15px); }
-.fade-slide-leave-to { opacity: 0; transform: translateY(-15px); }
+
+.fade-slide-enter-from {
+  opacity: 0;
+  /* 使用 translate3d 替代 translateY 强制开启 3D 加速 */
+  transform: translate3d(0, 15px, 0); 
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -15px, 0);
+}
 
 /* Notification Styles */
 .notif-dropdown-item {

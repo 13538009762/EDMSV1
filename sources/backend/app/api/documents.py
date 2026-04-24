@@ -231,12 +231,6 @@ def list_documents():
     if user.login_name == 'admin' and scope == "all":
         pass 
     else:
-        # Standard filtering for other users or specific scopes
-        if status_filter:
-            if status_filter not in VALID_STATUSES:
-                return jsonify({"error": "invalid status filter"}), 400
-            q = q.filter(Document.status == status_filter)
-
         if scope == "approved":
             q = q.filter(Document.status == "approved")
         elif scope == "collab":
@@ -274,6 +268,12 @@ def list_documents():
             )
         else:  # scope == "mine"
             q = q.filter(Document.owner_id == user.id)
+
+    # Standard filtering for all users (including admin)
+    if status_filter:
+        if status_filter not in VALID_STATUSES:
+            return jsonify({"error": "invalid status filter"}), 400
+        q = q.filter(Document.status == status_filter)
 
     # Re-apply space filter at the end
     if space_id:

@@ -1192,21 +1192,25 @@ async function loadDoc(silent = false) {
     );
     awareness.on("update", refreshCollabList);
     
-    // 并行执行次要任务
-    console.log("[DEBUG] Starting parallel tasks (comments, versions, users)...");
+    // 并行执行核心任务
     Promise.all([
       loadComments().catch(e => console.error("Load comments failed", e)),
       loadVersions().catch(e => console.error("Load versions failed", e)),
       loadStaticCollaborators().catch(e => console.error("Load collabs failed", e)),
-      loadDepts().catch(e => console.error("Load depts failed", e)),
-      loadSpaces().catch(e => console.error("Load spaces failed", e)),
-      // 仅在列表为空时加载用户数据
-      userOptions.value.length === 0 
-        ? api.get("/users", { params: { size: 1000 } }).then(us => { userOptions.value = us.data.items; }).catch(e => console.error("Load users failed", e))
-        : Promise.resolve()
     ]).then(() => {
-       console.log("[DEBUG] Parallel tasks complete.");
+       console.log("[DEBUG] Core parallel tasks complete.");
     });
+
+    // 延迟加载不紧急的下拉框数据，防止导航卡顿
+    setTimeout(() => {
+      loadDepts().catch(e => console.error("Load depts failed", e));
+      loadSpaces().catch(e => console.error("Load spaces failed", e));
+      if (userOptions.value.length === 0) {
+        api.get("/users", { params: { size: 1000 } })
+          .then(us => { userOptions.value = us.data.items; })
+          .catch(e => console.error("Load users failed", e));
+      }
+    }, 500);
 
     if (meta.value.status !== 'approved') refreshCollabList();
   } catch (err) {

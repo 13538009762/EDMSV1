@@ -221,7 +221,7 @@
             <div v-for="(doc, i) in trendingDocs" :key="doc.id" class="trending-item">
               <div class="rank">{{ i + 1 }}</div>
               <div class="info">
-                <el-link class="title" @click="$router.push(`/doc/${doc.id}`)">{{ doc.title }}</el-link>
+                <el-link class="title" @click="$router.push({ name: 'editor', params: { id: doc.id } })">{{ doc.title }}</el-link>
                 <div class="hits">{{ doc.hits }} {{ t('dashboard.hits', 'views') }}</div>
               </div>
               <el-progress 
@@ -282,7 +282,7 @@
                 :timestamp="formatLocalDate(activity.updated_at)"
                 :type="activity.status === 'approved' ? 'success' : (activity.status === 'rejected' ? 'danger' : 'primary')"
               >
-                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="$router.push(`/doc/${activity.id}`)">{{ activity.title }}</el-link></strong>"
+                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="zoomVisible = false; $router.push(`/doc/${activity.id}`)">{{ activity.title }}</el-link></strong>"
                 <el-tag size="small" style="margin-left: 8px;" :type="statusTagType(activity.status)">{{ activity.status }}</el-tag>
               </el-timeline-item>
             </el-timeline>
@@ -302,7 +302,7 @@
           <el-table-column prop="doc_number" :label="t('library.colId')" width="140" />
           <el-table-column prop="title" :label="t('library.colTitle')" min-width="180">
             <template #default="{ row }">
-               <el-link @click="$router.push(`/editor/${row.id}`)">{{ row.title }}</el-link>
+               <el-link @click="metricVisible = false; $router.push({ name: 'editor', params: { id: row.id } })">{{ row.title }}</el-link>
             </template>
           </el-table-column>
           <el-table-column prop="status" :label="t('library.colStatus')" width="120">
@@ -411,7 +411,7 @@
                 :timestamp="formatLocalDate(activity.updated_at)"
                 :type="activity.status === 'approved' ? 'success' : (activity.status === 'rejected' ? 'danger' : 'primary')"
               >
-                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="$router.push(`/doc/${activity.id}`)">{{ activity.title }}</el-link></strong>"
+                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="$router.push({ name: 'editor', params: { id: activity.id } })">{{ activity.title }}</el-link></strong>"
                 <el-tag size="small" style="margin-left: 8px;" :type="statusTagType(activity.status)">{{ activity.status }}</el-tag>
               </el-timeline-item>
             </el-timeline>

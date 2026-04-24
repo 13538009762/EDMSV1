@@ -1,7 +1,8 @@
 /* src/assets/theme.css */
 
 /* 全局动画过渡，确保切号时背景颜色平滑呼吸渐变 */
-* {
+/* ✅ 只给这几个核心大容器加 transition，绝对不要用 * 号，防止 DOM 渲染阻塞 */
+body, #app, .edms-layout-wrapper, .edms-sidebar, .edms-content-card, .el-card {
   transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
@@ -174,6 +175,24 @@ h1, h2, h3, h4, h5, h6 {
   background-color: var(--edms-sidebar-active-bg) !important;
   font-weight: 600 !important;
   border-right: 3px solid var(--el-color-primary) !important;
+}
+
+/* ==========================================
+   侧边栏字体与排版层级优化
+========================================== */
+
+/* 1. 放大二级菜单（比如 Library 下面的具体内容）的字体 */
+.edms-menu .el-sub-menu .el-menu-item {
+  font-size: 15px !important; /* Element 默认是 14px，调大到 15px */
+  letter-spacing: 0.5px !important; /* 增加一点字间距，提升阅读舒适度 */
+  padding-left: 50px !important; /* 稍微往右缩进一点，拉开与一级菜单的层级感 */
+}
+
+/* 2. 顺手强化一级菜单（比如 仪表盘、文档库 这几个大标题）的层级感 */
+.edms-menu > .el-menu-item,
+.edms-menu > .el-sub-menu > .el-sub-menu__title {
+  font-size: 15px !important;
+  font-weight: 500 !important; /* 一级菜单稍微加粗一点点 */
 }
 
 /* ==========================================

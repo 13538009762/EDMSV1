@@ -276,7 +276,11 @@ async function loadUsers() {
   loading.value = true;
   try {
     const { data } = await api.get("/users", {
-      params: { page: currentPage.value, size: pageSize.value }
+      params: { 
+        page: currentPage.value, 
+        size: pageSize.value,
+        management: 1 
+      }
     });
     users.value = data.items;
     total.value = data.total;

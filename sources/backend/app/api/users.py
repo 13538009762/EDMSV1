@@ -78,10 +78,17 @@ def list_users():
     
     query = User.query.filter_by(registration_status='active')
     
-    # 允许根据部门 ID 过滤，如果不传则默认查看全部（支持跨部门审批）
-    dept_id = request.args.get("department_id")
-    if dept_id:
-        query = query.filter_by(department_id=dept_id)
+    # 逻辑分歧：如果是管理模式 (management=1)，经理只能看本部门
+    is_management = request.args.get("management") == "1"
+    is_super = user.login_name == 'admin'
+    
+    if is_management and not is_super and user.is_manager:
+        query = query.filter_by(department_id=user.department_id)
+    else:
+        # 否则允许根据部门 ID 过滤，如果不传则默认查看全部（支持跨部门审批）
+        dept_id = request.args.get("department_id")
+        if dept_id:
+            query = query.filter_by(department_id=dept_id)
 
     search = request.args.get("search")
 
