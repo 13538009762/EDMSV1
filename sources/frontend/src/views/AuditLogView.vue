@@ -129,8 +129,8 @@ onMounted(() => {
 <style scoped>
 .audit-page {
   padding: 24px;
-  background-color: var(--el-bg-color-page);
-  height: calc(100vh - 80px); /* Adjust based on your header height */
+  background-color: transparent;
+  height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -142,31 +142,76 @@ onMounted(() => {
 
 .header h2 {
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--el-text-color-primary);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+/* 1. 给顶部搜索栏套上高透亚克力材质 */
 .filters {
-  background: white;
-  padding: 16px 16px 0 16px;
-  margin-bottom: 16px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  background-color: rgba(255, 255, 255, 0.65) !important; 
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05) !important;
+  border-radius: 12px;
+  
+  padding: 20px 20px 4px 20px;
+  margin-bottom: 20px;
 }
 
+/* 2. 底部表格容器玻璃化 */
 .table-container {
   flex: 1;
-  background: white;
-  min-height: 0; /* important for flex overflow */
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-  padding: 16px;
+  min-height: 0;
+  background-color: rgba(255, 255, 255, 0.65) !important; 
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05) !important;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* 彻底砸穿 Element 表格内部的实心白底 */
+:deep(.el-table),
+:deep(.el-table__expanded-cell),
+:deep(.el-table th),
+:deep(.el-table tr),
+:deep(.el-table td) {
+  background-color: transparent !important; 
+  background: transparent !important;
+}
+
+/* 修复表格悬浮时的颜色 */
+:deep(.el-table tbody tr:hover > td) {
+  background-color: rgba(255, 255, 255, 0.4) !important; 
+}
+
+/* 去掉表格底部自带的白线 */
+:deep(.el-table::before) {
+  display: none !important;
 }
 
 .pagination {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+/* 3. 顺手优化一下底部分页器 */
+:deep(.el-pagination button:disabled),
+:deep(.el-pagination .btn-next), 
+:deep(.el-pagination .btn-prev), 
+:deep(.el-pager li) {
+  background-color: transparent !important;
+}
+:deep(.el-pager li.is-active) {
+  background-color: var(--el-color-primary) !important;
+  color: white !important;
+  border-radius: 4px;
 }
 
 .action-tag {
@@ -176,6 +221,7 @@ onMounted(() => {
   padding: 4px;
   text-align: center;
   word-break: break-all;
+  backdrop-filter: blur(4px);
 }
 
 .summary-wrapper {

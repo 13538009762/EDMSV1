@@ -214,7 +214,11 @@ async function save() {
   saving.value = true;
   try {
     await Promise.all([
-      api.post(`/documents/${props.documentId}/permissions`, { grants, notify: notify.value }),
+      api.post(`/documents/${props.documentId}/permissions`, { 
+        grants, 
+        notify: notify.value,
+        is_public: isPublic.value 
+      }),
       api.patch(`/documents/${props.documentId}`, { is_public: isPublic.value })
     ]);
     ElMessage.success(t("editor.sharingSaved"));

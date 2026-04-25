@@ -13,6 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender1 \
     fontconfig \
+    gcc \
+    g++ \
+    libffi-dev \
+    libssl-dev \
+    make \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
@@ -20,8 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install Python dependencies
-# 💡 增加 gunicorn 以支持生产级部署
-RUN pip install --no-cache-dir -r requirements.txt gunicorn eventlet
+# 💡 使用 gevent 以配合 Socket.IO 的并发需求
+RUN pip install --no-cache-dir -r requirements.txt gunicorn gevent gevent-websocket
 
 # Copy backend code
 COPY . .
@@ -42,5 +47,5 @@ ENV STORAGE_PATH=/app/data
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
 
-# Run the application with gunicorn + gthread (Matches async_mode="threading" in code)
-CMD ["gunicorn", "--worker-class", "gthread", "-w", "1", "--threads", "100", "--bind", "0.0.0.0:5000", "wsgi:app"]
+# Run the application with gunicorn + gevent (Better for Socket.IO)
+CMD ["gunicorn", "--worker-class", "gevent", "-w", "1", "--bind", "0.0.0.0:5000", "wsgi:app"]

@@ -29,7 +29,7 @@
             type="textarea"
             :rows="2"
             placeholder="问问 AI..."
-            @keyup.enter.native.prevent="sendMessage"
+            @keyup.enter.prevent="sendMessage"
             resize="none"
           />
           <el-button type="primary" size="small" :loading="isTyping" @click="sendMessage" circle>
@@ -46,7 +46,7 @@ import { ref, onMounted, nextTick, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { MagicStick, ArrowUp, ArrowDown, Promotion } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
-import { useAiStore } from '@/stores/ai';
+import { useAiStore, type AiMessage } from '@/stores/ai';
 import { marked } from 'marked';
 
 const props = defineProps({
@@ -105,7 +105,7 @@ const sendMessage = async () => {
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let assistantMessage = { role: 'assistant', content: '' };
+    const assistantMessage: AiMessage = { role: 'assistant', content: '' };
     aiStore.globalMessages.push(assistantMessage);
     
     while (true) {
@@ -138,11 +138,22 @@ const sendMessage = async () => {
 </script>
 
 <style scoped>
+/* ==========================================
+   AI 智能助手：全息悬浮毛玻璃 (HUD 质感)
+========================================== */
+
+/* 1. 外层主容器：比文档库更通透，强化悬浮感 */
 .ai-sidebar-container {
   margin: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 使用 60% 的白，比表格更透一点，科技感直接拉满 */
+  background-color: rgba(255, 255, 255, 0.6) !important; 
+  backdrop-filter: blur(30px) !important; /* 增加模糊度，让背后的光晕彻底化开 */
+  -webkit-backdrop-filter: blur(30px) !important;
+  
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-radius: 16px !important; 
+  box-shadow: 0 16px 40px rgba(31, 38, 135, 0.1) !important;
+  
   overflow: hidden;
   transition: all 0.3s ease;
   display: flex;
@@ -151,46 +162,49 @@ const sendMessage = async () => {
 
 .ai-sidebar-container.collapsed {
   margin: 10px 4px;
-  background: transparent;
-  border: none;
+  background: transparent !important;
+  border: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
   align-items: center;
 }
 
 .ai-header {
-  padding: 10px 12px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.2);
   transition: background 0.2s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .ai-header:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .title-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--el-color-primary);
 }
 
 .magic-icon {
-  font-size: 18px;
-  filter: drop-shadow(0 0 5px var(--el-color-primary));
+  font-size: 20px;
+  filter: drop-shadow(0 0 8px var(--el-color-primary));
 }
 
 .expand-icon {
-  font-size: 12px;
-  color: #909399;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
 }
 
 .ai-body {
-  height: 300px;
+  height: 420px;
   display: flex;
   flex-direction: column;
 }
@@ -198,19 +212,18 @@ const sendMessage = async () => {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: rgba(0, 0, 0, 0.1);
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.02);
 }
 
-/* Scrollbar styling for chat */
 .chat-messages::-webkit-scrollbar {
   width: 4px;
 }
 .chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 2px;
 }
 
@@ -228,66 +241,83 @@ const sendMessage = async () => {
   align-self: flex-end;
 }
 
+/* 4. AI 的聊天气泡：带上微弱的磨砂感 */
 .bubble {
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  background: rgba(255, 255, 255, 0.08);
-  color: #e5eaf3;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+  color: var(--el-text-color-primary) !important;
 }
 
 .message.user .bubble {
-  background: var(--el-color-primary);
-  color: white;
+  background: var(--el-color-primary) !important;
+  color: white !important;
+  border: none !important;
+  backdrop-filter: none !important;
 }
 
+/* 2. 底部输入区域：果冻质感的底座 */
 .chat-input-area {
-  padding: 8px;
+  padding: 16px;
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: flex-end;
-  background: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.4) !important; 
+  border-top: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-radius: 0 0 16px 16px !important;
 }
 
+/* 3. 砸穿 Element Plus 输入框的死白底色 */
 :deep(.el-textarea__inner) {
-  background: rgba(0, 0, 0, 0.2) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-  font-size: 12px !important;
-  padding: 4px 8px !important;
+  background-color: rgba(255, 255, 255, 0.5) !important; 
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  color: var(--el-text-color-primary) !important;
+  box-shadow: none !important;
+  transition: all 0.3s ease !important;
+  font-size: 13px !important;
+  border-radius: 12px !important;
+}
+
+:deep(.el-textarea__inner:focus) {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  border-color: var(--el-color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important; 
 }
 
 .typing-dot {
-  width: 4px;
-  height: 4px;
-  background: #aaa;
+  width: 6px;
+  height: 6px;
+  background: var(--el-color-primary);
   border-radius: 50%;
   animation: typing 1s infinite alternate;
 }
 
 @keyframes typing {
-  from { opacity: 0.3; }
-  to { opacity: 1; }
+  from { opacity: 0.3; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.2); }
 }
 
 .expand-enter-active, .expand-leave-active {
-  transition: all 0.3s ease;
-  max-height: 400px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 500px;
 }
 .expand-enter-from, .expand-leave-to {
   max-height: 0;
   opacity: 0;
 }
 
-:deep(.content p) { margin: 0 0 6px 0; }
+:deep(.content p) { margin: 0 0 8px 0; }
 :deep(.content p:last-child) { margin-bottom: 0; }
 :deep(.content pre) { 
-  background: #282c34; 
-  padding: 6px; 
-  border-radius: 4px; 
+  background: rgba(0, 0, 0, 0.05); 
+  padding: 10px; 
+  border-radius: 8px; 
   overflow-x: auto;
-  font-size: 11px;
+  font-size: 12px;
 }
 </style>

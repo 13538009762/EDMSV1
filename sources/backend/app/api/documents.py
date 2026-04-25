@@ -700,13 +700,13 @@ def set_permissions(doc_id: int):
             DocumentPermission(document_id=doc.id, user_id=uid_int, role=role),
         )
 
-        # 💡 处理通知逻辑
+        # 💡 处理个人通知逻辑
         should_notify = (role == "edit") or (data.get("notify") is True)
         if should_notify:
             from app.models.notification import Notification
             from datetime import datetime, timedelta
             
-            # 检查是否已有相同文档的未读协作通知，避免刷屏
+            # 检查是否已有相同文档的未读协作通知
             existing = Notification.query.filter_by(
                 user_id=uid_int, 
                 related_doc_id=doc.id, 
@@ -716,18 +716,44 @@ def set_permissions(doc_id: int):
             
             if not existing:
                 title = f"待编辑: {doc.title}" if role == "edit" else f"共享文档: {doc.title}"
-                expires = datetime.utcnow() + timedelta(days=30) if role == "edit" else None
-                
-                # 💡 增加过期时间 30 天
-                from datetime import datetime, timedelta
                 expires = datetime.utcnow() + timedelta(days=30)
-                
-                print(f"[DEBUG] Creating share notification for user {uid_int}, doc {doc.id}")
                 new_notif = Notification(
                     user_id=uid_int,
                     type="协作",
                     title=title,
                     content=f"用户 {user.display_name()} 为您分配了文档的 {role} 权限。",
+                    related_doc_id=doc.id,
+                    link_url=f"/doc/{doc.id}",
+                    expires_at=expires
+                )
+                db.session.add(new_notif)
+
+    # 💡 处理“共享给所有人”的通知逻辑
+    if data.get("notify") is True and data.get("is_public") is True:
+        from app.models.notification import Notification
+        from datetime import datetime, timedelta
+        expires = datetime.utcnow() + timedelta(days=30)
+        
+        # 获取所有活跃用户，排除当前操作者和已通知过的用户
+        all_users = User.query.filter(User.id != user.id, User.id != doc.owner_id).all()
+        for u in all_users:
+            if u.id in seen:
+                continue
+            
+            # 避免重复通知
+            existing = Notification.query.filter_by(
+                user_id=u.id, 
+                related_doc_id=doc.id, 
+                type="协作", 
+                is_read=False
+            ).first()
+            
+            if not existing:
+                new_notif = Notification(
+                    user_id=u.id,
+                    type="协作",
+                    title=f"全员共享: {doc.title}",
+                    content=f"用户 {user.display_name()} 已将文档共享给所有人。",
                     related_doc_id=doc.id,
                     link_url=f"/doc/{doc.id}",
                     expires_at=expires

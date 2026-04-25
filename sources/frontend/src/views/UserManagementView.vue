@@ -1,38 +1,38 @@
 <template>
   <div class="user-mgmt-page">
     <div class="card-header">
-      <div>
-        <h2>{{ t('nav.users', 'Member Management') }}</h2>
-      </div>
-      <div class="header-actions">
-        <el-button 
-          v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" 
-          type="primary" 
-          :icon="Plus" 
-          @click="openAddUser"
-        >
-          {{ t('admin.addUser', 'Add Member') }}
-        </el-button>
-        <el-button 
-          v-if="auth.user?.login_name === 'admin'" 
-          type="success" 
-          :icon="Plus" 
-          @click="deptDialogVisible = true"
-        >
-          {{ t('admin.addDept', 'Add Department') }}
-        </el-button>
-        <el-button 
-          type="danger" 
-          :icon="Delete" 
-          :disabled="selectedIds.length === 0" 
-          @click="handleBatchDelete"
-        >
-          {{ t('common.delete') }} ({{ selectedIds.length }})
-        </el-button>
-      </div>
+      <h2>{{ t('nav.users', 'Member Management') }}</h2>
     </div>
 
-    <el-card shadow="hover">
+    <el-card shadow="hover" class="mgmt-card">
+      <div class="mgmt-toolbar">
+        <div class="header-actions">
+          <el-button 
+            v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" 
+            type="primary" 
+            :icon="Plus" 
+            @click="openAddUser"
+          >
+            {{ t('admin.addUser', 'Add Member') }}
+          </el-button>
+          <el-button 
+            v-if="auth.user?.login_name === 'admin'" 
+            type="success" 
+            :icon="Plus" 
+            @click="deptDialogVisible = true"
+          >
+            {{ t('admin.addDept', 'Add Department') }}
+          </el-button>
+          <el-button 
+            type="danger" 
+            :icon="Delete" 
+            :disabled="selectedIds.length === 0" 
+            @click="handleBatchDelete"
+          >
+            {{ t('common.delete') }} ({{ selectedIds.length }})
+          </el-button>
+        </div>
+      </div>
       <el-table 
         v-loading="loading" 
         :data="users" 
@@ -337,8 +337,26 @@ onMounted(() => {
 .user-mgmt-page {
   padding: 24px;
 }
+.card-header {
+  margin-bottom: 32px;
+}
+.card-header h2 {
+  text-align: center;
+  margin: 0;
+}
+/* 🚀 白色区域（卡片）样式优化 */
+.mgmt-card {
+  border-radius: 16px;
+  padding: 8px; /* 扩大内部感官空间 */
+}
+/* 🚀 内部工具栏：将按钮移至右上方 */
+.mgmt-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
 .pagination {
-  margin-top: 20px;
+  margin-top: 24px;
   display: flex;
   justify-content: flex-end;
 }

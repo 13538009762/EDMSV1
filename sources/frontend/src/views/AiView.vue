@@ -251,13 +251,15 @@ const executeAction = async (action: any, idx: number) => {
 
 <style scoped>
 .ai-page-container {
-  height: calc(100vh - 80px);
+  height: calc(100vh - 100px);
   display: flex;
   flex-direction: column;
-  background-color: #fff;
+  background-color: transparent; /* 由 theme.css 强制玻璃化 */
   position: relative;
   max-width: 1000px;
-  margin: 0 auto;
+  margin: 20px auto;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .empty-state {
@@ -278,88 +280,98 @@ const executeAction = async (action: any, idx: number) => {
   font-size: 64px;
   color: var(--el-color-primary);
   margin-bottom: 16px;
-  filter: drop-shadow(0 4px 12px rgba(64, 158, 255, 0.2));
+  filter: drop-shadow(0 0 15px var(--el-color-primary));
 }
 
 .welcome-section h1 {
-  font-size: 28px;
-  color: #1a1a1a;
-  margin-bottom: 8px;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--el-text-color-primary);
+  margin-bottom: 12px;
 }
 
 .subtitle {
-  color: #606266;
+  color: var(--el-text-color-secondary);
   font-size: 16px;
 }
 
 .suggestions-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 24px;
   width: 100%;
   max-width: 800px;
 }
 
 .suggestion-card {
-  padding: 20px;
-  background: #f8f9fb;
-  border: 1px solid #eef0f2;
-  border-radius: 12px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
 }
 
 .suggestion-card:hover {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.8);
   border-color: var(--el-color-primary);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transform: translateY(-4px);
+}
+
+.suggestion-card .el-icon {
+  font-size: 28px;
+  color: var(--el-color-primary);
+  margin-bottom: 12px;
 }
 
 .suggestion-card h3 {
-  font-size: 15px;
-  margin: 10px 0 6px;
-  color: #303133;
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: var(--el-text-color-primary);
 }
 
 .suggestion-card p {
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.4;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
 }
 
 .chat-main {
   flex: 1;
   overflow-y: auto;
-  padding: 40px 20px;
+  padding: 40px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 40px;
 }
 
 .message-item {
   display: flex;
-  gap: 20px;
-  max-width: 850px;
+  gap: 24px;
+  max-width: 900px;
   margin: 0 auto;
   width: 100%;
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #f0f2f5;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #606266;
+  color: var(--el-text-color-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
 .message-item.assistant .avatar {
   background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-7);
 }
 
 .content-box {
@@ -367,76 +379,80 @@ const executeAction = async (action: any, idx: number) => {
 }
 
 .role-label {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #303133;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--el-text-color-primary);
 }
 
 .text-content {
   font-size: 15px;
-  line-height: 1.7;
-  color: #2c3e50;
+  line-height: 1.8;
+  color: var(--el-text-color-regular);
 }
 
 .inline-action-card {
-  margin-top: 16px;
-  border: 1px solid var(--el-color-primary-light-7);
-  border-radius: 8px;
-  background: var(--el-color-primary-light-9);
+  margin-top: 20px;
+  border: 1px solid rgba(var(--el-color-primary-rgb), 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
   overflow: hidden;
-  max-width: 400px;
+  max-width: 450px;
 }
 
 .card-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--el-color-primary-light-7);
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(var(--el-color-primary-rgb), 0.1);
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: bold;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--el-color-primary);
 }
 
 .card-body {
-  padding: 12px;
+  padding: 16px;
   font-size: 14px;
 }
 
 .card-footer {
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.5);
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.3);
   display: flex;
   gap: 12px;
 }
 
 .input-container {
-  padding: 20px;
-  background: linear-gradient(to bottom, transparent, #fff 20%);
+  padding: 32px 40px;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.2));
 }
 
 .input-wrapper {
-  max-width: 800px;
+  max-width: 850px;
   margin: 0 auto;
-  background: #f4f4f4;
-  border-radius: 16px;
-  padding: 8px 16px;
-  border: 1px solid #e5e5e5;
-  transition: border-color 0.2s;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 12px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
 }
 
 .input-wrapper:focus-within {
   border-color: var(--el-color-primary);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 12px 48px rgba(var(--el-color-primary-rgb), 0.15);
 }
 
 :deep(.chat-textarea .el-textarea__inner) {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  font-size: 15px !important;
-  color: #1a1a1a !important;
+  font-size: 16px !important;
+  color: var(--el-text-color-primary) !important;
   padding: 8px 0 !important;
 }
 
@@ -444,40 +460,42 @@ const executeAction = async (action: any, idx: number) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 4px;
+  padding-top: 8px;
 }
 
 .hint {
-  font-size: 12px;
-  color: #909399;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .send-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .disclaimer {
   text-align: center;
   font-size: 12px;
-  color: #909399;
-  margin-top: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 16px;
+  opacity: 0.7;
 }
 
 .typing-indicator {
   display: flex;
-  gap: 4px;
-  padding: 8px 0;
+  gap: 6px;
+  padding: 12px 0;
 }
 
 .typing-indicator span {
-  width: 6px;
-  height: 6px;
-  background: #ccc;
+  width: 8px;
+  height: 8px;
+  background: var(--el-color-primary);
   border-radius: 50%;
   animation: bounce 1.4s infinite ease-in-out both;
+  opacity: 0.6;
 }
 
 .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
@@ -485,15 +503,16 @@ const executeAction = async (action: any, idx: number) => {
 
 @keyframes bounce {
   0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); }
+  40% { transform: scale(1.0); opacity: 1; }
 }
 
-:deep(.text-content p) { margin: 0 0 12px 0; }
+:deep(.text-content p) { margin: 0 0 16px 0; }
 :deep(.text-content p:last-child) { margin-bottom: 0; }
 :deep(.text-content pre) {
-  background: #f1f3f5;
-  padding: 16px;
-  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  border-radius: 12px;
   overflow-x: auto;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 </style>
