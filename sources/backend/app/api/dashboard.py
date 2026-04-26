@@ -229,7 +229,8 @@ def get_stats():
             h_limit = datetime.now() - timedelta(days=90)
             h_q = db.session.query(func.date(AuditLog.created_at), func.count(AuditLog.id))\
                 .filter(AuditLog.created_at >= h_limit)\
-                .group_by(func.date(AuditLog.created_at)).all()
+                .group_by(func.date(AuditLog.created_at))\
+                .order_by(func.date(AuditLog.created_at)).all()
             heatmap_data = [[str(r[0]), r[1]] for r in h_q]
     except Exception as e:
         print(f"[ERROR] Heatmap failed: {e}")

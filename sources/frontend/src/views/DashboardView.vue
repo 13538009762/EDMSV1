@@ -239,7 +239,7 @@
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>{{ t('dashboard.activityHeatmap', 'User Activity Heatmap') }}</span>
+              <span>{{ t('dashboard.activityTrend90', 'Activity Trend (90 Days)') }}</span>
               <el-button link :icon="FullScreen" @click="zoomWidget('activityHeatmap')" />
             </div>
           </template>
@@ -446,6 +446,7 @@ import {
   CalendarComponent,
 } from "echarts/components";
 import VChart from "vue-echarts";
+import * as echarts from "echarts";
 
 // Register ECharts core components manually
 use([
@@ -779,50 +780,78 @@ const storageOption = computed(() => {
 });
 
 const heatmapOption = computed(() => {
-    const today = new Date();
-    return {
-        backgroundColor: 'transparent',
-        tooltip: { 
-            position: 'top',
-            formatter: (p: any) => {
-                return `${p.data[0]}: ${p.data[1]} ${t('dashboard.activityUnit', 'activities')}`;
-            }
-        },
-        visualMap: {
-            min: 0,
-            max: 10,
-            type: 'piecewise',
-            orient: 'horizontal',
-            left: 'center',
-            top: 10,
-            textStyle: { fontSize: 11 },
-            inRange: { color: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] }
-        },
-        calendar: {
-            top: 80,
-            left: 40,
-            right: 20,
-            cellSize: [18, 18],
-            range: [new Date(today.getTime() - 90 * 24 * 3600 * 1000), today],
-            itemStyle: { borderWidth: 2, borderColor: '#fff' },
-            yearLabel: { show: false },
-            dayLabel: { 
-                fontSize: 11, 
-                firstDay: 1, 
-                nameMap: locale.value === 'zh-CN' ? 'cn' : 'en' 
-            },
-            monthLabel: { 
-                fontSize: 11, 
-                margin: 10,
-                nameMap: locale.value === 'zh-CN' ? 'cn' : 'en'
-            }
-        },
-        series: {
-            type: 'heatmap',
-            coordinateSystem: 'calendar',
-            data: heatmapData.value
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'line',
+        lineStyle: {
+          color: 'rgba(16, 185, 129, 0.5)',
+          width: 2,
+          type: 'dashed'
         }
-    };
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      borderColor: 'rgba(16, 185, 129, 0.2)',
+      textStyle: { color: '#334155' }
+    },
+    grid: {
+      left: '2%',
+      right: '4%',
+      bottom: '3%',
+      top: '15%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: heatmapData.value.map(item => {
+        const d = new Date(item[0]);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: {
+        color: '#94a3b8',
+        margin: 16
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#94a3b8' },
+      splitLine: {
+        lineStyle: {
+          type: 'dashed',
+          color: 'rgba(148, 163, 184, 0.15)'
+        }
+      }
+    },
+    series: [
+      {
+        name: t('dashboard.activityUnit', 'activities'),
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        lineStyle: {
+          width: 3,
+          color: '#10b981'
+        },
+        itemStyle: {
+          color: '#10b981'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(16, 185, 129, 0.4)' },
+            { offset: 1, color: 'rgba(16, 185, 129, 0.0)' }
+          ])
+        },
+        data: heatmapData.value.map(item => item[1])
+      }
+    ]
+  };
 });
 
 function calculatePercentage(hits: number | null | undefined) {

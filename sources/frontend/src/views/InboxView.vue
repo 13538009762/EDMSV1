@@ -23,6 +23,9 @@
               <template #default="{ row }">
                 <div class="progress-details">
                   <h4>{{ t("inbox.progressDetails") }}</h4>
+                  <div class="initiator-info">
+                    <strong>{{ t("inbox.initiator") }}:</strong> {{ row.initiator_name }}
+                  </div>
                   <el-table :data="row.details" size="small" border style="width: 100%">
                     <el-table-column prop="user_name" :label="t('inbox.participant')" />
                     <el-table-column :label="t('inbox.decision')">
@@ -116,6 +119,9 @@
               <template #default="{ row }">
                 <div class="progress-details">
                   <h4>{{ t("inbox.progressDetails") }}</h4>
+                  <div class="initiator-info">
+                    <strong>{{ t("inbox.initiator") }}:</strong> {{ row.initiator_name }}
+                  </div>
                   <el-table :data="row.details" size="small" border style="width: 100%">
                     <el-table-column prop="user_name" :label="t('inbox.participant')" />
                     <el-table-column :label="t('inbox.decision')">
@@ -279,6 +285,7 @@ interface InboxRow {
   participant_id: number;
   document_id: number;
   title: string;
+  initiator_name: string;
   flow_type: string;
   flow_status: string;
   progress: { done: number; total: number };
@@ -430,6 +437,11 @@ onMounted(load);
   background: var(--el-color-primary);
   margin-right: 8px;
   border-radius: 2px;
+}
+.initiator-info {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
 }
 
 .pagination-wrapper {

@@ -26,13 +26,15 @@ def inbox():
     flows = ApprovalFlow.query.filter_by(status="active").all()
     for flow in flows:
         doc = flow.document
+        initiator_name = "Unknown"
         if flow.flow_type == "registration":
-            # Admin or Manager of the appropriate dept can see it
-            # Already checked by participants filter below, but good to have a title
-            title = f"User Registration: {User.query.get(flow.rel_id).display_name() if flow.rel_id else 'New User'}"
+            initiator = User.query.get(flow.rel_id) if flow.rel_id else None
+            initiator_name = initiator.display_name() if initiator else "New User"
+            title = f"User Registration: {initiator_name}"
         elif doc:
             if not user_can_view_document(user, doc):
                 continue
+            initiator_name = doc.owner.display_name() if doc.owner else "Unknown"
             title = doc.title
         else:
             continue
@@ -50,7 +52,7 @@ def inbox():
                 continue
             participants = []
             for p_detail in flow.participants:
-                user_name = f"{p_detail.user.last_name} {p_detail.user.first_name}".strip() if p_detail.user else "Unknown"
+                user_name = p_detail.user.display_name() if p_detail.user else "Unknown"
                 participants.append({
                     "user_id": p_detail.user_id,
                     "user_name": user_name,
@@ -66,6 +68,7 @@ def inbox():
                     "participant_id": p.id,
                     "document_id": doc.id if doc else None,
                     "title": title,
+                    "initiator_name": initiator_name,
                     "flow_status": flow.status,
                     "flow_type": flow.flow_type,
                     "progress": {"done": done, "total": total},
@@ -210,6 +213,7 @@ def my_applications():
         items.append({
             "document_id": doc.id,
             "title": doc.title,
+            "initiator_name": user.display_name(),
             "flow_id": flow.id,
             "flow_type": flow.flow_type,
             "flow_status": flow.status,

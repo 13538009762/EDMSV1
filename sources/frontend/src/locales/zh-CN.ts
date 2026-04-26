@@ -78,7 +78,7 @@ export default {
   },
 
   login: {
-    title: "登录（仅需登录名）",
+    title: "登录",
     loginName: "登录名",
     password: "密码",
     submit: "进入",
@@ -202,6 +202,7 @@ export default {
     decision: "结果",
     reason: "意见",
     statusPending: "等待中",
+    initiator: "发起人",
   },
   diff: {
     title: "版本比对",
@@ -416,6 +417,7 @@ export default {
     storageBreakdown: "存储规格占比",
     trendingDocs: "高频热门文档 (Top 5)",
     activityHeatmap: "用户活跃热力图",
+    activityTrend90: "用户活跃趋势 (90日)",
     hits: "次浏览",
     activityUnit: "项活动",
     blockchainTitle: "区块链底层安全监控中心",

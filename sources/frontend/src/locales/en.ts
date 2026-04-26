@@ -178,6 +178,7 @@ export default {
     cancel: "Cancel",
     submitted: "Submitted",
     reasonRequired: "Reason is required",
+    initiator: "Initiator",
   },
   diff: {
     title: "Version comparison",
@@ -385,6 +386,7 @@ export default {
     storageBreakdown: "Storage by File Type",
     trendingDocs: "Trending Documents (Top 5)",
     activityHeatmap: "User Activity Heatmap",
+    activityTrend90: "Activity Trend (90 Days)",
     hits: "views",
     activityUnit: "activities",
     blockchainTitle: "Blockchain Security Monitoring",

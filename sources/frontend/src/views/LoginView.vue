@@ -59,15 +59,15 @@ const { t } = useI18n();
 // 轮播图数据，预留接口
 const carouselImages = ref([
   {
-    src: "/images/carousel/1.png", // 图片接口路径
+    src: "/images/carousel/pic2.png",
     alt: "EDMS System"
   },
   {
-    src: "/images/carousel/2.png", // 图片接口路径
+    src: "/images/carousel/pic3.png",
     alt: "Document Management"
   },
   {
-    src: "/images/carousel/3.png", // 图片接口路径
+    src: "/images/carousel/pic4.png",
     alt: "Workflow Automation"
   }
 ]);
@@ -141,6 +141,12 @@ async function submit() {
 .card {
   width: 100%;
   max-width: 400px;
+}
+.card :deep(.el-card__header) {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  color: var(--el-text-color-primary);
 }
 .carousel-image {
   width: 100%;
