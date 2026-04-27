@@ -1,13 +1,19 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <div>
-        <h2>{{ t("import.title") }}</h2>
-        <p class="subtitle">{{ t("import.hint") }}</p>
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><Setting /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t("nav.masterData", "Master Data Management") }}</h1>
+          <p class="page-sub">{{ t("import.hint") }}</p>
+        </div>
       </div>
     </div>
 
-    <el-tabs type="border-card" class="master-tabs">
+    <div class="page-content">
+      <el-tabs type="border-card" class="master-tabs">
       <!-- Tab 1: XLSX Import (Only for System Admin) -->
       <el-tab-pane v-if="isSystemAdmin" :label="t('import.title')">
         <div class="upload-section">
@@ -75,9 +81,9 @@
 
         <transition name="el-fade-in">
           <div v-if="result" class="result-section">
-            <el-divider>{{ t("import.resultTitle", "导入结果") }}</el-divider>
-            <el-alert v-if="!isError" :title="t('import.successTitle', '导入任务已执行完毕')" type="success" show-icon :closable="false" class="result-alert" />
-            <el-alert v-else :title="t('import.errorTitle', '导入任务执行失败')" type="error" show-icon :closable="false" class="result-alert" />
+            <el-divider>{{ t("import.resultTitle") }}</el-divider>
+            <el-alert v-if="!isError" :title="t('import.successTitle')" type="success" show-icon :closable="false" class="result-alert" />
+            <el-alert v-else :title="t('import.errorTitle')" type="error" show-icon :closable="false" class="result-alert" />
             <div class="json-viewer"><pre>{{ JSON.stringify(result, null, 2) }}</pre></div>
           </div>
         </transition>
@@ -124,6 +130,7 @@
         </div>
       </el-tab-pane>
     </el-tabs>
+  </div>
 
     <!-- Create User Dialog -->
     <el-dialog :title="t('profile.addUser', 'Add User')" v-model="addDialogVisible" width="600px">
@@ -190,7 +197,7 @@ import type { UploadFile } from "element-plus";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Upload, UploadFilled, InfoFilled, Search, Plus, Warning, Download } from "@element-plus/icons-vue"; // 引入图标
+import { Upload, UploadFilled, InfoFilled, Search, Plus, Warning, Download, Setting } from "@element-plus/icons-vue"; // 引入图标
 import { useAuthStore } from "@/stores/auth";
 
 const { t } = useI18n();
@@ -359,10 +366,61 @@ onMounted(loadUsers);
 </script>
 
 <style scoped>
+.page-wrapper {
+  padding: 0 0 40px;
+}
+
+/* ── Page Header (Hero Style) ────────────────────────────────── */
+.hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
+}
+
 .page-container {
-  padding: 24px 32px;
-  max-width: 1200px;
+  padding: 0;
+  max-width: 1400px;
   margin: 0 auto;
+}
+
+.page-content {
+  padding: 0 24px 40px;
 }
 .master-tabs {
   border-radius: 8px;
@@ -389,8 +447,9 @@ onMounted(loadUsers);
 .el-upload__tip { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 12px; color: var(--el-text-color-secondary); font-size: 13px; }
 .action-bar { margin-top: 32px; width: 100%; display: flex; justify-content: center; }
 .template-download { margin-bottom: 24px; }
-.type-selector { margin-bottom: 16px; }
-.submit-btn { width: 200px; border-radius: 6px; font-weight: 600; letter-spacing: 1px; }
+.submit-btn { width: 220px; border-radius: 8px; font-weight: 700; letter-spacing: 1px; margin-top: 12px; }
+.type-selector { margin-bottom: 24px; }
+.type-selector :deep(.el-radio-button__inner) { padding: 12px 24px; }
 .result-section { margin-top: 24px; }
 .mode-selector { margin-top: 24px; display: flex; flex-direction: column; align-items: center; border: 1px solid var(--el-border-color-lighter); padding: 16px; border-radius: 8px; background: var(--el-fill-color-blank); }
 .mode-hint { margin-top: 12px; font-size: 13px; color: var(--el-text-color-secondary); display: flex; align-items: center; gap: 6px; text-align: center; max-width: 400px; }

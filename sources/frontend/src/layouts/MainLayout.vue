@@ -25,6 +25,10 @@
           <el-icon><CopyDocument /></el-icon>
           <span>{{ t("nav.templates", "Templates") }}</span>
         </el-menu-item>
+        <el-menu-item v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" index="/template-admin">
+          <el-icon><Grid /></el-icon>
+          <span>{{ t("nav.templateAdmin", "Template Mgmt") }}</span>
+        </el-menu-item>
         <el-menu-item index="/inbox">
           <el-icon><Message /></el-icon>
           <span>{{ t("nav.inbox", "Approval Inbox") }}</span>
@@ -44,7 +48,7 @@
         <el-menu-item index="/ai" class="ai-menu-item">
           <el-icon class="magic-icon"><MagicStick /></el-icon>
           <template #title>
-            <span class="ai-text">智能 AI 助手</span>
+            <span class="ai-text">{{ t("nav.aiAssistant") }}</span>
           </template>
         </el-menu-item>
       </el-menu>
@@ -150,7 +154,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
 import { 
   Reading, DataLine, Bell, Message, Setting, SwitchButton, 
   Monitor, CopyDocument, User, Star, StarFilled, Delete,
-  Expand, Fold, MagicStick
+  Expand, Fold, MagicStick, Grid
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 

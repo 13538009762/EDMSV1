@@ -1,17 +1,22 @@
 <template>
   <div class="page-wrapper" v-loading="loading">
-    <div class="card-header">
-       <div>
-         <h2>{{ t('dashboard.title', 'Data Dashboard') }}</h2>
-         <p class="subtitle">{{ t('dashboard.subtitle', 'Overview of your document management system statistics.') }}</p>
-       </div>
-       <el-input
-          v-model="widgetSearch"
-          :placeholder="t('dashboard.searchCharts')"
-          :prefix-icon="Search"
-          clearable
-          style="width: 250px"
-        />
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><DataLine /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t('dashboard.title', 'Data Dashboard') }}</h1>
+          <p class="page-sub">{{ t('dashboard.subtitle', 'Overview of your document management system statistics.') }}</p>
+        </div>
+      </div>
+      <el-input
+        v-model="widgetSearch"
+        :placeholder="t('dashboard.searchCharts')"
+        :prefix-icon="Search"
+        clearable
+        class="header-search"
+      />
     </div>
  
     <!-- 🔗 区块链核心安全监控 -->
@@ -428,7 +433,7 @@ import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { 
   Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen, Folder,
-  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine
+  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Monitor
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
@@ -899,20 +904,72 @@ onMounted(() => {
   min-height: calc(100vh - 60px);
 }
 
-.header {
-  margin-bottom: 24px;
+.hero-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-end;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
 }
 
-.header h2 {
-  margin: 0;
-  font-family: var(--app-font-title);
-  font-size: 28px;
-  font-weight: 800;
-  color: #1e1b4b;
-  letter-spacing: -0.02em;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
+}
+
+.header-search {
+  width: 260px;
+}
+
+:deep(.header-search .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+:deep(.header-search .el-input__inner) {
+  color: #fff !important;
+}
+
+:deep(.header-search .el-input__inner::placeholder) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+:deep(.header-search .el-input__prefix-icon) {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.page-wrapper {
+  padding: 0 0 40px;
 }
 
 .subtitle {

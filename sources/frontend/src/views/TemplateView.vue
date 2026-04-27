@@ -1,66 +1,140 @@
 <template>
   <div class="page-wrapper" v-loading="loading">
-    <div class="card-header">
-      <div style="text-align: center;">
-        <h2>{{ t("templates.title", "Template Gallery") }}</h2>
-        <p class="subtitle" style="margin: 8px 0 0; font-size: 1rem; color: var(--el-text-color-secondary)">{{ t("templates.subtitle", "Start your documentation from a standard template.") }}</p>
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><CopyDocument /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t("templates.title") }}</h1>
+          <p class="page-sub">{{ t("templates.subtitle") }}</p>
+        </div>
       </div>
     </div>
 
-    <el-empty v-if="items.length === 0 && !loading" :description="t('templates.noTemplates', 'No templates available')" />
+    <!-- Search / Filter Bar -->
+    <div class="toolbar">
+      <el-input
+        v-model="searchQuery"
+        :placeholder="t('templates.searchPlaceholder', 'Search templates...')"
+        clearable
+        class="search-input"
+        id="template-search-input"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
+      <el-tag class="count-tag" type="info" effect="plain">
+        {{ filteredItems.length }} {{ t('templates.count', 'templates') }}
+      </el-tag>
+    </div>
 
-    <el-row :gutter="24" class="template-grid">
-      <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="item in items" :key="item.id">
-        <div class="template-card" @click="useTemplate(item.id)">
-          <div class="card-icon">
-            <el-icon><Document /></el-icon>
+    <!-- Empty state -->
+    <el-empty
+      v-if="filteredItems.length === 0 && !loading"
+      :description="searchQuery ? t('templates.noResults', 'No matching templates') : t('templates.noTemplates', 'No templates available')"
+      class="gallery-empty"
+    />
+
+    <!-- Template Cards Grid -->
+    <div class="template-grid" v-if="filteredItems.length > 0">
+      <div
+        v-for="item in filteredItems"
+        :key="item.id"
+        class="template-card"
+        @click="useTemplate(item)"
+        :id="`template-card-${item.id}`"
+      >
+        <!-- Card accent ribbon -->
+        <div class="card-ribbon" />
+
+        <div class="card-body">
+          <!-- Icon -->
+          <div class="card-icon-wrap">
+            <el-icon class="card-icon-el"><component :is="getTemplateIcon(item.title)" /></el-icon>
           </div>
-          <div class="card-content">
-            <h3 class="template-title">{{ t(`templates.templateNames.${item.title}`, item.title) }}</h3>
-            <p class="template-desc">{{ item.description }}</p>
-            <div class="template-meta">
-              <span>{{ item.owner_name }}</span>
-            </div>
+
+          <!-- Text -->
+          <h3 class="card-title">{{ t(`templates.templateNames.${item.title}`, item.title) }}</h3>
+          <p class="card-desc">{{ item.description || t('templates.noDescription', 'Standard document template') }}</p>
+
+          <!-- Meta -->
+          <div class="card-meta">
+            <el-tag size="small" effect="plain" class="meta-tag">
+              <el-icon style="margin-right:3px"><User /></el-icon>{{ item.owner_name }}
+            </el-tag>
           </div>
         </div>
-      </el-col>
-    </el-row>
+
+        <!-- Use CTA -->
+        <div class="card-footer">
+          <span class="use-btn">
+            <el-icon><DocumentAdd /></el-icon>
+            {{ t('templates.useTemplate', 'Use Template') }}
+          </span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import api from '@/api/client';
-import { Document } from '@element-plus/icons-vue';
+import {
+  CopyDocument, Search, User, DocumentAdd,
+  Document, Tickets, DataAnalysis, Calendar, Money, EditPen
+} from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const { t } = useI18n();
 const router = useRouter();
 const loading = ref(false);
 const items = ref<any[]>([]);
+const searchQuery = ref('');
+
+const ICON_MAP: Record<string, any> = {
+  'Employment Contract': Tickets,
+  'Meeting Minutes': Calendar,
+  'Technical Specification': DataAnalysis,
+  'Weekly Report': EditPen,
+  'Expense Report': Money,
+};
+
+function getTemplateIcon(title: string) {
+  return ICON_MAP[title] || Document;
+}
+
+const filteredItems = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return items.value;
+  return items.value.filter(i =>
+    i.title.toLowerCase().includes(q) ||
+    (i.description || '').toLowerCase().includes(q)
+  );
+});
 
 async function loadData() {
   loading.value = true;
   try {
-    const { data } = await api.get('/spaces/templates');
+    const { data } = await api.get('/templates');
     items.value = data.items;
   } catch (err) {
-    ElMessage.error(t("common.failed", "Failed to load templates"));
+    ElMessage.error(t('common.failed', 'Failed to load templates'));
   } finally {
     loading.value = false;
   }
 }
 
-async function useTemplate(id: number) {
+async function useTemplate(item: any) {
   loading.value = true;
   try {
-    const { data } = await api.post(`/spaces/templates/${id}/create-from`);
-    ElMessage.success(t("templates.createdSuccessfully", "Document created from template"));
+    const { data } = await api.post(`/templates/${item.id}/create-from`);
+    ElMessage.success(t('templates.createdSuccessfully', 'Document created from template'));
     router.push(`/doc/${data.id}`);
   } catch (err) {
-    ElMessage.error(t("common.failed", "Failed to create document"));
+    ElMessage.error(t('common.failed', 'Failed to create document'));
   } finally {
     loading.value = false;
   }
@@ -72,77 +146,191 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.template-grid {
-  margin-top: 24px;
+/* ── Page wrapper ────────────────────────────────────────────── */
+.page-wrapper {
+  padding: 0 0 40px;
 }
 
+/* ── Hero Header ─────────────────────────────────────────────── */
+.hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.search-input {
+  max-width: 320px;
+}
+
+.count-tag {
+  font-size: 13px;
+  border-radius: 20px;
+}
+
+/* ── Template Grid ───────────────────────────────────────────── */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+/* ── Single Card ─────────────────────────────────────────────── */
 .template-card {
   cursor: pointer;
-  background-color: var(--edms-card-bg);
-  border: 1px solid rgba(156, 163, 175, 0.15);
-  border-radius: 12px;
+  background: var(--edms-card-bg);
+  border: 1px solid rgba(156, 163, 175, 0.12);
+  border-radius: 16px;
   box-shadow: var(--edms-shadow);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1),
+              box-shadow 0.28s cubic-bezier(0.4,0,0.2,1),
+              border-color 0.28s ease;
+  position: relative;
+}
+
+.template-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 36px -8px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
+  border-color: var(--el-color-primary);
+}
+
+.card-ribbon {
+  height: 4px;
+  background: linear-gradient(90deg, var(--el-color-primary), color-mix(in srgb, var(--el-color-primary) 60%, #7367f0 40%));
+}
+
+.card-body {
+  padding: 20px 20px 12px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  height: 100%;
-  box-sizing: border-box;
 }
 
-.template-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.12);
-  border-color: var(--el-color-primary); 
-}
-
-.card-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background-color: var(--el-color-primary-light-9);
+.card-icon-wrap {
+  width: 60px; height: 60px;
+  border-radius: 14px;
+  background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  margin-bottom: 16px;
-  transition: all 0.3s ease;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  margin-bottom: 14px;
+  transition: background 0.3s, color 0.3s, transform 0.3s;
 }
 
-.template-card:hover .card-icon {
-  transform: scale(1.1);
-  background-color: var(--el-color-primary);
+.template-card:hover .card-icon-wrap {
+  background: var(--el-color-primary);
   color: #fff;
+  transform: scale(1.1) rotate(-3deg);
 }
 
-.template-title {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 600;
+.card-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--el-text-color-primary);
+  line-height: 1.3;
 }
 
-.template-desc {
-  margin: 0 0 16px 0;
-  font-size: 13px;
+.card-desc {
+  margin: 0 0 14px;
+  font-size: 12.5px;
   color: var(--el-text-color-secondary);
-  line-height: 1.5;
+  line-height: 1.55;
   flex: 1;
 }
 
-.template-meta {
-  font-size: 12px;
-  color: var(--el-text-color-placeholder);
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
 }
 
-/* 适配不同角色的图标背景 */
-html[data-theme='manager'] .card-icon {
-  background-color: rgba(217, 119, 6, 0.1);
+.meta-tag {
+  border-radius: 20px;
+  font-size: 11px;
 }
-html[data-theme='admin'] .card-icon {
-  background-color: rgba(79, 70, 229, 0.1);
+
+/* ── Card Footer CTA ─────────────────────────────────────────── */
+.card-footer {
+  padding: 12px 20px;
+  border-top: 1px solid rgba(156,163,175,0.1);
+  display: flex;
+  justify-content: center;
+}
+
+.use-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  transition: gap 0.2s ease;
+}
+
+.template-card:hover .use-btn {
+  gap: 10px;
+}
+
+/* ── Empty State ─────────────────────────────────────────────── */
+.gallery-empty {
+  margin-top: 48px;
+}
+
+/* ── Admin theme tints ───────────────────────────────────────── */
+html[data-theme='admin'] .card-ribbon {
+  background: linear-gradient(90deg, #4f46e5, #818cf8);
+}
+html[data-theme='manager'] .card-ribbon {
+  background: linear-gradient(90deg, #d97706, #f59e0b);
 }
 </style>

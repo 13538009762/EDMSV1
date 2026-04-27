@@ -1,7 +1,15 @@
 <template>
   <div class="user-mgmt-page">
-    <div class="card-header">
-      <h2>{{ t('nav.users', 'Member Management') }}</h2>
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><User /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t('nav.users', 'Member Management') }}</h1>
+          <p class="page-sub">{{ t("dashboard.subtitle", "Organize departments and manage employee access.") }}</p>
+        </div>
+      </div>
     </div>
 
     <el-card shadow="hover" class="mgmt-card">
@@ -139,7 +147,7 @@
 import { ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { Plus, Delete } from "@element-plus/icons-vue";
+import { Plus, Delete, User } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAuthStore } from "@/stores/auth";
 
@@ -335,14 +343,50 @@ onMounted(() => {
 
 <style scoped>
 .user-mgmt-page {
-  padding: 24px;
+  padding: 0 0 40px;
 }
-.card-header {
-  margin-bottom: 32px;
+
+/* ── Page Header (Hero Style) ────────────────────────────────── */
+.hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
 }
-.card-header h2 {
-  text-align: center;
-  margin: 0;
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
 }
 /* 🚀 白色区域（卡片）样式优化 */
 .mgmt-card {

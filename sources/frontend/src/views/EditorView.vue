@@ -1220,8 +1220,8 @@ async function loadDoc(silent = false) {
             console.error("解析页面设置失败:", e);
         }
     }
-    // 防呆设计：仅在草稿状态下允许 Tiptap 编辑
-    const isEditable = data.can_edit && data.status === 'draft';
+    // 防呆设计：允许编辑草稿，或者管理员编辑模板
+    const isEditable = data.can_edit && (data.status === 'draft' || data.is_template);
     editor.value?.setEditable(isEditable);
     if (data.yjs_state_b64) {
       Y.applyUpdate(ydoc, Uint8Array.from(atob(data.yjs_state_b64), (c) => c.charCodeAt(0)));

@@ -1,7 +1,15 @@
 <template>
   <div class="page-wrapper">
-    <div class="card-header">
-      <h2>{{ t("inbox.title") }}</h2>
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><Message /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t("inbox.title") }}</h1>
+          <p class="page-sub">{{ t("dashboard.subtitle", "Track and manage your document approval tasks.") }}</p>
+        </div>
+      </div>
     </div>
     
     <div class="edms-content-card">
@@ -222,7 +230,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Refresh, Search } from "@element-plus/icons-vue"; // 引入图标
+import { Refresh, Search, Message } from "@element-plus/icons-vue"; // 引入图标
 import { formatLocalDate } from "@/utils/date";
 
 const { t } = useI18n();
@@ -382,23 +390,51 @@ onMounted(load);
 </script>
 
 <style scoped>
-.page-container {
-  padding: 24px 32px;
-  max-width: 1600px;
-  margin: 0 auto;
+.page-wrapper {
+  padding: 0 0 40px;
 }
 
-.page-header {
-  margin-bottom: 32px;
-  text-align: center;
+/* ── Page Header (Hero Style) ────────────────────────────────── */
+.hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
 }
 
-.page-header h2 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-  letter-spacing: -0.5px;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
 }
 
 .table-card {

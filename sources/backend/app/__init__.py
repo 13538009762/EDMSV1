@@ -51,6 +51,7 @@ def create_app(config_class=Config):
     from app.api.ai import bp as ai_bp
     from app.api.spaces import bp as spaces_bp
     from app.api.notifications import bp as notifications_bp
+    from app.api.templates import bp as templates_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
@@ -63,6 +64,7 @@ def create_app(config_class=Config):
     app.register_blueprint(ai_bp, url_prefix="/api/ai")
     app.register_blueprint(spaces_bp, url_prefix="/api/spaces")
     app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+    app.register_blueprint(templates_bp, url_prefix="/api/templates")
 
 
     # 💡 增加：支持从持久化存储路径读取图片

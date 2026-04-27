@@ -1,9 +1,16 @@
 <template>
   <div class="personal">
-    <el-card class="card">
-      <template #header>
-        <span>{{ t("personal.title") }}</span>
-      </template>
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><User /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t("personal.title") }}</h1>
+          <p class="page-sub">{{ t("dashboard.subtitle", "View and update your personal information and statistics.") }}</p>
+        </div>
+      </div>
+    </div>
       <div class="profile">
         <div class="avatar">
           <el-avatar :size="100" :src="avatarUrl">{{ userInitials }}</el-avatar>
@@ -93,7 +100,6 @@
           </el-card>
         </div>
       </div>
-    </el-card>
   </div>
 </template>
 
@@ -101,7 +107,7 @@
 import { onMounted, computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { Edit, Lock } from "@element-plus/icons-vue";
+import { Edit, Lock, User } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 
 interface UserInfo {
@@ -214,20 +220,60 @@ onMounted(async () => {
 <style scoped>
 .personal {
   min-height: 100%;
-  padding: 24px;
-  background: var(--el-fill-color-light);
+  padding: 0 0 40px;
+  background: transparent;
   box-sizing: border-box;
 }
 
-.top {
+/* ── Page Header (Hero Style) ────────────────────────────────── */
+.hero-header {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
 }
 
 .card {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
+  border-radius: 16px;
+  border: 1px solid rgba(156,163,175,0.12);
+  box-shadow: var(--edms-shadow);
 }
 
 .profile {

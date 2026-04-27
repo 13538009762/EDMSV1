@@ -17,6 +17,7 @@ const router = createRouter({
         { path: "inbox", name: "inbox", component: () => import("@/views/InboxView.vue") },
         { path: "dashboard", name: "dashboard", component: () => import("@/views/DashboardView.vue") },
         { path: "templates", name: "templates", component: () => import("@/views/TemplateView.vue") },
+        { path: "template-admin", name: "template-admin", component: () => import("@/views/TemplateAdminView.vue"), meta: { requiresManager: true } },
         {
           path: "doc/:id",
           name: "editor",
@@ -48,7 +49,7 @@ router.beforeEach((to, _from, next) => {
     return;
   }
   // 检查是否需要 manager 权限
-  if (to.meta.requiresManager && !auth.user?.is_manager) {
+  if (to.meta.requiresManager && !auth.user?.is_manager && auth.user?.login_name !== 'admin') {
     next({ name: "library" });
     return;
   }

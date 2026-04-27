@@ -1,7 +1,15 @@
 <template>
   <div class="audit-page">
-    <div class="header">
-      <h2>{{ t("auditLog.title", "Operation Trail") }}</h2>
+    <div class="hero-header">
+      <div class="header-left">
+        <div class="header-icon-ring">
+          <el-icon><Monitor /></el-icon>
+        </div>
+        <div>
+          <h1 class="page-title">{{ t("auditLog.title", "Operation Trail") }}</h1>
+          <p class="page-sub">{{ t("dashboard.subtitle", "Review system events and security logs.") }}</p>
+        </div>
+      </div>
     </div>
 
     <div class="filters">
@@ -73,6 +81,7 @@ import { useI18n } from 'vue-i18n';
 import api from '@/api/client';
 import { formatLocalDate } from '@/utils/date';
 import { ElMessage } from 'element-plus';
+import { Monitor } from "@element-plus/icons-vue";
 
 const { t } = useI18n();
 
@@ -128,7 +137,7 @@ onMounted(() => {
 
 <style scoped>
 .audit-page {
-  padding: 24px;
+  padding: 0 0 40px;
   background-color: transparent;
   height: calc(100vh - 80px);
   display: flex;
@@ -136,15 +145,47 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-.header {
+/* ── Page Header (Hero Style) ────────────────────────────────── */
+.hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
+  border-radius: 16px;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
 }
 
-.header h2 {
-  margin: 0;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-  text-shadow: 0 2px 4px rgba(0,0,0,0.05);
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0 0 4px !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #fff !important;
+}
+
+.page-sub {
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255,255,255,0.8) !important;
 }
 
 /* 1. 给顶部搜索栏套上高透亚克力材质 */

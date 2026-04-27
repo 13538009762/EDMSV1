@@ -1,11 +1,11 @@
 <template>
   <div class="ai-page-container">
     <!-- Empty state with suggestions -->
-    <div v-if="aiStore.globalMessages.length <= 1 && !isTyping" class="empty-state">
+    <div v-if="aiStore.globalMessages.length === 0 && !isTyping" class="empty-state">
       <div class="welcome-section">
         <el-icon class="huge-icon"><MagicStick /></el-icon>
-        <h1>您好，我是 EDMS 智能助理</h1>
-        <p class="subtitle">我可以帮您写文档、分析报告、或者执行系统管理任务</p>
+        <h1>{{ t('aiView.welcome') }}</h1>
+        <p class="subtitle">{{ t('aiView.subtitle') }}</p>
       </div>
       
       <div class="suggestions-grid">
@@ -26,21 +26,21 @@
             <el-icon v-else><MagicStick /></el-icon>
           </div>
           <div class="content-box">
-            <div class="role-label">{{ msg.role === 'user' ? '您' : 'EDMS AI' }}</div>
+            <div class="role-label">{{ msg.role === 'user' ? t('aiView.userRole') : t('aiView.aiRole') }}</div>
             <div class="text-content" v-html="renderMarkdown(msg.content)"></div>
             
             <!-- Action Card inside message -->
             <div v-if="msg.action" class="inline-action-card">
               <div class="card-header">
                 <el-icon><InfoFilled /></el-icon>
-                <span>建议执行以下操作</span>
+                <span>{{ t('aiView.suggestedAction') }}</span>
               </div>
               <div class="card-body">
                 <p>{{ getActionDesc(msg.action) }}</p>
               </div>
               <div class="card-footer">
-                <el-button type="primary" size="small" @click="executeAction(msg.action, i)">立即执行</el-button>
-                <el-button size="small" link @click="msg.action = null">忽略</el-button>
+                <el-button type="primary" size="small" @click="executeAction(msg.action, i)">{{ t('aiView.executeNow') }}</el-button>
+                <el-button size="small" link @click="msg.action = null">{{ t('aiView.ignore') }}</el-button>
               </div>
             </div>
           </div>
@@ -50,7 +50,7 @@
       <div v-if="isTyping" class="message-item assistant typing">
         <div class="avatar"><el-icon><MagicStick /></el-icon></div>
         <div class="content-box">
-          <div class="role-label">EDMS AI</div>
+          <div class="role-label">{{ t('aiView.aiRole') }}</div>
           <div class="typing-indicator">
             <span></span><span></span><span></span>
           </div>
@@ -65,12 +65,12 @@
           v-model="input"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 8 }"
-          placeholder="给 EDMS 助手发送消息..."
+          :placeholder="t('aiView.inputPlaceholder')"
           @keydown.enter.prevent="handleEnter"
           class="chat-textarea"
         />
         <div class="input-footer">
-          <span class="hint">按 Enter 发送，Shift + Enter 换行</span>
+          <span class="hint">{{ t('aiView.inputHint') }}</span>
           <el-button 
             type="primary" 
             :disabled="!input.trim() || isTyping" 
@@ -81,13 +81,14 @@
           </el-button>
         </div>
       </div>
-      <div class="disclaimer">AI 生成内容仅供参考，请核对关键信息。</div>
+      <div class="disclaimer">{{ t('aiView.disclaimer') }}</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAiStore } from '@/stores/ai';
 import { useAuthStore } from '@/stores/auth';
 import { 
@@ -100,6 +101,7 @@ import api from '@/api/client';
 
 import { useRouter } from 'vue-router';
 
+const { t } = useI18n();
 const aiStore = useAiStore();
 const auth = useAuthStore();
 const router = useRouter();
@@ -107,11 +109,26 @@ const input = ref('');
 const isTyping = ref(false);
 const chatScroll = ref<HTMLElement | null>(null);
 
-const suggestions = [
-  { title: '总结文档', desc: '帮我概括一下最近更新的财务制度', prompt: '帮我总结一下最近一周的文档', icon: FolderOpened },
-  { title: '发起审批', desc: '我要把这篇报告发给经理审核', prompt: '我想发起一个审批流程', icon: DocumentChecked },
-  { title: '系统查询', desc: '目前有多少待处理的审批件？', prompt: '查询我的待办审批状态', icon: Management }
-];
+const suggestions = computed(() => [
+  { 
+    title: t('aiView.suggestions.summarize.title'), 
+    desc: t('aiView.suggestions.summarize.desc'), 
+    prompt: t('aiView.suggestions.summarize.prompt'), 
+    icon: FolderOpened 
+  },
+  { 
+    title: t('aiView.suggestions.approval.title'), 
+    desc: t('aiView.suggestions.approval.desc'), 
+    prompt: t('aiView.suggestions.approval.prompt'), 
+    icon: DocumentChecked 
+  },
+  { 
+    title: t('aiView.suggestions.query.title'), 
+    desc: t('aiView.suggestions.query.desc'), 
+    prompt: t('aiView.suggestions.query.prompt'), 
+    icon: Management 
+  }
+]);
 
 const renderMarkdown = (text: string) => marked.parse(text);
 
@@ -194,7 +211,7 @@ const sendMessage = async () => {
               const openMatch = assistantMessage.content.match(openDocRegex);
               if (openMatch && openMatch[1]) {
                 const docId = openMatch[1];
-                ElMessage.success(`正在为您跳转至文档 ${docId}...`);
+                ElMessage.success(t('aiView.messages.redirecting', { id: docId }));
                 router.push(`/document/${docId}`);
                 assistantMessage.content = assistantMessage.content.replace(openDocRegex, '').trim();
               }
@@ -208,19 +225,22 @@ const sendMessage = async () => {
                 
                 // Show a fake processing step then replace content
                 const tempMsg = assistantMessage.content;
-                assistantMessage.content = tempMsg + "\n\n⌛ *正在接入底层数据库核实中...*";
+                assistantMessage.content = tempMsg + "\n\n⌛ *...*"; 
                 
                 try {
                   // Actually fetch real data
                   const res = await api.get('/documents/stats'); 
                   const stats = res.data;
                   let resultText = "";
-                  if (statType === 'document_count') resultText = `✅ 查询完毕。系统目前共有 **${stats.total_count}** 份文档。`;
-                  else resultText = `✅ 查询完毕。系统当前运行状态良好。`;
+                  if (statType === 'document_count') {
+                    resultText = t('aiView.messages.queryDoneDocs', { count: stats.total_count });
+                  } else {
+                    resultText = t('aiView.messages.queryDoneStatus');
+                  }
                   
                   assistantMessage.content = tempMsg + "\n\n" + resultText;
                 } catch (e) {
-                  assistantMessage.content = tempMsg + "\n\n❌ 数据库连接超时，请稍后再试。";
+                  assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
                 }
               }
             }
@@ -230,8 +250,8 @@ const sendMessage = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('服务连接异常');
-    aiStore.addMessage('assistant', '抱歉，我现在连接不稳定。');
+    ElMessage.error(t('aiView.messages.serviceError'));
+    aiStore.addMessage('assistant', t('aiView.messages.unstable'));
   } finally {
     isTyping.value = false;
     scrollToBottom();
@@ -239,12 +259,12 @@ const sendMessage = async () => {
 };
 
 const getActionDesc = (action: any) => {
-  if (action.action === 'start_approval') return '发起并行审批流程';
-  return '系统操作建议';
+  if (action.action === 'start_approval') return t('editor.ai.actionStartApproval', { names: '' }).replace(': ', '');
+  return t('aiView.suggestedAction');
 };
 
 const executeAction = async (action: any, idx: number) => {
-  ElMessage.success('操作已执行');
+  ElMessage.success(t('aiView.messages.actionExecuted'));
   aiStore.globalMessages[idx].action = null;
 };
 </script>
