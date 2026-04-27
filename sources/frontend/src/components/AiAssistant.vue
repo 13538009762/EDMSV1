@@ -12,8 +12,9 @@
 
     <transition name="expand">
       <div v-if="isExpanded && !isSidebarCollapsed" class="ai-body">
-        <div class="chat-messages" ref="scrollContainer">
+        <transition-group name="msg" tag="div" class="chat-messages" ref="scrollContainer">
           <div v-for="(msg, i) in aiStore.globalMessages" :key="i" :class="['message', msg.role]">
+            <div v-if="msg.role === 'assistant'" class="avatar-mini"><el-icon><MagicStick /></el-icon></div>
             <div class="bubble">
               <div class="content" v-html="renderMarkdown(msg.content)"></div>
               
@@ -25,12 +26,24 @@
                   <el-button size="small" link @click="msg.action = null">忽略</el-button>
                 </div>
               </div>
+
+              <!-- Quick Insert Button -->
+              <div v-if="msg.role === 'assistant' && isEditorPage" class="bubble-footer">
+                <el-button size="small" link type="primary" @click="insertToDoc(msg.content)">
+                  <el-icon><MagicStick /></el-icon> 插入到文档
+                </el-button>
+              </div>
             </div>
           </div>
-          <div v-if="isTyping" class="message assistant">
-            <div class="bubble"><div class="typing-dot"></div></div>
+          <div v-if="isTyping" key="typing" class="message assistant typing">
+            <div class="avatar-mini"><el-icon><MagicStick /></el-icon></div>
+            <div class="bubble">
+              <div class="typing-indicator">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
           </div>
-        </div>
+        </transition-group>
 
         <div class="chat-input-area">
           <el-input
@@ -58,6 +71,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useAiStore, type AiMessage } from '@/stores/ai';
 import { marked } from 'marked';
 import { ElMessage } from 'element-plus';
+import { computed } from 'vue';
 import api from '@/api/client';
 import { useRouter } from 'vue-router';
 
@@ -73,6 +87,18 @@ const input = ref('');
 const isTyping = ref(false);
 const isExpanded = ref(true);
 const scrollContainer = ref<HTMLElement | null>(null);
+
+const isEditorPage = computed(() => route.path.startsWith('/doc/'));
+
+function insertToDoc(content: string) {
+  // Clean up content: remove [ACTION:...] tags
+  const cleanContent = content.replace(/\[ACTION:[\s\S]*?\]/g, '').trim();
+  if (!cleanContent) return;
+  
+  // Dispatch a custom event that EditorView.vue listens to
+  window.dispatchEvent(new CustomEvent('edms:insert_content', { detail: { content: cleanContent } }));
+  ElMessage.success("内容已发送至编辑器");
+}
 
 const getActionDesc = (action: any) => {
   if (action.confirm_prompt) return action.confirm_prompt;
@@ -331,6 +357,7 @@ const sendMessage = async () => {
   flex-direction: column;
   gap: 12px;
   background: rgba(0, 0, 0, 0.02);
+  scroll-behavior: smooth;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -349,6 +376,22 @@ const sendMessage = async () => {
 
 .message.assistant {
   align-self: flex-start;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.avatar-mini {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1px solid var(--el-color-primary-light-7);
 }
 
 .message.user {
@@ -422,17 +465,27 @@ const sendMessage = async () => {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important; 
 }
 
-.typing-dot {
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typing-indicator span {
   width: 6px;
   height: 6px;
   background: var(--el-color-primary);
   border-radius: 50%;
-  animation: typing 1s infinite alternate;
+  animation: bounce 1.4s infinite ease-in-out both;
+  opacity: 0.6;
 }
 
-@keyframes typing {
-  from { opacity: 0.3; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1.2); }
+.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); opacity: 1; }
 }
 
 .expand-enter-active, .expand-leave-active {
@@ -440,8 +493,17 @@ const sendMessage = async () => {
   max-height: 500px;
 }
 .expand-enter-from, .expand-leave-to {
-  max-height: 0;
+  height: 0;
   opacity: 0;
+}
+
+/* Message Animations */
+.msg-enter-active {
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.msg-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.95);
 }
 
 :deep(.content p) { margin: 0 0 8px 0; }
@@ -452,5 +514,12 @@ const sendMessage = async () => {
   border-radius: 8px; 
   overflow-x: auto;
   font-size: 12px;
+}
+.bubble-footer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

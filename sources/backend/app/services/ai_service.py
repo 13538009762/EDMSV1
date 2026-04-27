@@ -54,12 +54,13 @@ class AIService:
 当前操作员：{user_name} ({role_desc})
 
 【核心规则】
-1. ⚠️ 严禁猜测或捏造任何数字、统计数据或人员信息。
-2. 你不仅可以读取文件，还可以通过执行特定 [ACTION] 或输出 JSON 代码块来“操作”系统（如发起审批、跳转页面等）。严禁回复“我只能读取文件”或“我无法操作”。
-3. 如果用户请求查询（如：有多少人、查询文档、搜索用户），你**必须且仅**输出对应的 [ACTION: ...] 标签。
-4. 查询用户总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: user_count]
-5. 查询文档总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: document_count]
-6. 搜索特定数据（文档、用户、审批件）时，必须输出标签：[ACTION: QUERY_DATA, ENTITY: documents|users|approvals, QUERY: 关键词]
+1. **优先创作**：如果用户请求你创作、撰写、翻译或润色内容（如：写个请假条、写个模板、写段代码、润色文字等），你**必须直接生成内容**。严禁在此类请求中使用 [ACTION: QUERY_DATA] 标签。
+2. ⚠️ 严禁猜测或捏造任何数字、统计数据或人员信息。
+3. 你不仅可以读取文件，还可以通过执行特定 [ACTION] 或输出 JSON 代码块来“操作”系统（如发起审批、跳转页面等）。
+4. 如果用户明确请求查询或搜索系统内已有的特定“实体数据”（如：有多少人、查询文档、搜索用户甲），你才输出对应的 [ACTION: ...] 标签。
+5. 查询用户总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: user_count]
+6. 查询文档总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: document_count]
+7. 搜索特定数据（文档、用户、审批件）时，必须输出标签：[ACTION: QUERY_DATA, ENTITY: documents|users|approvals, QUERY: 关键词]
 7. 如果用户询问宏观统计、仪表盘数据、活跃度、存储占比、部门分布等，你**必须且仅**输出对应的仪表盘查询标签：
    - 存储空间/规格占比：[ACTION: QUERY_DASHBOARD, TYPE: storage]
    - 用户活跃度/趋势/热力图：[ACTION: QUERY_DASHBOARD, TYPE: activity]
@@ -123,6 +124,48 @@ class AIService:
                 print(f"[AI Service] Stream Error: {e}")
                 error_msg = f"AI 服务异常: {str(e)}"
                 yield f"data: {json.dumps({'content': error_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return generate()
+
+    @staticmethod
+    def stream_generate(prompt, action, lang="zh"):
+        """Task-specific generation for editor (summarize, polish, etc.)."""
+        client = AIService.get_client()
+        
+        prompts = {
+            "summarize": "请帮我总结以下文字的核心要点，使用简洁的列表形式：",
+            "expand": "请帮我扩写以下内容，使其更加详细丰富，逻辑严密：",
+            "polish": "请帮我润色以下文字，使其表达更加专业、流畅、正式：",
+            "fix_punctuation": "请帮我纠正以下文字中的错别字和标点符号错误，保持原意：",
+            "translate_en": "请将以下文字翻译成英文：",
+            "translate_zh": "请将以下文字翻译成中文：",
+            "translate_ru": "请将以下文字翻译成俄文：",
+        }
+        
+        system_msg = prompts.get(action, "你是一个专业的文档编辑助手。请协助处理以下文字：")
+        
+        def generate():
+            try:
+                response = client.chat.completions.create(
+                    model="generalv3.5",
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": prompt}
+                    ],
+                    stream=True
+                )
+                
+                for chunk in response:
+                    if not chunk.choices: continue
+                    content = getattr(chunk.choices[0].delta, 'content', None)
+                    if content:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
+                
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'chunk', 'content': f'AI Error: {str(e)}'})}\n\n"
                 yield "data: [DONE]\n\n"
 
         return generate()

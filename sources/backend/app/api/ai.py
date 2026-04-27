@@ -20,6 +20,21 @@ def ai_chat():
         stream_with_context(AIService.stream_chat(messages, context_url, current_user=current_user())),
         mimetype="text/event-stream"
     )
+@bp.route("/generate", methods=["POST"])
+@jwt_required()
+def ai_generate():
+    data = request.get_json() or {}
+    prompt = data.get("prompt", "")
+    action = data.get("action", "")
+    lang = data.get("lang", "zh")
+    
+    if not prompt:
+        return jsonify({"error": "No prompt provided"}), 400
+        
+    return Response(
+        stream_with_context(AIService.stream_generate(prompt, action, lang)),
+        mimetype="text/event-stream"
+    )
 
 @bp.post("/import-image")
 @jwt_required()

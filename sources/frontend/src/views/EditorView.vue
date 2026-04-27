@@ -261,7 +261,7 @@
 
               <!-- AI Chat Section -->
               <div class="ai-chat-container">
-                <div class="chat-messages" ref="chatScroll">
+                <transition-group name="msg" tag="div" class="chat-messages" ref="chatScroll">
                   <div v-for="(msg, idx) in aiStore.globalMessages" :key="idx" :class="['chat-msg', msg.role]">
                     <div class="msg-content">{{ msg.content }}</div>
                     
@@ -301,10 +301,15 @@
                       </div>
                     </div>
                   </div>
+                  <div v-if="asking" key="typing" class="chat-msg ai typing">
+                    <div class="typing-indicator">
+                      <span></span><span></span><span></span>
+                    </div>
+                  </div>
+                </transition-group>
                   <div v-if="aiStore.globalMessages.length === 0" class="chat-placeholder">
                     <el-empty :description="t('editor.ai.aiChatEmpty')" :image-size="40" />
                   </div>
-                </div>
                 
                 <div class="chat-input-area">
                   <el-input
@@ -316,7 +321,7 @@
                     resize="none"
                   />
                   <div class="chat-actions">
-                    <el-button type="primary" size="small" :loading="asking" @click="askAi">
+                    <el-button type="primary" size="small" @click="askAi">
                       {{ t("common.send") }}
                     </el-button>
                   </div>
@@ -1480,7 +1485,10 @@ async function handleAiAction(action: string) {
   try {
     // Move cursor to the end of selection to avoid replacing original text
     editor.value.chain().focus().setTextSelection(selection.to).insertContent("\n\n").run();
-    const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
+    const startPos = editor.value.state.selection.to;
+    const baseUrl = api.defaults.baseURL || "/api";
+    const genUrl = baseUrl.endsWith("/") ? `${baseUrl}ai/generate` : `${baseUrl}/ai/generate`;
+    const response = await fetch(genUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
       body: JSON.stringify({ prompt: text, action, lang: locale.value })
@@ -1489,6 +1497,8 @@ async function handleAiAction(action: string) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let done = false;
+    let fullResponse = "";
+
     while (!done) {
       const { value, done: readerDone } = await reader.read();
       done = readerDone;
@@ -1501,8 +1511,21 @@ async function handleAiAction(action: string) {
             try {
               const data = JSON.parse(raw);
               if (data.type === "chunk" && data.content) {
+                fullResponse += data.content;
+                // During streaming, insert as plain text
                 editor.value.chain().focus().insertContent(data.content).run();
               } else if (data.type === "done") {
+                // Generation complete. Replace the raw text with correctly parsed HTML.
+                const currentPos = editor.value.state.selection.to;
+                const html = marked.parse(fullResponse);
+                
+                // Delete the raw text chunks we just inserted and replace with HTML
+                editor.value.chain()
+                  .focus()
+                  .deleteRange({ from: startPos, to: currentPos })
+                  .insertContent(html)
+                  .run();
+                  
                 done = true;
                 break;
               }
@@ -1542,12 +1565,22 @@ const onStatusChanged = (e: any) => {
   }
 };
 
+const onInsertContent = (e: any) => {
+  if (!isMounted.value || !editor.value) return;
+  const { content } = e.detail;
+  if (content) {
+    const html = marked.parse(content);
+    editor.value.chain().focus().insertContent(html).run();
+  }
+};
+
 onMounted(() => {
   isMounted.value = true;
   loadDoc();
   updateWatermark();
   setInterval(updateWatermark, 60000);
   window.addEventListener("edms:status_changed", onStatusChanged);
+  window.addEventListener("edms:insert_content", onInsertContent);
 });
 onBeforeUnmount(() => { 
   isMounted.value = false;
@@ -1555,6 +1588,7 @@ onBeforeUnmount(() => {
   awareness.off("update", refreshCollabList); 
   editor.value?.destroy(); 
   window.removeEventListener("edms:status_changed", onStatusChanged);
+  window.removeEventListener("edms:insert_content", onInsertContent);
 });
 watch(() => route.params.id, () => loadDoc());
 </script>
@@ -2044,5 +2078,35 @@ watch(() => route.params.id, () => loadDoc());
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+.msg-enter-active {
+  transition: all 0.3s ease;
+}
+.msg-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  background: var(--el-color-primary);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+  opacity: 0.6;
+}
+
+.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); opacity: 1; }
 }
 </style>

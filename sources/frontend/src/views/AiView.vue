@@ -18,7 +18,7 @@
     </div>
 
     <!-- Message List -->
-    <div class="chat-main" ref="chatScroll">
+    <transition-group name="msg" tag="div" class="chat-main" ref="chatScroll">
       <div class="message-wrapper" v-for="(msg, i) in aiStore.globalMessages" :key="i">
         <div :class="['message-item', msg.role]">
           <div class="avatar">
@@ -47,7 +47,7 @@
         </div>
       </div>
       
-      <div v-if="isTyping" class="message-item assistant typing">
+      <div v-if="isTyping" key="typing" class="message-item assistant typing">
         <div class="avatar"><el-icon><MagicStick /></el-icon></div>
         <div class="content-box">
           <div class="role-label">{{ t('aiView.aiRole') }}</div>
@@ -56,7 +56,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </transition-group>
 
     <!-- Fixed Input Area -->
     <div class="input-container">
@@ -631,10 +631,18 @@ const executeAction = async (action: any, idx: number) => {
 
 .disclaimer {
   text-align: center;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-top: 16px;
-  opacity: 0.7;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  margin-top: 8px;
+}
+
+/* Message Animations */
+.msg-enter-active {
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.msg-enter-from {
+  opacity: 0;
+  transform: translateY(15px);
 }
 
 .typing-indicator {
