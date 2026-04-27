@@ -17,7 +17,7 @@ def ai_chat():
         return jsonify({"error": "No messages provided"}), 400
         
     return Response(
-        stream_with_context(AIService.stream_chat(messages, context_url)),
+        stream_with_context(AIService.stream_chat(messages, context_url, current_user=current_user())),
         mimetype="text/event-stream"
     )
 

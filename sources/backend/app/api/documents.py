@@ -210,9 +210,20 @@ def get_stats():
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
+    # 💡 Filter count based on user role
+    q = Document.query.filter(Document.deleted_at == None, Document.is_template == False)
     
-    # 💡 Currently returns simple count, can be extended later
-    total_count = Document.query.filter(Document.deleted_at == None, Document.is_template == False).count()
+    if user.login_name != 'admin':
+        if user.is_manager and user.department_id:
+            # Manager sees all docs in their department
+            from sqlalchemy import select
+            dept_users = select(User.id).where(User.department_id == user.department_id)
+            q = q.filter(Document.owner_id.in_(dept_users))
+        else:
+            # Normal user sees their own docs
+            q = q.filter(Document.owner_id == user.id)
+
+    total_count = q.count()
     return jsonify({
         "total_count": total_count,
         "status": "healthy"
@@ -238,6 +249,10 @@ def list_documents():
 
     q = Document.query.filter(Document.is_template == False, Document.deleted_at == None)
     
+    search = request.args.get("search")
+    if search:
+        q = q.filter(Document.title.ilike(f"%{search}%"))
+
     if on_chain == "true":
         q = q.filter(Document.tx_hash != None)
     
@@ -273,14 +288,20 @@ def list_documents():
                        .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
                        .filter(ApprovalParticipant.user_id == user.id).all()]
             
-            q = q.filter(
-                or_(
-                    Document.owner_id == user.id,
-                    Document.is_public == True,
-                    Document.id.in_(perm_ids),
-                    Document.id.in_(flow_ids),
-                )
-            )
+            conditions = [
+                Document.owner_id == user.id,
+                Document.is_public == True,
+                Document.id.in_(perm_ids),
+                Document.id.in_(flow_ids),
+            ]
+            
+            # Managers automatically see their department's documents
+            if user.is_manager and user.department_id:
+                from sqlalchemy import select
+                dept_users = select(User.id).where(User.department_id == user.department_id)
+                conditions.append(Document.owner_id.in_(dept_users))
+                
+            q = q.filter(or_(*conditions))
         else:  # scope == "mine"
             q = q.filter(Document.owner_id == user.id)
 

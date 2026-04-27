@@ -50,7 +50,7 @@
         <div class="card-body">
           <!-- Icon -->
           <div class="card-icon-wrap">
-            <el-icon class="card-icon-el"><component :is="getTemplateIcon(item.title)" /></el-icon>
+            <el-icon class="card-icon-el"><component :is="getIconComponent(item.icon)" /></el-icon>
           </div>
 
           <!-- Text -->
@@ -84,7 +84,9 @@ import { useRouter } from 'vue-router';
 import api from '@/api/client';
 import {
   CopyDocument, Search, User, DocumentAdd,
-  Document, Tickets, DataAnalysis, Calendar, Money, EditPen
+  Document, Tickets, DataAnalysis, Calendar, Money, EditPen,
+  Files, Folder, Memo, Postcard, Collection, Briefcase, Management,
+  Monitor, PieChart, Stamp, List
 } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
@@ -94,16 +96,14 @@ const loading = ref(false);
 const items = ref<any[]>([]);
 const searchQuery = ref('');
 
-const ICON_MAP: Record<string, any> = {
-  'Employment Contract': Tickets,
-  'Meeting Minutes': Calendar,
-  'Technical Specification': DataAnalysis,
-  'Weekly Report': EditPen,
-  'Expense Report': Money,
+const ICON_COMPONENTS: Record<string, any> = {
+  Document, Tickets, Files, Folder, Memo, Postcard, Collection,
+  Briefcase, Management, DataAnalysis, Monitor, Calendar,
+  Money, PieChart, Stamp, List
 };
 
-function getTemplateIcon(title: string) {
-  return ICON_MAP[title] || Document;
+function getIconComponent(name: string) {
+  return ICON_COMPONENTS[name] || Document;
 }
 
 const filteredItems = computed(() => {

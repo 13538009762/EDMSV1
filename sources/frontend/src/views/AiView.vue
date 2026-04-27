@@ -161,6 +161,14 @@ const sendMessage = async () => {
   isTyping.value = true;
   scrollToBottom();
 
+  // Send the last 10 messages raw for troubleshooting
+  const filteredMessages = aiStore.globalMessages
+    .filter(m => m.content.trim() !== '')
+    .slice(-10);
+
+  let assistantMessage = { role: 'assistant' as const, content: '', action: null };
+  aiStore.globalMessages.push(assistantMessage);
+
   try {
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
@@ -169,23 +177,29 @@ const sendMessage = async () => {
         'Authorization': `Bearer ${auth.token}`
       },
       body: JSON.stringify({
-        messages: aiStore.globalMessages
+        messages: filteredMessages,
+        context_url: window.location.pathname
       })
     });
 
-    if (!response.body) throw new Error('No body');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server responded with ${response.status}`);
+    }
+
+    if (!response.body) throw new Error('No response body');
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let assistantMessage = { role: 'assistant' as const, content: '', action: null };
-    aiStore.globalMessages.push(assistantMessage);
     
+    let buffer = '';
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
       
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep the last partial line in buffer
       
       for (const line of lines) {
         if (line.startsWith('data: ')) {
@@ -206,41 +220,125 @@ const sendMessage = async () => {
               }
 
               // 2. Intercept Tags (Automatic actions)
-              // Handle OPEN_DOC
+              // Handle NAVIGATE
+              const navRegex = /\[ACTION:\s*NAVIGATE,\s*PATH:\s*([^\s\]]+)\]/i;
+              const navMatch = assistantMessage.content.match(navRegex);
+              if (navMatch && navMatch[1]) {
+                const path = navMatch[1];
+                ElMessage.success(t('aiView.messages.redirecting', { id: path }));
+                router.push(path);
+                assistantMessage.content = assistantMessage.content.replace(navRegex, '').trim();
+              }
+
+              // Handle OPEN_DOC (legacy support)
               const openDocRegex = /\[ACTION:\s*OPEN_DOC,\s*ID:\s*([a-zA-Z0-9_-]+)\]/i;
               const openMatch = assistantMessage.content.match(openDocRegex);
               if (openMatch && openMatch[1]) {
                 const docId = openMatch[1];
                 ElMessage.success(t('aiView.messages.redirecting', { id: docId }));
-                router.push(`/document/${docId}`);
+                router.push(`/doc/${docId}`);
                 assistantMessage.content = assistantMessage.content.replace(openDocRegex, '').trim();
               }
 
-              // Handle QUERY_STATS
+              // Handle QUERY_DATA
+              const queryDataRegex = /\[ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+),\s*QUERY:\s*([^\]]+)\]/i;
+              const qMatch = assistantMessage.content.match(queryDataRegex);
+              if (qMatch) {
+                const entity = qMatch[1];
+                const query = qMatch[2];
+                assistantMessage.content = assistantMessage.content.replace(queryDataRegex, '').trim();
+                
+                const tempMsg = assistantMessage.content;
+                assistantMessage.content = tempMsg + "\n\n⌛ *正在检索 " + entity + "...*"; 
+                
+                try {
+                  let res;
+                  let resultHtml = "";
+                  if (entity === 'documents') {
+                    res = await api.get('/documents', { params: { search: query } });
+                    const items = res.data.items || [];
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (ID: ${d.id}, 状态: ${d.status})`).join('\n');
+                    } else {
+                      resultHtml = "\n\n❌ 未找到相关文档。";
+                    }
+                  } else if (entity === 'users') {
+                    res = await api.get('/users', { params: { search: query } });
+                    const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### 找到以下用户:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}, ID: ${u.id}) - ${u.department_name}`).join('\n');
+                    } else {
+                      resultHtml = "\n\n❌ 未找到相关用户。";
+                    }
+                  } else if (entity === 'approvals') {
+                    res = await api.get('/approvals/inbox');
+                    const items = res.data.items || [];
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### 待处理审批:\n" + items.map((a:any) => `- **${a.title}** (来自: ${a.initiator_name}, 进度: ${a.progress.done}/${a.progress.total})`).join('\n');
+                    } else {
+                      resultHtml = "\n\n✅ 暂无待处理审批。";
+                    }
+                  }
+                  
+                  assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
+                } catch (e) {
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败，请稍后重试。";
+                }
+              }
+
+              // Handle QUERY_STATS (legacy)
               const queryStatsRegex = /\[ACTION:\s*QUERY_STATS,\s*TYPE:\s*([a-zA-Z0-9_-]+)\]/i;
               const queryMatch = assistantMessage.content.match(queryStatsRegex);
               if (queryMatch) {
                 const statType = queryMatch[1];
                 assistantMessage.content = assistantMessage.content.replace(queryStatsRegex, '').trim();
-                
-                // Show a fake processing step then replace content
                 const tempMsg = assistantMessage.content;
                 assistantMessage.content = tempMsg + "\n\n⌛ *...*"; 
-                
                 try {
-                  // Actually fetch real data
-                  const res = await api.get('/documents/stats'); 
-                  const stats = res.data;
                   let resultText = "";
-                  if (statType === 'document_count') {
-                    resultText = t('aiView.messages.queryDoneDocs', { count: stats.total_count });
+                  if (statType === 'user_count') {
+                    const res = await api.get('/users/stats');
+                    resultText = `📊 **系统统计**: 当前权限内共有 **${res.data.total_count}** 位可见成员。`;
                   } else {
-                    resultText = t('aiView.messages.queryDoneStatus');
+                    const res = await api.get('/documents/stats'); 
+                    const stats = res.data;
+                    resultText = `📊 **系统统计**: 当前权限下共有 **${stats.total_count}** 份可见文档。`;
                   }
-                  
                   assistantMessage.content = tempMsg + "\n\n" + resultText;
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
+                }
+              }
+
+              // Handle QUERY_DASHBOARD
+              const dashboardRegex = /\[ACTION:\s*QUERY_DASHBOARD,\s*TYPE:\s*([a-z]+)\]/i;
+              const dMatch = assistantMessage.content.match(dashboardRegex);
+              if (dMatch) {
+                const dType = dMatch[1];
+                assistantMessage.content = assistantMessage.content.replace(dashboardRegex, '').trim();
+                const tempMsg = assistantMessage.content;
+                assistantMessage.content = tempMsg + "\n\n⌛ *正在分析仪表盘数据...*";
+                try {
+                  const res = await api.get('/dashboard/stats');
+                  const data = res.data;
+                  let resultHtml = "";
+                  if (dType === 'storage') {
+                    resultHtml = `📊 **存储规格占比分析**:\n- 总存储量: **${data.storage_info.total_size_mb} MB**\n` + 
+                                 data.storage_info.by_type.map((t:any) => `  - ${t.name}: ${t.value} MB`).join('\n');
+                  } else if (dType === 'activity') {
+                    const todayTrend = data.trend_data[data.trend_data.length-1];
+                    resultHtml = `📈 **用户活跃度简报**:\n- 今日新增/更新文档: **${todayTrend.docs}**\n- 今日完成审批: **${todayTrend.approvals}**\n- 活跃热力指数: **${data.heatmap_data.length}** 个活跃日(近90天)`;
+                  } else if (dType === 'distribution') {
+                    resultHtml = `🏢 **部门分布**: \n` + data.dept_data.map((d:any) => `- ${d.name}: ${d.count} 份`).join('\n') + 
+                                 `\n\n📂 **空间分布**: \n` + data.space_data.map((s:any) => `- ${s.name}: ${s.count} 份`).join('\n');
+                  } else if (dType === 'security') {
+                    resultHtml = `🛡️ **安全合规监控**:\n- 已上链确权: **${data.blockchain_stats.on_chain_count}** 份\n- 零信任拦截次数: **${data.blockchain_stats.tamper_alerts}** 次\n- 模拟区块高度: **${data.blockchain_stats.block_height}**`;
+                  } else {
+                    resultHtml = `📑 **系统总体概览**:\n- 总成员数: **${data.total_users}**\n- 权限内可见文档: **${data.total_docs}**\n- 待我审批: **${data.my_stats.pending}** 份`;
+                  }
+                  assistantMessage.content = tempMsg + "\n\n" + resultHtml;
+                } catch (e) {
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 仪表盘数据获取失败。";
                 }
               }
             }
@@ -249,9 +347,9 @@ const sendMessage = async () => {
         }
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     ElMessage.error(t('aiView.messages.serviceError'));
-    aiStore.addMessage('assistant', t('aiView.messages.unstable'));
+    assistantMessage.content = t('aiView.messages.unstable') + (error.message ? ` (${error.message})` : '');
   } finally {
     isTyping.value = false;
     scrollToBottom();
@@ -259,12 +357,48 @@ const sendMessage = async () => {
 };
 
 const getActionDesc = (action: any) => {
-  if (action.action === 'start_approval') return t('editor.ai.actionStartApproval', { names: '' }).replace(': ', '');
+  if (action.confirm_prompt) return action.confirm_prompt;
+  if (action.action === 'start_approval') {
+    const docText = action.params?.doc_id ? `文档 ID ${action.params.doc_id}` : '';
+    return `确认对 ${docText} 发起 ${action.params?.type === 'sequential' ? '顺序' : '并行'} 审批吗？`;
+  }
+  if (action.action === 'delete_doc') return `确认删除文档 ID: ${action.params?.id}`;
+  if (action.action === 'update_doc') return `确认更新文档 ID: ${action.params?.id}`;
+  if (action.action === 'update_user') return `确认更新用户信息 ID: ${action.params?.id}`;
+  if (action.action === 'create_user') return `确认创建新用户: ${action.params?.data?.login_name}`;
   return t('aiView.suggestedAction');
 };
 
 const executeAction = async (action: any, idx: number) => {
-  ElMessage.success(t('aiView.messages.actionExecuted'));
+  try {
+    if (action.action === 'delete_doc') {
+      await api.delete(`/documents/${action.params.id}`);
+      ElMessage.success("文档已成功删除");
+    } else if (action.action === 'update_doc') {
+      await api.patch(`/documents/${action.params.id}`, action.params.data);
+      ElMessage.success("文档已成功更新");
+    } else if (action.action === 'update_user') {
+      await api.patch(`/users/${action.params.id}`, action.params.data);
+      ElMessage.success("用户信息已更新");
+    } else if (action.action === 'create_user') {
+      await api.post('/users', action.params.data);
+      ElMessage.success("用户创建成功");
+    } else if (action.action === 'create_doc') {
+      const res = await api.post('/documents', action.params);
+      ElMessage.success("文档创建成功");
+      router.push(`/doc/${res.data.id}`);
+    } else if (action.action === 'start_approval') {
+      await api.post(`/documents/${action.params.doc_id}/approvals`, {
+        type: action.params.type || 'parallel',
+        approvers: action.params.approvers
+      });
+      ElMessage.success("审批流程已成功发起");
+    } else {
+      ElMessage.warning("未知的操作类型");
+    }
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.error || "执行操作失败");
+  }
   aiStore.globalMessages[idx].action = null;
 };
 </script>

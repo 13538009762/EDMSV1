@@ -40,6 +40,7 @@ def list_templates():
             "id": t.id,
             "title": t.title,
             "description": t.template_description or "",
+            "icon": t.template_icon or "Document",
             "created_at": t.created_at.isoformat() + "Z" if t.created_at else None,
             "updated_at": t.updated_at.isoformat() + "Z" if t.updated_at else None,
             "owner_name": t.owner.display_name() if t.owner else "System",
@@ -121,6 +122,7 @@ def admin_list_templates():
             "id": t.id,
             "title": t.title,
             "description": t.template_description or "",
+            "icon": t.template_icon or "Document",
             "is_public": t.is_public,
             "created_at": t.created_at.isoformat() + "Z" if t.created_at else None,
             "updated_at": t.updated_at.isoformat() + "Z" if t.updated_at else None,
@@ -161,6 +163,7 @@ def admin_create_template():
         owner_id=user.id,
         title=title,
         template_description=description,
+        template_icon=data.get("icon", "Document"),
         status="draft",   # Templates start as draft so they can be edited
         is_template=True,
         is_public=is_public,
@@ -184,6 +187,7 @@ def admin_create_template():
         "id": tmpl.id,
         "title": tmpl.title,
         "description": tmpl.template_description or "",
+        "icon": tmpl.template_icon or "Document",
         "is_public": tmpl.is_public,
     }), 201
 
@@ -209,6 +213,8 @@ def admin_update_template(tmpl_id: int):
         tmpl.title = (data["title"] or "Untitled Template").strip()[:512]
     if "description" in data:
         tmpl.template_description = (data["description"] or "").strip()[:512]
+    if "icon" in data:
+        tmpl.template_icon = (data["icon"] or "Document").strip()[:64]
     if "is_public" in data:
         tmpl.is_public = bool(data["is_public"])
 
@@ -218,6 +224,7 @@ def admin_update_template(tmpl_id: int):
         "id": tmpl.id,
         "title": tmpl.title,
         "description": tmpl.template_description or "",
+        "icon": tmpl.template_icon or "Document",
         "is_public": tmpl.is_public,
     })
 

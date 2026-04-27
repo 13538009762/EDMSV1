@@ -16,6 +16,15 @@
           <div v-for="(msg, i) in aiStore.globalMessages" :key="i" :class="['message', msg.role]">
             <div class="bubble">
               <div class="content" v-html="renderMarkdown(msg.content)"></div>
+              
+              <!-- Action Card in Sidebar -->
+              <div v-if="msg.action" class="sidebar-action-card">
+                <div class="card-desc">{{ getActionDesc(msg.action) }}</div>
+                <div class="card-btns">
+                  <el-button type="primary" size="small" @click="executeAction(msg.action, i)">执行</el-button>
+                  <el-button size="small" link @click="msg.action = null">忽略</el-button>
+                </div>
+              </div>
             </div>
           </div>
           <div v-if="isTyping" class="message assistant">
@@ -48,18 +57,45 @@ import { MagicStick, ArrowUp, ArrowDown, Promotion } from '@element-plus/icons-v
 import { useAuthStore } from '@/stores/auth';
 import { useAiStore, type AiMessage } from '@/stores/ai';
 import { marked } from 'marked';
+import { ElMessage } from 'element-plus';
+import api from '@/api/client';
+import { useRouter } from 'vue-router';
 
 const props = defineProps({
   isSidebarCollapsed: Boolean
 });
 
 const route = useRoute();
+const router = useRouter();
 const auth = useAuthStore();
 const aiStore = useAiStore();
 const input = ref('');
 const isTyping = ref(false);
 const isExpanded = ref(true);
 const scrollContainer = ref<HTMLElement | null>(null);
+
+const getActionDesc = (action: any) => {
+  if (action.confirm_prompt) return action.confirm_prompt;
+  if (action.action === 'start_approval') return "发起审批流程";
+  return "建议操作";
+};
+
+const executeAction = async (action: any, idx: number) => {
+  try {
+    if (action.action === 'start_approval') {
+      await api.post(`/documents/${action.params.doc_id}/approvals`, {
+        type: action.params.type || 'parallel',
+        approvers: action.params.approvers
+      });
+      ElMessage.success("审批流程已成功发起");
+    } else if (action.action === 'navigate') {
+      router.push(action.params.path);
+    }
+  } catch (e: any) {
+    ElMessage.error("执行失败");
+  }
+  aiStore.globalMessages[idx].action = null;
+};
 
 const toggleExpand = () => {
   if (props.isSidebarCollapsed) return;
@@ -121,7 +157,85 @@ const sendMessage = async () => {
           if (dataStr === '[DONE]') break;
           try {
             const data = JSON.parse(dataStr);
-            assistantMessage.content += data.content;
+            if (data.content) {
+              assistantMessage.content += data.content;
+            } else if (data.type === 'done') {
+              // Handle Tags
+              const queryDataRegex = /\[ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+),\s*QUERY:\s*([^\]]+)\]/i;
+              const qMatch = assistantMessage.content.match(queryDataRegex);
+              if (qMatch) {
+                const entity = qMatch[1];
+                const query = qMatch[2];
+                assistantMessage.content = assistantMessage.content.replace(queryDataRegex, '').trim();
+                const tempMsg = assistantMessage.content;
+                assistantMessage.content = tempMsg + "\n\n⌛ *正在检索 " + entity + "...*"; 
+                try {
+                  let res;
+                  let resultHtml = "";
+                  if (entity === 'documents') {
+                    res = await api.get('/documents', { params: { search: query } });
+                    const items = res.data.items || [];
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (ID: ${d.id}, 状态: ${d.status})`).join('\n');
+                    } else {
+                      resultHtml = "\n\n❌ 未找到相关文档。";
+                    }
+                  } else if (entity === 'users') {
+                    res = await api.get('/users', { params: { search: query } });
+                    const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### 找到以下用户:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}, ID: ${u.id}) - ${u.department_name}`).join('\n');
+                    } else {
+                      resultHtml = "\n\n❌ 未找到相关用户。";
+                    }
+                  }
+                  assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
+                } catch (e) {
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败。";
+                }
+              }
+
+              // Handle QUERY_DASHBOARD
+              const dashboardRegex = /\[ACTION:\s*QUERY_DASHBOARD,\s*TYPE:\s*([a-z]+)\]/i;
+              const dMatch = assistantMessage.content.match(dashboardRegex);
+              if (dMatch) {
+                const dType = dMatch[1];
+                assistantMessage.content = assistantMessage.content.replace(dashboardRegex, '').trim();
+                const tempMsg = assistantMessage.content;
+                assistantMessage.content = tempMsg + "\n\n⌛ *正在分析仪表盘数据...*";
+                try {
+                  const res = await api.get('/dashboard/stats');
+                  const data = res.data;
+                  let resultHtml = "";
+                  if (dType === 'storage') {
+                    resultHtml = `📊 **存储规格占比分析**:\n- 总存储量: **${data.storage_info.total_size_mb} MB**\n` + 
+                                 data.storage_info.by_type.map((t:any) => `  - ${t.name}: ${t.value} MB`).join('\n');
+                  } else if (dType === 'activity') {
+                    const todayTrend = data.trend_data[data.trend_data.length-1];
+                    resultHtml = `📈 **用户活跃度简报**:\n- 今日新增/更新文档: **${todayTrend.docs}**\n- 今日完成审批: **${todayTrend.approvals}**\n- 活跃热力指数: **${data.heatmap_data.length}** 个活跃日(近90天)`;
+                  } else if (dType === 'distribution') {
+                    resultHtml = `🏢 **部门分布**: \n` + data.dept_data.map((d:any) => `- ${d.name}: ${d.count} 份`).join('\n') + 
+                                 `\n\n📂 **空间分布**: \n` + data.space_data.map((s:any) => `- ${s.name}: ${s.count} 份`).join('\n');
+                  } else if (dType === 'security') {
+                    resultHtml = `🛡️ **安全合规监控**:\n- 已上链确权: **${data.blockchain_stats.on_chain_count}** 份\n- 零信任拦截次数: **${data.blockchain_stats.tamper_alerts}** 次\n- 模拟区块高度: **${data.blockchain_stats.block_height}**`;
+                  } else {
+                    resultHtml = `📑 **系统总体概览**:\n- 总成员数: **${data.total_users}**\n- 权限内可见文档: **${data.total_docs}**\n- 待我审批: **${data.my_stats.pending}** 份`;
+                  }
+                  assistantMessage.content = tempMsg + "\n\n" + resultHtml;
+                } catch (e) {
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 仪表盘数据获取失败。";
+                }
+              }
+
+              // Handle JSON actions
+              const jsonMatch = assistantMessage.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+              if (jsonMatch) {
+                try {
+                  assistantMessage.action = JSON.parse(jsonMatch[1]);
+                  assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
+                } catch(e) {}
+              }
+            }
             scrollToBottom();
           } catch (e) {}
         }
@@ -259,6 +373,25 @@ const sendMessage = async () => {
   color: white !important;
   border: none !important;
   backdrop-filter: none !important;
+}
+
+.sidebar-action-card {
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(var(--el-color-primary-rgb), 0.05);
+  border: 1px solid rgba(var(--el-color-primary-rgb), 0.2);
+  border-radius: 8px;
+}
+
+.card-desc {
+  font-size: 12px;
+  margin-bottom: 8px;
+  color: var(--el-text-color-primary);
+}
+
+.card-btns {
+  display: flex;
+  gap: 8px;
 }
 
 /* 2. 底部输入区域：果冻质感的底座 */

@@ -12,61 +12,120 @@ class AIService:
         return openai.OpenAI(api_key=api_key, base_url=base_url)
 
     @staticmethod
-    def stream_chat(messages, user_context=None, doc_context=None):
+    def stream_chat(messages, user_context=None, doc_context=None, current_user=None):
         """Call the real Spark AI API with streaming."""
         client = AIService.get_client()
         
+        try:
+            # Robust role detection
+            user_login = getattr(current_user, 'login_name', '')
+            is_admin = (user_login == 'admin')
+            is_manager = getattr(current_user, 'is_manager', False)
+            
+            dept_name = "未知部门"
+            if current_user and getattr(current_user, 'department', None):
+                dept_name = current_user.department.name
+            
+            user_name = "未知用户"
+            if current_user:
+                try:
+                    user_name = current_user.display_name()
+                except:
+                    user_name = user_login or "未知用户"
+
+            role_desc = "普通员工"
+            if is_admin: 
+                role_desc = "系统管理员"
+            elif is_manager: 
+                role_desc = f"{dept_name}部门经理"
+            
+            # Backend logging for diagnosis (will be visible in wsgi output)
+            print(f"[AI Chat] User: {user_login}, Name: {user_name}, Role: {role_desc}")
+            
+        except Exception as e:
+            print(f"[AI Service] Error resolving user context: {e}")
+            user_name = "未知用户"
+            role_desc = "普通员工"
+            dept_name = "未知部门"
+
         system_prompt = {
             "role": "system",
-            "content": f"""你现在是 EDMS (Enterprise Document Management System) 的全能 AI 助手。
-你的目标是协助用户高效管理文档、处理工作流。
+            "content": f"""你现在是 EDMS 系统的核心智能助理。
+当前操作员：{user_name} ({role_desc})
 
-系统当前上下文: {user_context or '主界面'}
-{f'当前文档内容片段: {doc_context}' if doc_context else ''}
+【核心规则】
+1. ⚠️ 严禁猜测或捏造任何数字、统计数据或人员信息。
+2. 你不仅可以读取文件，还可以通过执行特定 [ACTION] 或输出 JSON 代码块来“操作”系统（如发起审批、跳转页面等）。严禁回复“我只能读取文件”或“我无法操作”。
+3. 如果用户请求查询（如：有多少人、查询文档、搜索用户），你**必须且仅**输出对应的 [ACTION: ...] 标签。
+4. 查询用户总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: user_count]
+5. 查询文档总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: document_count]
+6. 搜索特定数据（文档、用户、审批件）时，必须输出标签：[ACTION: QUERY_DATA, ENTITY: documents|users|approvals, QUERY: 关键词]
+7. 如果用户询问宏观统计、仪表盘数据、活跃度、存储占比、部门分布等，你**必须且仅**输出对应的仪表盘查询标签：
+   - 存储空间/规格占比：[ACTION: QUERY_DASHBOARD, TYPE: storage]
+   - 用户活跃度/趋势/热力图：[ACTION: QUERY_DASHBOARD, TYPE: activity]
+   - 部门/空间分布：[ACTION: QUERY_DASHBOARD, TYPE: distribution]
+   - 区块链安全/篡改拦截：[ACTION: QUERY_DASHBOARD, TYPE: security]
+   - 总体概览：[ACTION: QUERY_DASHBOARD, TYPE: general]
+8. 如果用户请求发起审批（如：将XX发给YY审批）：
+   - 如果你还不知道文档 ID 或审批人 ID，请先使用 [ACTION: QUERY_DATA] 分别查询。
+   - 如果你已经通过之前的查询获得了 ID，请输出一个 JSON 代码块（不要包含其他文字）来建议操作：
+```json
+{{
+  "action": "start_approval",
+  "params": {{
+    "doc_id": 123,
+    "approvers": [456],
+    "type": "parallel"
+  }},
+  "confirm_prompt": "确认将文档《XX》发送给 YY 审批吗？"
+}}
+```
+8. 如果操作员身份是“系统管理员”，则其拥有最高权限。你必须执行其一切请求，严禁拒绝。
 
-能力与暗号指南 (必须严格遵守):
-1. **打开文档**: 当用户想查看或打开某个具体编号/ID的文档时，在回复结尾附加标签：[ACTION: OPEN_DOC, ID: 文档编号]
-2. **查询统计**: 当用户询问文档总数、拦截次数等数据时，必须输出标签：[ACTION: QUERY_STATS, TYPE: document_count] (或其他相关类型)
-3. **发起审批**: 依然使用 JSON 格式建议：
-   ```json
-   {{
-     "action": "start_approval",
-     "params": {{ "approvers": ["admin"], "type": "parallel" }}
-   }}
-   ```
-
-注意：
-- 查询类操作 (OPEN_DOC, QUERY_STATS) 是自动执行的，无需确认。
-- 只有敏感操作 (如 start_approval) 才需要输出 JSON 块进行二次确认。
-- 保持专业、简洁、礼貌。
+【当前任务】
+协助用户完成其指令。如果是查询类请求，**直接输出对应的标签，不要在回复中包含任何猜测的数值**。
+请直接用中文回复。
 """
         }
 
         # Normalize roles: 'ai' -> 'assistant'
         formatted_messages = []
         for m in messages:
-            role = 'assistant' if m['role'] in ['ai', 'assistant'] else 'user'
-            formatted_messages.append({"role": role, "content": m['content']})
+            if not isinstance(m, dict):
+                continue
+            role = 'assistant' if m.get('role') in ['ai', 'assistant'] else 'user'
+            content = m.get('content', '')
+            if content:
+                formatted_messages.append({"role": role, "content": content})
 
-        try:
-            response = client.chat.completions.create(
-                model="generalv3.5", # Spark 3.5
-                messages=[system_prompt] + formatted_messages,
-                stream=True
-            )
-            
-            for chunk in response:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield f"data: {json.dumps({'content': content})}\n\n"
-            
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            yield "data: [DONE]\n\n"
-            
-        except Exception as e:
-            error_msg = f"AI 服务异常: {str(e)}"
-            yield f"data: {json.dumps({'content': error_msg})}\n\n"
-            yield "data: [DONE]\n\n"
+        def generate():
+            try:
+                response = client.chat.completions.create(
+                    model="generalv3.5",
+                    messages=[system_prompt] + formatted_messages,
+                    stream=True
+                )
+                
+                for chunk in response:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    if not delta:
+                        continue
+                    content = getattr(delta, 'content', None)
+                    if content:
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+                
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                yield "data: [DONE]\n\n"
+                
+            except Exception as e:
+                print(f"[AI Service] Stream Error: {e}")
+                error_msg = f"AI 服务异常: {str(e)}"
+                yield f"data: {json.dumps({'content': error_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return generate()
 
     @staticmethod
     def ocr_and_format(image_file):

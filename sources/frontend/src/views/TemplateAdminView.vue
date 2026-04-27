@@ -62,7 +62,7 @@
         <el-table-column prop="title" :label="t('templates.colTitle', 'Title')" min-width="200">
           <template #default="{ row }">
             <div class="title-cell">
-              <el-icon class="title-icon"><Document /></el-icon>
+              <el-icon class="title-icon"><component :is="getIconComponent(row.icon)" /></el-icon>
               <span>{{ row.title }}</span>
             </div>
           </template>
@@ -184,6 +184,19 @@
             :inactive-text="t('templates.statusDraft', 'Draft — hidden from gallery')"
           />
         </el-form-item>
+        <el-form-item :label="t('templates.colIcon', 'Template Icon')">
+          <div class="icon-picker">
+            <div
+              v-for="item in availableIcons"
+              :key="item.name"
+              class="icon-item"
+              :class="{ active: form.icon === item.name }"
+              @click="form.icon = item.name"
+            >
+              <el-icon><component :is="item.icon" /></el-icon>
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
@@ -206,7 +219,10 @@ import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 import {
   Plus, Edit, EditPen, Delete, Search, Setting,
-  Document, View, Hide, Grid
+  Document, View, Hide, Grid,
+  Tickets, Files, Folder, Memo, Postcard, Collection,
+  Briefcase, Management, DataAnalysis, Monitor, Calendar,
+  Money, PieChart, Stamp, List
 } from '@element-plus/icons-vue';
 
 const { t } = useI18n();
@@ -222,7 +238,31 @@ const editMode = ref<'create' | 'edit'>('create');
 const editingId = ref<number | null>(null);
 const formRef = ref<any>(null);
 
-const form = reactive({ title: '', description: '', is_public: false });
+const form = reactive({ title: '', description: '', is_public: false, icon: 'Document' });
+
+const availableIcons = [
+  { name: 'Document', icon: Document },
+  { name: 'Tickets', icon: Tickets },
+  { name: 'Files', icon: Files },
+  { name: 'Folder', icon: Folder },
+  { name: 'Memo', icon: Memo },
+  { name: 'Postcard', icon: Postcard },
+  { name: 'Collection', icon: Collection },
+  { name: 'Briefcase', icon: Briefcase },
+  { name: 'Management', icon: Management },
+  { name: 'DataAnalysis', icon: DataAnalysis },
+  { name: 'Monitor', icon: Monitor },
+  { name: 'Calendar', icon: Calendar },
+  { name: 'Money', icon: Money },
+  { name: 'PieChart', icon: PieChart },
+  { name: 'Stamp', icon: Stamp },
+  { name: 'List', icon: List }
+];
+
+function getIconComponent(name: string) {
+  const found = availableIcons.find(i => i.name === name);
+  return found ? found.icon : Document;
+}
 const rules = {
   title: [{ required: true, message: t('common.requiredFields', 'Required'), trigger: 'blur' }]
 };
@@ -264,14 +304,14 @@ async function loadData() {
 function openCreate() {
   editMode.value = 'create';
   editingId.value = null;
-  Object.assign(form, { title: '', description: '', is_public: false });
+  Object.assign(form, { title: '', description: '', is_public: false, icon: 'Document' });
   dialogVisible.value = true;
 }
 
 function openEdit(row: any) {
   editMode.value = 'edit';
   editingId.value = row.id;
-  Object.assign(form, { title: row.title, description: row.description, is_public: row.is_public });
+  Object.assign(form, { title: row.title, description: row.description, is_public: row.is_public, icon: row.icon || 'Document' });
   dialogVisible.value = true;
 }
 
@@ -476,6 +516,7 @@ onMounted(() => loadData());
   font-size: 12.5px;
   color: var(--el-text-color-secondary);
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -503,5 +544,39 @@ onMounted(() => loadData());
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.icon-picker {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+  padding: 10px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 8px;
+}
+
+.icon-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: var(--el-text-color-secondary);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-item:hover {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.icon-item.active {
+  background: var(--el-color-primary-light-8);
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
 }
 </style>

@@ -455,6 +455,7 @@ export default {
     deleteOk: "Template deleted",
     colTitle: "Title",
     colDesc: "Description",
+    colIcon: "Icon",
     colOwner: "Author",
     colUpdated: "Last Updated",
     colStatus: "Status",

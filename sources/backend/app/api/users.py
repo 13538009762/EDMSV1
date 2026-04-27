@@ -7,6 +7,27 @@ from datetime import datetime
 
 bp = Blueprint("users", __name__)
 
+@bp.get("/stats")
+@jwt_required()
+def get_stats():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    query = User.query.filter_by(registration_status='active')
+    
+    if user.login_name != 'admin':
+        # Non-admins can only see their own department's stats
+        if user.department_id:
+            query = query.filter_by(department_id=user.department_id)
+        else:
+            query = query.filter_by(id=user.id) # Fallback to just themselves if no dept
+            
+    return jsonify({
+        "total_count": query.count(),
+        "status": "healthy"
+    })
+
 @bp.post("")
 @jwt_required()
 def create_user():

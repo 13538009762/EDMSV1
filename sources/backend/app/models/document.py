@@ -24,6 +24,7 @@ class Document(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey("documents.id"), nullable=True)
     is_template = db.Column(db.Boolean, default=False)
     template_description = db.Column(db.String(512), nullable=True)  # Description shown in Template Gallery
+    template_icon = db.Column(db.String(64), nullable=True) # Icon name (e.g., from Element Plus icons)
     doc_type = db.Column(db.String(32), default="rich_text") # rich_text, pdf
     deleted_at = db.Column(db.DateTime, nullable=True)  # soft delete for recycle bin
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
