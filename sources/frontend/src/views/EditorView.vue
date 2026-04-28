@@ -262,7 +262,8 @@
               <!-- AI Chat Section -->
               <div class="ai-chat-container">
                 <transition-group name="msg" tag="div" class="chat-messages" ref="chatScroll">
-                  <div v-for="(msg, idx) in aiStore.globalMessages" :key="idx" :class="['chat-msg', msg.role]">
+                  <template v-for="(msg, idx) in aiStore.globalMessages" :key="idx">
+                    <div v-if="!msg.hidden" :class="['chat-msg', msg.role]">
                     <div class="msg-content" v-html="renderMarkdown(msg.content)"></div>
                     
                     <div v-if="msg.role === 'ai' || msg.role === 'assistant'" class="msg-footer" style="margin-top: 8px;">
@@ -300,7 +301,8 @@
                         </el-button>
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  </template>
                   <div v-if="asking" key="typing" class="chat-msg ai typing">
                     <div class="typing-indicator">
                       <span></span><span></span><span></span>
@@ -662,9 +664,9 @@ const handleAudioUpload = async (blob: Blob) => {
     formData.append('audio', blob, 'meeting.webm');
     const { data } = await api.post('/api/ai/meeting-summary', formData);
     
-    if (data.code === 200 && editor.value) {
+    if (data.code === 200) {
       const summaryHtml = marked.parse(data.data.summary_markdown);
-      editor.value.commands.insertContent(summaryHtml);
+      editor.value?.commands.insertContent(summaryHtml);
       ElMessage.success("会议摘要已插入文档");
     }
   } catch (err: any) {
@@ -674,9 +676,24 @@ const handleAudioUpload = async (blob: Blob) => {
     loadingInstance.close();
   }
 };
-const asking = ref(false);
+const askingCount = ref(0);
+const asking = computed(() => askingCount.value > 0);
 const aiStore = useAiStore();
 const chatScroll = ref<HTMLElement | null>(null);
+
+const scrollToBottom = async (force = false) => {
+  await nextTick();
+  if (chatScroll.value) {
+    const el = (chatScroll.value as any).$el || chatScroll.value;
+    const isAtTop = el.scrollTop === 0;
+    const isNearBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 300;
+    
+    if (force || isNearBottom || (el.scrollHeight > el.clientHeight && isAtTop)) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+};
+
 const spacesOptions = ref<Array<{ id: any, name: string }>>([]);
 const selectedSpaceId = ref<any>(null);
 
@@ -699,13 +716,14 @@ const insertChatToEditor = (content: string) => {
                             .trim();
   
   const html = renderMarkdown(cleanContent);
-  editor.value.commands.insertContent(html);
+  editor.value?.commands.insertContent(html);
   ElMessage.success(t("editor.ai.insertSuccess"));
 };
 
 const confirmAiAction = async (action: any, idx: number) => {
   if (!action) return;
-  if (action.action === "start_approval") {
+  const type = String(action.action || '').toUpperCase();
+  if (action.action === "start_approval" || type === "START_APPROVAL") {
     const p = action.params || action;
     const approvers = p.approvers || [];
     
@@ -735,6 +753,43 @@ const confirmAiAction = async (action: any, idx: number) => {
         } 
       }));
     }
+  } else if (action.action === "recall_approval" || type === "RECALL_APPROVAL") {
+    try {
+      loading.value = true;
+      await api.post(`/approvals/recall`, { doc_id: action.params?.doc_id || docId.value });
+      ElMessage.success("审批申请已成功撤回");
+      aiStore.globalMessages[idx].action = null;
+      loadDoc(true);
+    } catch (err: any) {
+      ElMessage.error(err.response?.data?.error || "撤回失败");
+    } finally {
+      loading.value = false;
+    }
+  } else if (['QUERY', 'SEARCH', 'STATS', 'DASHBOARD', 'GET', 'LIST', 'COUNT', 'VIEW', 'SHOW', 'READ'].some(k => type.includes(k))) {
+     // 💡 Handle any variation of query/search/stats/dashboard/get/list
+     const p = action.params || {};
+     let resultHtml = "";
+     try {
+       if (type.includes('DATA') || type.includes('SEARCH') || type.includes('GET') || type.includes('LIST')) {
+         const entity = (p.ENTITY || p.entity || '').toLowerCase();
+         const q = p.QUERY || p.query || 'all';
+         const res = await api.get(entity.includes('approval') ? '/approvals/inbox' : (entity.includes('user') ? '/users' : '/documents'), { params: { search: q } });
+         resultHtml = JSON.stringify(res.data.items || res.data);
+       } else if (type.includes('STATS') || type.includes('COUNT')) {
+         const sType = (p.TYPE || p.type || '').toLowerCase();
+         const res = await api.get(sType.includes('user') ? '/users/stats' : '/documents/stats');
+         resultHtml = `📊 统计: ${res.data.total_count}`;
+       } else if (type.includes('DASHBOARD')) {
+         const res = await api.get('/dashboard/stats');
+         resultHtml = JSON.stringify(res.data);
+       }
+       if (resultHtml) {
+         aiStore.addMessage('user', `[反馈]:\n${resultHtml}`, null, true);
+         askAi(true);
+       }
+     } catch (e) {
+       console.error("Action execution failed", e);
+     }
   }
   aiStore.globalMessages[idx].action = null;
 };
@@ -833,13 +888,16 @@ async function runAutoTag() {
   }
 }
 
-async function askAi() {
-  if (!aiQuery.value.trim() || asking.value || !editor.value) return;
+async function askAi(isFeedback = false) {
+  if (!isFeedback && (!aiQuery.value.trim() || asking.value || !editor.value)) return;
   
   const query = aiQuery.value.trim();
-  aiStore.addMessage('user', query);
-  aiQuery.value = "";
-  asking.value = true;
+  if (!isFeedback) {
+    aiStore.addMessage('user', query);
+    aiQuery.value = "";
+  }
+  askingCount.value++;
+  scrollToBottom(true); // 💡 Force scroll on send
   
   // Scoped RAG: Send document metadata + context + user question
   const docMeta = {
@@ -847,14 +905,14 @@ async function askAi() {
     title: meta.value?.title || "未命名文档",
     status: meta.value?.status || "draft"
   };
-  const docContext = `[当前编辑文档信息] ID: ${docMeta.id}, 标题: ${docMeta.title}, 状态: ${docMeta.status}\n\n内容摘要: ${editor.value.getText().slice(0, 4000)}`;
+  const docContext = `[当前编辑文档信息] ID: ${docMeta.id}, 标题: ${docMeta.title}, 状态: ${docMeta.status}\n\n内容摘要: ${editor.value?.getText().slice(0, 4000) || ""}`;
   
   try {
      const response = await fetch('/api/ai/chat', {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
       body: JSON.stringify({ 
-        messages: aiStore.globalMessages, 
+        messages: aiStore.globalMessages.filter(m => m.content && m.content.trim() !== '').slice(-15), 
         context_url: route.path,
         doc_context: docContext 
       })
@@ -927,12 +985,43 @@ async function askAi() {
                       window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
                         detail: { approvers: [foundUser.id], type: 'sequential' } 
                       }));
-                    } else {
-                      resultHtml = "\n\n❌ 未找到相关用户。";
+                    } else if (entity === 'approvals') {
+                      res = await api.get('/approvals/inbox');
+                      const items = res.data.items || [];
+                      if (items.length > 0) {
+                        resultHtml = "\n\n### 待处理审批:\n" + items.map((a:any) => `- **${a.title}** (来自: ${a.initiator_name}, 进度: ${a.progress.done}/${a.progress.total})`).join('\n');
+                      } else {
+                        resultHtml = "\n\n✅ 暂无待处理审批。";
+                      }
+                    }
+                  } else {
+                    // Handle QUERY_STATS and QUERY_DASHBOARD (Legacy/General tags)
+                    const statsMatch = aiMsg.content.match(/\[ACTION:\s*QUERY_STATS,\s*TYPE:\s*([a-zA-Z0-9_-]+)\]/i);
+                    const dashMatch = aiMsg.content.match(/\[ACTION:\s*QUERY_DASHBOARD,\s*TYPE:\s*([a-z]+)\]/i);
+                    
+                    if (statsMatch) {
+                      const type = statsMatch[1];
+                      aiMsg.content = aiMsg.content.replace(/\[ACTION:\s*QUERY_STATS,\s*TYPE:\s*([a-zA-Z0-9_-]+)\]/i, '').trim();
+                      const res = await api.get(type === 'user_count' ? '/users/stats' : '/documents/stats');
+                      resultHtml = `📊 **系统统计**: ${type === 'user_count' ? '总成员' : '可见文档'}共 **${res.data.total_count}**。`;
+                    } else if (dashMatch) {
+                      const dType = dashMatch[1];
+                      aiMsg.content = aiMsg.content.replace(/\[ACTION:\s*QUERY_DASHBOARD,\s*TYPE:\s*([a-z]+)\]/i, '').trim();
+                      const res = await api.get('/dashboard/stats');
+                      const data = res.data;
+                      if (dType === 'storage') resultHtml = `📊 存储占用: **${data.storage_info.total_size_mb} MB**`;
+                      else if (dType === 'security') resultHtml = `🛡️ 安全监控: 已上链 **${data.blockchain_stats.on_chain_count}** 份`;
+                      else resultHtml = `📑 总览: 成员 ${data.total_users}, 文档 ${data.total_docs}`;
                     }
                   }
                   if (resultHtml !== undefined) {
                     aiMsg.content = tempMsg + (resultHtml || "");
+                    
+                    // 💡 Feed back to AI
+                    if (resultHtml) {
+                      aiStore.addMessage('user', `[系统反馈]:\n${resultHtml}`, null, true);
+                      askAi(true);
+                    }
                   }
                 } catch (e) {
                   aiMsg.content = tempMsg + "\n\n⚠️ 查询失败。";
@@ -949,12 +1038,23 @@ async function askAi() {
                   let rawAction = aMatch ? aMatch[1] : jsonMatch![1];
                   let actionData = JSON.parse(rawAction);
                   
-                  // 💡 兼容性处理：支持 { start_approval: { ... } } 格式
                   if (actionData.start_approval && !actionData.action) {
                     actionData = { action: 'start_approval', params: actionData.start_approval };
                   }
+                  
+                  const aType = String(actionData.action || '').toUpperCase();
+                  
+                  // 💡 Aggressive Auto-execute: catch ANY read-only or query action
+                  const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD'];
+                  const isSafe = safeKeywords.some(k => aType.includes(k));
 
-                  if (actionData.action === "start_approval") {
+                  if (isSafe) {
+                    aiMsg.content = aiMsg.content.replace(/```json[\s\S]*?```/g, "").trim();
+                    confirmAiAction(actionData, aiStore.globalMessages.length - 1);
+                    return; 
+                  }
+
+                  if (actionData.action === "start_approval" || aType === "START_APPROVAL") {
                     const params = actionData.params || actionData;
                     
                     // 补全姓名
@@ -1025,17 +1125,13 @@ async function askAi() {
   } catch (err) {
     ElMessage.error(t("common.failed"));
   } finally {
-    asking.value = false;
+    askingCount.value = Math.max(0, askingCount.value - 1);
   }
 }
 
 // 💡 监听消息变化自动滚动
-watch(() => aiStore.globalMessages, async () => {
-  await nextTick();
-  if (chatScroll.value) {
-    const el = (chatScroll.value as any).$el || chatScroll.value;
-    el.scrollTop = el.scrollHeight;
-  }
+watch(() => aiStore.globalMessages, () => {
+  scrollToBottom();
 }, { deep: true });
 
 // 💡 监听来自 AI 助理的审批触发事件

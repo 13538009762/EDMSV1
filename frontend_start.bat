@@ -29,11 +29,13 @@ if not exist "node_modules" (
 
 REM Start Vue development server
 echo Starting Vue frontend on http://localhost:5173
-cnpm run dev
 
-REM If cnpm is not available, try npm
-if %ERRORLEVEL% NEQ 0 (
-    echo cnpm not found, trying npm...
+where cnpm >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+    echo Using cnpm run dev...
+    cnpm run dev
+) else (
+    echo Using npm run dev...
     npm run dev
 )
 

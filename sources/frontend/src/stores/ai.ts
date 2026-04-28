@@ -2,16 +2,17 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 export interface AiMessage {
-  role: 'assistant' | 'user' | 'ai'; // 'ai' is used in EditorView, 'assistant' in global
+  role: 'assistant' | 'user' | 'ai';
   content: string;
   action?: any;
+  hidden?: boolean;
 }
 
 export const useAiStore = defineStore('ai', () => {
   const globalMessages = ref<AiMessage[]>([]);
 
-  function addMessage(role: 'assistant' | 'user' | 'ai', content: string, action?: any) {
-    globalMessages.value.push({ role, content, action });
+  function addMessage(role: 'assistant' | 'user' | 'ai', content: string, action?: any, hidden?: boolean) {
+    globalMessages.value.push({ role, content, action, hidden });
   }
 
   function clearHistory() {

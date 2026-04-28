@@ -19,7 +19,8 @@
 
     <!-- Message List -->
     <transition-group name="msg" tag="div" class="chat-main" ref="chatScroll">
-      <div class="message-wrapper" v-for="(msg, i) in aiStore.globalMessages" :key="i">
+      <template v-for="(msg, i) in aiStore.globalMessages" :key="i">
+        <div v-if="!msg.hidden" class="message-wrapper">
         <div :class="['message-item', msg.role]">
           <div class="avatar">
             <el-icon v-if="msg.role === 'user'"><User /></el-icon>
@@ -45,7 +46,8 @@
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </template>
       
       <div v-if="isTyping" key="typing" class="message-item assistant typing">
         <div class="avatar"><el-icon><MagicStick /></el-icon></div>
@@ -106,7 +108,8 @@ const aiStore = useAiStore();
 const auth = useAuthStore();
 const router = useRouter();
 const input = ref('');
-const isTyping = ref(false);
+const typingCount = ref(0);
+const isTyping = computed(() => typingCount.value > 0);
 const chatScroll = ref<HTMLElement | null>(null);
 
 const suggestions = computed(() => [
@@ -136,10 +139,20 @@ const renderMarkdown = (text: string) => {
   return marked.parse(cleanText);
 };
 
-const scrollToBottom = async () => {
+const scrollToBottom = async (force = false) => {
   await nextTick();
   if (chatScroll.value) {
-    chatScroll.value.scrollTop = chatScroll.value.scrollHeight;
+    const el = chatScroll.value;
+    // 💡 Improved logic: 
+    // 1. If force is true, scroll immediately.
+    // 2. If it's the first message (scrollTop is 0), scroll.
+    // 3. If user is within 300px of bottom, keep scrolling.
+    const isAtTop = el.scrollTop === 0;
+    const isNearBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 300;
+    
+    if (force || isNearBottom || (el.scrollHeight > el.clientHeight && isAtTop)) {
+      el.scrollTop = el.scrollHeight;
+    }
   }
 };
 
@@ -156,19 +169,21 @@ const useSuggestion = (prompt: string) => {
   sendMessage();
 };
 
-const sendMessage = async () => {
-  if (!input.value.trim() || isTyping.value) return;
+const sendMessage = async (isFeedback = false) => {
+  if (!isFeedback && (!input.value.trim() || isTyping.value)) return;
 
   const userQuery = input.value;
-  aiStore.addMessage('user', userQuery);
-  input.value = '';
-  isTyping.value = true;
-  scrollToBottom();
+  if (!isFeedback) {
+    aiStore.addMessage('user', userQuery);
+    input.value = '';
+  }
+  typingCount.value++;
+  scrollToBottom(true);
 
-  // Send the last 10 messages raw for troubleshooting
+  // Send the last 15 messages for better context
   const filteredMessages = aiStore.globalMessages
-    .filter(m => m.content.trim() !== '')
-    .slice(-10);
+    .filter(m => m.content && m.content.trim() !== '')
+    .slice(-15);
 
   let assistantMessage = { role: 'assistant' as const, content: '', action: null };
   aiStore.globalMessages.push(assistantMessage);
@@ -214,11 +229,26 @@ const sendMessage = async () => {
             if (data.content) {
               assistantMessage.content += data.content;
             } else if (data.type === 'done') {
-              // 1. Intercept JSON actions (Sensitve, need confirmation)
+              // 1. Intercept JSON actions (Sensitive, need confirmation)
               const jsonMatch = assistantMessage.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
               if (jsonMatch) {
                 try {
-                  assistantMessage.action = JSON.parse(jsonMatch[1]);
+                  const actionData = JSON.parse(jsonMatch[1]);
+                  const aType = String(actionData.action || '').toUpperCase();
+                  
+                  // 💡 Aggressive Auto-execute: catch ANY read-only or query action
+                  const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD'];
+                  const isSafe = safeKeywords.some(k => aType.includes(k));
+                  
+                  if (isSafe) {
+                    console.log("[AI] Auto-executing safe action:", aType);
+                    assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
+                    const msgIdx = aiStore.globalMessages.indexOf(assistantMessage);
+                    executeAction(actionData, msgIdx);
+                    return; 
+                  }
+
+                  assistantMessage.action = actionData;
                   assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                 } catch(e) {}
               }
@@ -284,7 +314,13 @@ const sendMessage = async () => {
                     }
                   }
                   
-                  assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
+                    assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
+
+                  // 💡 Reflexive feedback: Send the results back to AI so it can "read and output" properly
+                  if (resultHtml) {
+                    aiStore.addMessage('user', `[系统反馈搜索结果]:\n${resultHtml}\n请根据上述数据回答我的问题。`, null, true); 
+                    sendMessage(true); 
+                  }
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败，请稍后重试。";
                 }
@@ -309,6 +345,10 @@ const sendMessage = async () => {
                     resultText = `📊 **系统统计**: 当前权限下共有 **${stats.total_count}** 份可见文档。`;
                   }
                   assistantMessage.content = tempMsg + "\n\n" + resultText;
+                  
+                  // Feed back to AI
+                  aiStore.addMessage('user', `[系统反馈统计数据]:\n${resultText}`, null, true);
+                  sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
                 }
@@ -341,6 +381,10 @@ const sendMessage = async () => {
                     resultHtml = `📑 **系统总体概览**:\n- 总成员数: **${data.total_users}**\n- 权限内可见文档: **${data.total_docs}**\n- 待我审批: **${data.my_stats.pending}** 份`;
                   }
                   assistantMessage.content = tempMsg + "\n\n" + resultHtml;
+                  
+                  // Feed back to AI
+                  aiStore.addMessage('user', `[系统反馈仪表盘信息]:\n${resultHtml}`, null, true);
+                  sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 仪表盘数据获取失败。";
                 }
@@ -355,55 +399,106 @@ const sendMessage = async () => {
     ElMessage.error(t('aiView.messages.serviceError'));
     assistantMessage.content = t('aiView.messages.unstable') + (error.message ? ` (${error.message})` : '');
   } finally {
-    isTyping.value = false;
+    typingCount.value = Math.max(0, typingCount.value - 1);
     scrollToBottom();
   }
 };
 
 const getActionDesc = (action: any) => {
+  if (!action) return "";
   if (action.confirm_prompt) return action.confirm_prompt;
-  if (action.action === 'start_approval') {
-    const docText = action.params?.doc_id ? `文档 ID ${action.params.doc_id}` : '';
-    return `确认对 ${docText} 发起 ${action.params?.type === 'sequential' ? '顺序' : '并行'} 审批吗？`;
+  
+  const type = String(action.action || '').toUpperCase();
+  const p = action.params || {};
+
+  if (type.includes('START_APPROVAL')) {
+    const docText = p.doc_id ? `文档 ID ${p.doc_id}` : '';
+    return `确认对 ${docText} 发起 ${p.type === 'sequential' ? '顺序' : '并行'} 审批吗？`;
   }
-  if (action.action === 'delete_doc') return `确认删除文档 ID: ${action.params?.id}`;
-  if (action.action === 'update_doc') return `确认更新文档 ID: ${action.params?.id}`;
-  if (action.action === 'update_user') return `确认更新用户信息 ID: ${action.params?.id}`;
-  if (action.action === 'create_user') return `确认创建新用户: ${action.params?.data?.login_name}`;
+  if (type.includes('RECALL_APPROVAL')) {
+    const docText = p.doc_id ? `文档 ID ${p.doc_id}` : '';
+    return `确认撤销 ${docText} 的审批申请吗？`;
+  }
+  if (type.includes('QUERY_DATA') || type.includes('SEARCH') || type.includes('GET') || type.includes('LIST')) {
+    return `检索 ${p.ENTITY || p.entity || '系统数据'}: ${p.QUERY || p.query || ''}`;
+  }
+  if (type.includes('STATS') || type.includes('COUNT')) {
+    return `统计查询: ${p.TYPE || p.type || '数据指标'}`;
+  }
+  if (type.includes('QUERY_DASHBOARD') || type.includes('DASHBOARD')) {
+    return `立即分析仪表盘实时数据: ${p.TYPE || '概览'}`;
+  }
+  if (type === 'DELETE_DOC') return `确认删除文档 ID: ${p.id}`;
+  if (type === 'UPDATE_DOC') return `确认更新文档 ID: ${p.id}`;
+  if (type === 'UPDATE_USER') return `确认更新用户信息 ID: ${p.id}`;
+  if (type === 'CREATE_USER') return `确认创建新用户: ${p.data?.login_name}`;
+  
   return t('aiView.suggestedAction');
 };
 
 const executeAction = async (action: any, idx: number) => {
+  const type = String(action.action || '').toUpperCase();
+  const p = action.params || {};
+  
+  // Create a wrapper for the assistant message if we need to update its content during execution
+  const assistantMessage = aiStore.globalMessages[idx].role === 'assistant' ? aiStore.globalMessages[idx] : null;
+
   try {
-    if (action.action === 'delete_doc') {
-      await api.delete(`/documents/${action.params.id}`);
+    const isQuery = ['QUERY', 'SEARCH', 'STATS', 'DASHBOARD', 'GET', 'LIST', 'COUNT', 'VIEW', 'SHOW', 'READ'].some(k => type.includes(k));
+    if (isQuery) {
+       // 💡 Handle any variation of query/search/stats/dashboard/get/list
+       if (type.includes('DATA') || type.includes('SEARCH') || type.includes('GET') || type.includes('LIST')) {
+          const entity = (p.ENTITY || p.entity || '').toLowerCase();
+          const q = p.QUERY || p.query || 'all';
+          const res = await api.get(entity.includes('approval') ? '/approvals/inbox' : (entity.includes('user') ? '/users' : '/documents'), { params: { search: q } });
+          const result = JSON.stringify(res.data.items || res.data);
+          aiStore.addMessage('user', `[反馈]:\n${result}`, null, true);
+          sendMessage(true);
+       } else if (type.includes('STATS') || type.includes('COUNT')) {
+          const sType = (p.TYPE || p.type || '').toLowerCase();
+          const res = await api.get(sType.includes('user') ? '/users/stats' : '/documents/stats');
+          const result = `📊 统计结果: ${res.data.total_count}`;
+          aiStore.addMessage('user', `[反馈]:\n${result}`, null, true);
+          sendMessage(true);
+       } else if (type.includes('DASHBOARD')) {
+          const res = await api.get('/dashboard/stats');
+          aiStore.addMessage('user', `[反馈]:\n${JSON.stringify(res.data)}`, null, true);
+          sendMessage(true);
+       }
+    } else if (type.includes('DELETE_DOC')) {
+      await api.delete(`/documents/${p.id}`);
       ElMessage.success("文档已成功删除");
-    } else if (action.action === 'update_doc') {
-      await api.patch(`/documents/${action.params.id}`, action.params.data);
+    } else if (type === 'UPDATE_DOC') {
+      await api.patch(`/documents/${p.id}`, p.data);
       ElMessage.success("文档已成功更新");
-    } else if (action.action === 'update_user') {
-      await api.patch(`/users/${action.params.id}`, action.params.data);
+    } else if (type === 'UPDATE_USER') {
+      await api.patch(`/users/${p.id}`, p.data);
       ElMessage.success("用户信息已更新");
-    } else if (action.action === 'create_user') {
-      await api.post('/users', action.params.data);
+    } else if (type === 'CREATE_USER') {
+      await api.post('/users', p.data);
       ElMessage.success("用户创建成功");
-    } else if (action.action === 'create_doc') {
-      const res = await api.post('/documents', action.params);
+    } else if (type === 'CREATE_DOC') {
+      const res = await api.post('/documents', p);
       ElMessage.success("文档创建成功");
       router.push(`/doc/${res.data.id}`);
-    } else if (action.action === 'start_approval') {
-      await api.post(`/documents/${action.params.doc_id}/approvals`, {
-        type: action.params.type || 'parallel',
-        approvers: action.params.approvers
+    } else if (type === 'START_APPROVAL') {
+      await api.post(`/documents/${p.doc_id}/approvals`, {
+        type: p.type || 'parallel',
+        approvers: p.approvers
       });
       ElMessage.success("审批流程已成功发起");
+    } else if (type === 'RECALL_APPROVAL') {
+      await api.post(`/approvals/recall`, { doc_id: p.doc_id });
+      ElMessage.success("审批申请已成功撤销");
     } else {
-      ElMessage.warning("未知的操作类型");
+      ElMessage.warning("未知的操作类型: " + type);
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.error || "执行操作失败");
   }
-  aiStore.globalMessages[idx].action = null;
+  if (aiStore.globalMessages[idx]) {
+    aiStore.globalMessages[idx].action = null;
+  }
 };
 </script>
 

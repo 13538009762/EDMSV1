@@ -223,3 +223,43 @@ def my_applications():
         })
         
     return jsonify({"items": items})
+    
+@bp.post("/recall")
+@jwt_required()
+def recall():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json(silent=True) or {}
+    doc_id = data.get("doc_id")
+    if not doc_id:
+        return jsonify({"error": "doc_id required"}), 400
+        
+    doc = db.session.get(Document, doc_id)
+    if not doc:
+        return jsonify({"error": "Document not found"}), 404
+        
+    if doc.owner_id != user.id:
+        return jsonify({"error": "Forbidden: Only owner can recall approval"}), 403
+        
+    if doc.status != "in_approval":
+        return jsonify({"error": "Document is not in approval status"}), 400
+        
+    from app.services.approval_service import recall_flow
+    try:
+        recall_flow(doc)
+        db.session.commit()
+        
+        # Notify via Socket.io
+        from app.extensions import socketio
+        socketio.emit("status_change", {
+            "document_id": doc.id,
+            "status": doc.status,
+            "can_edit": True
+        }, room=f"doc_{doc.id}")
+        
+        return jsonify({"ok": True, "status": doc.status})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
