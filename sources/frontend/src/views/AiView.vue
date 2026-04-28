@@ -76,7 +76,7 @@
           <el-button 
             type="primary" 
             :disabled="!input.trim() || isTyping" 
-            @click="sendMessage"
+            @click="() => sendMessage()"
             class="send-btn"
           >
             <el-icon><Promotion /></el-icon>
@@ -89,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from 'vue';
+import { ref, onMounted, nextTick, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAiStore } from '@/stores/ai';
 import { useAuthStore } from '@/stores/auth';
@@ -156,6 +156,11 @@ const scrollToBottom = async (force = false) => {
   }
 };
 
+// 💡 监听消息变化自动滚动
+watch(() => aiStore.globalMessages, () => {
+  scrollToBottom();
+}, { deep: true });
+
 onMounted(scrollToBottom);
 
 const handleEnter = (e: KeyboardEvent) => {
@@ -174,7 +179,7 @@ const sendMessage = async (isFeedback = false) => {
 
   const userQuery = input.value;
   if (!isFeedback) {
-    aiStore.addMessage('user', userQuery);
+    aiStore.addMessage('global', 'user', userQuery);
     input.value = '';
   }
   typingCount.value++;
@@ -318,7 +323,7 @@ const sendMessage = async (isFeedback = false) => {
 
                   // 💡 Reflexive feedback: Send the results back to AI so it can "read and output" properly
                   if (resultHtml) {
-                    aiStore.addMessage('user', `[系统反馈搜索结果]:\n${resultHtml}\n请根据上述数据回答我的问题。`, null, true); 
+                    aiStore.addMessage('global', 'user', `[系统反馈搜索结果]:\n${resultHtml}\n请根据上述数据回答我的问题。`, null, true); 
                     sendMessage(true); 
                   }
                 } catch (e) {
@@ -347,7 +352,7 @@ const sendMessage = async (isFeedback = false) => {
                   assistantMessage.content = tempMsg + "\n\n" + resultText;
                   
                   // Feed back to AI
-                  aiStore.addMessage('user', `[系统反馈统计数据]:\n${resultText}`, null, true);
+                  aiStore.addMessage('global', 'user', `[系统反馈统计数据]:\n${resultText}`, null, true);
                   sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
@@ -383,7 +388,7 @@ const sendMessage = async (isFeedback = false) => {
                   assistantMessage.content = tempMsg + "\n\n" + resultHtml;
                   
                   // Feed back to AI
-                  aiStore.addMessage('user', `[系统反馈仪表盘信息]:\n${resultHtml}`, null, true);
+                  aiStore.addMessage('global', 'user', `[系统反馈仪表盘信息]:\n${resultHtml}`, null, true);
                   sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 仪表盘数据获取失败。";
@@ -452,17 +457,17 @@ const executeAction = async (action: any, idx: number) => {
           const q = p.QUERY || p.query || 'all';
           const res = await api.get(entity.includes('approval') ? '/approvals/inbox' : (entity.includes('user') ? '/users' : '/documents'), { params: { search: q } });
           const result = JSON.stringify(res.data.items || res.data);
-          aiStore.addMessage('user', `[反馈]:\n${result}`, null, true);
+          aiStore.addMessage('global', 'user', `[反馈]:\n${result}`, null, true);
           sendMessage(true);
        } else if (type.includes('STATS') || type.includes('COUNT')) {
           const sType = (p.TYPE || p.type || '').toLowerCase();
           const res = await api.get(sType.includes('user') ? '/users/stats' : '/documents/stats');
           const result = `📊 统计结果: ${res.data.total_count}`;
-          aiStore.addMessage('user', `[反馈]:\n${result}`, null, true);
+          aiStore.addMessage('global', 'user', `[反馈]:\n${result}`, null, true);
           sendMessage(true);
        } else if (type.includes('DASHBOARD')) {
           const res = await api.get('/dashboard/stats');
-          aiStore.addMessage('user', `[反馈]:\n${JSON.stringify(res.data)}`, null, true);
+          aiStore.addMessage('global', 'user', `[反馈]:\n${JSON.stringify(res.data)}`, null, true);
           sendMessage(true);
        }
     } else if (type.includes('DELETE_DOC')) {

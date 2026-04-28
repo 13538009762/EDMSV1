@@ -262,7 +262,7 @@
               <!-- AI Chat Section -->
               <div class="ai-chat-container">
                 <transition-group name="msg" tag="div" class="chat-messages" ref="chatScroll">
-                  <template v-for="(msg, idx) in aiStore.globalMessages" :key="idx">
+                  <template v-for="(msg, idx) in aiStore.editorMessages" :key="idx">
                     <div v-if="!msg.hidden" :class="['chat-msg', msg.role]">
                     <div class="msg-content" v-html="renderMarkdown(msg.content)"></div>
                     
@@ -309,7 +309,7 @@
                     </div>
                   </div>
                 </transition-group>
-                  <div v-if="aiStore.globalMessages.length === 0" class="chat-placeholder">
+                  <div v-if="aiStore.editorMessages.length === 0" class="chat-placeholder">
                     <el-empty :description="t('editor.ai.aiChatEmpty')" :image-size="40" />
                   </div>
                 
@@ -319,11 +319,11 @@
                     type="textarea"
                     :rows="2"
                     :placeholder="t('editor.ai.aiChatPlaceholder')"
-                    @keyup.enter.prevent="askAi"
+                    @keyup.enter.prevent="() => askAi()"
                     resize="none"
                   />
                   <div class="chat-actions">
-                    <el-button type="primary" size="small" @click="askAi">
+                    <el-button type="primary" size="small" @click="() => askAi()">
                       {{ t("common.send") }}
                     </el-button>
                   </div>
@@ -736,7 +736,7 @@ const confirmAiAction = async (action: any, idx: number) => {
           approvers: approvers,
         });
         ElMessage.success(t("editor.messages.sentToApproval") || "已成功发起审批");
-        aiStore.globalMessages[idx].action = null;
+        aiStore.editorMessages[idx].action = null;
         loadDoc(true);
         return;
       } catch (err) {
@@ -758,7 +758,7 @@ const confirmAiAction = async (action: any, idx: number) => {
       loading.value = true;
       await api.post(`/approvals/recall`, { doc_id: action.params?.doc_id || docId.value });
       ElMessage.success("审批申请已成功撤回");
-      aiStore.globalMessages[idx].action = null;
+      aiStore.editorMessages[idx].action = null;
       loadDoc(true);
     } catch (err: any) {
       ElMessage.error(err.response?.data?.error || "撤回失败");
@@ -784,14 +784,14 @@ const confirmAiAction = async (action: any, idx: number) => {
          resultHtml = JSON.stringify(res.data);
        }
        if (resultHtml) {
-         aiStore.addMessage('user', `[反馈]:\n${resultHtml}`, null, true);
+         aiStore.addMessage('editor', 'user', `[反馈]:\n${resultHtml}`, null, true);
          askAi(true);
        }
      } catch (e) {
        console.error("Action execution failed", e);
      }
   }
-  aiStore.globalMessages[idx].action = null;
+  aiStore.editorMessages[idx].action = null;
 };
 
 // AI Agent Action Resolver
@@ -893,7 +893,7 @@ async function askAi(isFeedback = false) {
   
   const query = aiQuery.value.trim();
   if (!isFeedback) {
-    aiStore.addMessage('user', query);
+    aiStore.addMessage('editor', 'user', query);
     aiQuery.value = "";
   }
   askingCount.value++;
@@ -912,7 +912,7 @@ async function askAi(isFeedback = false) {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
       body: JSON.stringify({ 
-        messages: aiStore.globalMessages.filter(m => m.content && m.content.trim() !== '').slice(-15), 
+        messages: aiStore.editorMessages.filter(m => m.content && m.content.trim() !== '').slice(-15), 
         context_url: route.path,
         doc_context: docContext 
       })
@@ -921,7 +921,7 @@ async function askAi(isFeedback = false) {
     if (!response.ok) throw new Error("AI request failed");
     
     const aiMsg: any = { role: 'ai', content: "", action: undefined };
-    aiStore.globalMessages.push(aiMsg);
+    aiStore.editorMessages.push(aiMsg);
     
     const reader = response.body?.getReader();
     if (!reader) return;
@@ -1019,7 +1019,7 @@ async function askAi(isFeedback = false) {
                     
                     // 💡 Feed back to AI
                     if (resultHtml) {
-                      aiStore.addMessage('user', `[系统反馈]:\n${resultHtml}`, null, true);
+                      aiStore.addMessage('editor', 'user', `[系统反馈]:\n${resultHtml}`, null, true);
                       askAi(true);
                     }
                   }
@@ -1050,7 +1050,7 @@ async function askAi(isFeedback = false) {
 
                   if (isSafe) {
                     aiMsg.content = aiMsg.content.replace(/```json[\s\S]*?```/g, "").trim();
-                    confirmAiAction(actionData, aiStore.globalMessages.length - 1);
+                    confirmAiAction(actionData, aiStore.editorMessages.length - 1);
                     return; 
                   }
 
@@ -1130,7 +1130,7 @@ async function askAi(isFeedback = false) {
 }
 
 // 💡 监听消息变化自动滚动
-watch(() => aiStore.globalMessages, () => {
+watch(() => aiStore.editorMessages, () => {
   scrollToBottom();
 }, { deep: true });
 

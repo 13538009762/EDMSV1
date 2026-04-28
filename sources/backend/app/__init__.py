@@ -38,14 +38,18 @@ def create_app(config_class=Config):
     @app.errorhandler(500)
     def handle_500(e):
         import traceback
-        print("❌ [Global Error Handler] 500 Internal Server Error:")
+        print("[Global Error Handler] 500 Internal Server Error:")
         traceback.print_exc()
         return {"error": "Internal Server Error", "message": str(e)}, 500
 
     @app.errorhandler(Exception)
     def handle_exception(e):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return e
+            
         import traceback
-        print("❌ [Global Error Handler] Unhandled Exception:")
+        print("[Global Error Handler] Unhandled Exception:")
         traceback.print_exc()
         return {"error": str(e)}, 500
 
