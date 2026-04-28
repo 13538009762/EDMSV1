@@ -130,7 +130,11 @@ const suggestions = computed(() => [
   }
 ]);
 
-const renderMarkdown = (text: string) => marked.parse(text);
+const renderMarkdown = (text: string) => {
+  if (!text) return '';
+  const cleanText = text.replace(/\[ACTION:[\s\S]*?\]/g, '').trim();
+  return marked.parse(cleanText);
+};
 
 const scrollToBottom = async () => {
   await nextTick();

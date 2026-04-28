@@ -9,17 +9,25 @@ bp = Blueprint("ai", __name__)
 @bp.post("/chat")
 @jwt_required()
 def ai_chat():
-    data = request.get_json() or {}
-    messages = data.get("messages", [])
-    context_url = data.get("context_url", "")
-    
-    if not messages:
-        return jsonify({"error": "No messages provided"}), 400
-        
-    return Response(
-        stream_with_context(AIService.stream_chat(messages, context_url, current_user=current_user())),
-        mimetype="text/event-stream"
-    )
+    try:
+        data = request.get_json(silent=True) or {}
+        messages = data.get("messages", [])
+        context_url = data.get("context_url", "")
+        doc_context = data.get("doc_context", "")
+
+        return Response(
+            stream_with_context(AIService.stream_chat(
+                messages, 
+                user_context=context_url, 
+                doc_context=doc_context, 
+                current_user=current_user()
+            )),
+            mimetype="text/event-stream"
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 @bp.route("/generate", methods=["POST"])
 @jwt_required()
 def ai_generate():

@@ -10,11 +10,11 @@
           type="success" 
           plain 
           size="small"
-          icon="Shield" 
+          :icon="Finished" 
           :loading="isVerifying"
           @click="handleBlockchainVerify"
           style="margin-left: 12px;">
-          区块链确权审计
+          {{ t('editor.blockchainVerify') }}
         </el-button>
       </div>
       
@@ -263,7 +263,7 @@
               <div class="ai-chat-container">
                 <transition-group name="msg" tag="div" class="chat-messages" ref="chatScroll">
                   <div v-for="(msg, idx) in aiStore.globalMessages" :key="idx" :class="['chat-msg', msg.role]">
-                    <div class="msg-content">{{ msg.content }}</div>
+                    <div class="msg-content" v-html="renderMarkdown(msg.content)"></div>
                     
                     <div v-if="msg.role === 'ai' || msg.role === 'assistant'" class="msg-footer" style="margin-top: 8px;">
                       <el-button 
@@ -286,9 +286,9 @@
                       </div>
                       <div class="card-body">
                         <div class="action-desc">
-                          {{ t('editor.ai.actionStartApproval', { 
-                            names: (msg.action.params?.approvers || []).join(', ') 
-                          }) }}
+                          {{ msg.action.confirm_prompt || (msg.action.params?.approver_names 
+                            ? `立即发起审批：${msg.action.params.approver_names}？` 
+                            : t('editor.ai.actionStartApproval', { names: (msg.action.params?.approvers || []).join(', ') })) }}
                         </div>
                       </div>
                       <div class="card-actions">
@@ -501,7 +501,7 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { ArrowDown, Back, Right, MagicStick, Microphone } from "@element-plus/icons-vue";
+import { ArrowDown, Back, Right, MagicStick, Microphone, Finished } from "@element-plus/icons-vue";
 
 import { FontSize, LineHeight, Indent, CommentMark, TableExit, SearchAndReplace } from "@/utils/tiptapExtensions";
 import api from "@/api/client";
@@ -536,6 +536,8 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const auth = useAuthStore();
 const docId = computed(() => Number(route.params.id));
+const isAdmin = computed(() => auth.user?.login_name === 'admin');
+const isOwner = computed(() => auth.user?.id === meta.value.owner_id);
 
 const loading = ref(true);
 const saving = ref(false);
@@ -550,6 +552,14 @@ const meta = ref<any>({
   file_path: null,
 });
 
+const statusTag = computed(() => {
+  const map: any = { draft: 'info', approved: 'success', rejected: 'danger', pending: 'warning', ARCHIVED: 'info' };
+  return map[meta.value.status] || 'info';
+});
+const statusLabel = computed(() => {
+  return t(`editor.status.${meta.value.status}`) || meta.value.status;
+});
+
 const isVerifying = ref(false);
 
 const handleBlockchainVerify = async () => {
@@ -559,15 +569,15 @@ const handleBlockchainVerify = async () => {
     
     if (res.data.safe) {
       ElNotification({
-        title: '审计通过 (Audit Passed)',
+        title: t('editor.blockchainPassed'),
         message: `
           <div style="margin-top: 5px;">
             <p style="color: #67C23A; font-weight: bold; margin-bottom: 8px; display:flex; align-items:center; gap:4px">
-              <span style="font-size: 16px;">✔</span> 当前数据与区块链存证完全一致
+              <span style="font-size: 16px;">✔</span> ${t('editor.blockchainVerified')}
             </p>
             <div style="padding: 8px; background: rgba(0,0,0,0.03); border-radius: 4px;">
               <p style="font-size: 12px; color: #909399; margin: 0; word-break: break-all;">
-                <b>交易凭证 TxHash:</b><br/>${res.data.tx_hash}
+                <b>${t('editor.blockchainTxHash')}:</b><br/>${res.data.tx_hash}
               </p>
             </div>
           </div>
@@ -578,13 +588,13 @@ const handleBlockchainVerify = async () => {
       });
     } else {
       ElNotification({
-        title: '零信任拦截 (Zero-Trust Alert)',
+        title: t('editor.blockchainTamperAlert'),
         message: `
           <div style="margin-top: 5px;">
             <p style="color: #F56C6C; font-weight: bold; margin-bottom: 8px; display:flex; align-items:center; gap:4px">
               <span style="font-size: 16px;">❌</span> ${res.data.msg}
             </p>
-            <p style="font-size: 12px; color: #606266; margin: 0;">系统已拦截该脏数据，并记录安全审计日志。</p>
+            <p style="font-size: 12px; color: #606266; margin: 0;">${t('editor.blockchainInterceptionMsg')}</p>
           </div>
         `,
         dangerouslyUseHTMLString: true,
@@ -670,6 +680,65 @@ const chatScroll = ref<HTMLElement | null>(null);
 const spacesOptions = ref<Array<{ id: any, name: string }>>([]);
 const selectedSpaceId = ref<any>(null);
 
+// ==========================================
+// AI Core Helper Functions (Unified)
+// ==========================================
+
+const renderMarkdown = (text: string) => {
+  if (!text) return '';
+  const cleanText = text.replace(/\[ACTION:[\s\S]*?\]/g, '').trim();
+  return marked.parse(cleanText);
+};
+
+const insertChatToEditor = (content: string) => {
+  if (!editor.value || !content) return;
+  
+  // Clean content: remove [ACTION:...] and JSON blocks
+  let cleanContent = content.replace(/\[ACTION:[\s\S]*?\]/g, '')
+                            .replace(/```json[\s\S]*?```/g, "")
+                            .trim();
+  
+  const html = renderMarkdown(cleanContent);
+  editor.value.commands.insertContent(html);
+  ElMessage.success(t("editor.ai.insertSuccess"));
+};
+
+const confirmAiAction = async (action: any, idx: number) => {
+  if (!action) return;
+  if (action.action === "start_approval") {
+    const p = action.params || action;
+    const approvers = p.approvers || [];
+    
+    // 💡 如果已经有具体的 ID，直接发起审批，不再弹窗
+    if (approvers.length > 0 && typeof approvers[0] === 'number') {
+      try {
+        loading.value = true;
+        await api.post(`/documents/${docId.value}/approvals`, {
+          type: p.type || p.approval_type || "sequential",
+          approvers: approvers,
+        });
+        ElMessage.success(t("editor.messages.sentToApproval") || "已成功发起审批");
+        aiStore.globalMessages[idx].action = null;
+        loadDoc(true);
+        return;
+      } catch (err) {
+        ElMessage.error(t("common.failed"));
+      } finally {
+        loading.value = false;
+      }
+    } else {
+      // 💡 如果只有姓名没有 ID，则回退到弹窗让用户手动选
+      window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+        detail: { 
+          approvers: approvers, 
+          type: p.type || 'parallel'
+        } 
+      }));
+    }
+  }
+  aiStore.globalMessages[idx].action = null;
+};
+
 // AI Agent Action Resolver
 function resolveApproverIds(names: any = []) {
   const ids: number[] = [];
@@ -703,27 +772,42 @@ function resolveApproverIds(names: any = []) {
   return { ids, notFound };
 }
 
-async function confirmAiAction(action: any, msgIdx: number) {
+async function confirmAiAction_OLD(action: any, msgIdx: number) {
   if (action?.action === "start_approval") {
-    // 💡 Robustness: AI might use 'approver' or 'approvers', with or without 'params'
     const params = action.params || action;
     const rawApprovers = params.approvers || params.approver || [];
     
-    const { ids, notFound } = resolveApproverIds(rawApprovers);
-    if (notFound.length > 0) {
-      ElMessage.warning(t("editor.ai.approverNotFound", { name: notFound.join(", ") }));
+    let ids: number[] = [];
+    
+    // 💡 智能检测：如果审批人列表里是数字ID，直接使用；如果是姓名，再走解析逻辑
+    const firstItem = Array.isArray(rawApprovers) ? rawApprovers[0] : rawApprovers;
+    if (typeof firstItem === 'number' || (typeof firstItem === 'string' && /^\d+$/.test(firstItem))) {
+      // 直接是 ID，转换并使用
+      ids = (Array.isArray(rawApprovers) ? rawApprovers : [rawApprovers]).map((id: any) => Number(id));
+    } else {
+      // 是姓名，走搜索解析
+      const resolved = resolveApproverIds(rawApprovers);
+      if (resolved.notFound.length > 0) {
+        ElMessage.warning(t("editor.ai.approverNotFound", { name: resolved.notFound.join(", ") }));
+      }
+      ids = resolved.ids;
     }
     
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      ElMessage.warning("未能确定审批人，请手动选择");
+      approverIds.value = [];
+      showApproval.value = true;
+      return;
+    }
     
     try {
       loading.value = true;
       await api.post(`/documents/${docId.value}/approvals`, {
-        type: params.approval_type || params.type || "parallel",
+        type: params.approval_type || params.type || "sequential",
         approvers: ids,
       });
       ElMessage.success(t("editor.messages.sentToApproval"));
-      aiStore.globalMessages[msgIdx].action = null; // Hide card after success
+      aiStore.globalMessages[msgIdx].action = null;
       loadDoc(true);
     } catch (err) {
       ElMessage.error(t("common.failed"));
@@ -757,8 +841,13 @@ async function askAi() {
   aiQuery.value = "";
   asking.value = true;
   
-  // Scoped RAG: Send document context + user question
-  const docContext = editor.value.getText().slice(0, 3000);
+  // Scoped RAG: Send document metadata + context + user question
+  const docMeta = {
+    id: route.params.id,
+    title: meta.value?.title || "未命名文档",
+    status: meta.value?.status || "draft"
+  };
+  const docContext = `[当前编辑文档信息] ID: ${docMeta.id}, 标题: ${docMeta.title}, 状态: ${docMeta.status}\n\n内容摘要: ${editor.value.getText().slice(0, 4000)}`;
   
   try {
      const response = await fetch('/api/ai/chat', {
@@ -767,7 +856,7 @@ async function askAi() {
       body: JSON.stringify({ 
         messages: aiStore.globalMessages, 
         context_url: route.path,
-        doc_context: docContext // Additional context for document-specific chat
+        doc_context: docContext 
       })
     });
     
@@ -793,24 +882,141 @@ async function askAi() {
             if (data.content) {
               aiMsg.content += data.content;
             } else if (data.type === "done") {
-              // Extract action from message content
-              const jsonMatch = aiMsg.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-              if (jsonMatch) {
+              // 1. Handle QUERY_DATA Tag (Search Logic)
+              const queryDataRegex = /\[ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+),\s*QUERY:\s*([^\]]+)\]/i;
+              const qMatch = aiMsg.content.match(queryDataRegex);
+              if (qMatch) {
+                const entity = qMatch[1];
+                const query = qMatch[2];
+                aiMsg.content = aiMsg.content.replace(queryDataRegex, '').trim();
+                const tempMsg = aiMsg.content;
+                aiMsg.content = tempMsg + "\n\n⌛ *正在检索 " + entity + "...*"; 
                 try {
-                  let actionData = JSON.parse(jsonMatch[1]);
-                  if (actionData.start_approval || actionData.action === "start_approval") {
+                  let res;
+                  let resultHtml = "";
+                  if (entity === 'documents') {
+                    res = await api.get('/documents', { params: { search: query } });
+                    const items = res.data.items || [];
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (ID: ${d.id}, 状态: ${d.status})`).join('\n');
+                    } else {
+                      resultHtml = "\n\n❌ 未找到相关文档。";
+                    }
+                  } else if (entity === 'users') {
+                    res = await api.get('/users', { params: { search: query } });
+                    const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                    if (items.length > 1) {
+                      resultHtml = "\n\n### 找到以下用户（请告知确认发给哪位）:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}) - ${u.department_name}`).join('\n');
+                    } else if (items.length === 1) {
+                      const foundUser = items[0];
+                      const docIdStr = route.params.id;
+                      resultHtml = `\n\n✅ 已定位到用户: **${foundUser.display_name}**`;
+                      
+                      aiMsg.action = {
+                        action: 'start_approval',
+                        confirm_prompt: `立即发起审批：${foundUser.display_name}？`,
+                        params: {
+                          doc_id: docIdStr ? Number(docIdStr) : null,
+                          approvers: [foundUser.id],
+                          approver_names: foundUser.display_name,
+                          type: 'sequential'
+                        }
+                      };
+
+                      console.log("[DEBUG] EditorView Auto-triggering approval dialog for:", foundUser.display_name);
+                      window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+                        detail: { approvers: [foundUser.id], type: 'sequential' } 
+                      }));
+                    } else {
+                      resultHtml = "\n\n❌ 未找到相关用户。";
+                    }
+                  }
+                  if (resultHtml !== undefined) {
+                    aiMsg.content = tempMsg + (resultHtml || "");
+                  }
+                } catch (e) {
+                  aiMsg.content = tempMsg + "\n\n⚠️ 查询失败。";
+                }
+              }
+
+              // 2. Handle start_approval Tag/JSON
+              const approvalRegex = /\[ACTION:\s*start_approval,\s*PARAMS:\s*(\{[\s\S]*?\})\]/i;
+              const aMatch = aiMsg.content.match(approvalRegex);
+              const jsonMatch = aiMsg.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+              
+              if ((aMatch || jsonMatch) && !aiMsg.action) {
+                try {
+                  let rawAction = aMatch ? aMatch[1] : jsonMatch![1];
+                  let actionData = JSON.parse(rawAction);
+                  
+                  // 💡 兼容性处理：支持 { start_approval: { ... } } 格式
+                  if (actionData.start_approval && !actionData.action) {
+                    actionData = { action: 'start_approval', params: actionData.start_approval };
+                  }
+
+                  if (actionData.action === "start_approval") {
+                    const params = actionData.params || actionData;
+                    
+                    // 补全姓名
+                    if (!params.approver_names) {
+                      const nameMatch = aiMsg.content.match(/\*\*([^\*]{2,10})\*\*/);
+                      if (nameMatch) {
+                        params.approver_names = nameMatch[1];
+                      } else if (params.approvers && Array.isArray(params.approvers)) {
+                        const nameList = params.approvers.filter((p: any) => typeof p === 'string');
+                        if (nameList.length > 0) params.approver_names = nameList.join(', ');
+                      }
+                    }
+
+                    // 💡 核心改进：如果只有姓名没有 ID，自动尝试匹配并弹出窗口
+                    if (params.approver_names && (!params.approvers || params.approvers.length === 0 || typeof params.approvers[0] === 'string')) {
+                      const names = Array.isArray(params.approver_names) ? params.approver_names : String(params.approver_names).split(',');
+                      const searchName = (names[0] || "").trim();
+                      
+                      if (searchName) {
+                        api.get('/users', { params: { search: searchName } }).then(res => {
+                        let matchedUsers = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                        
+                        // 💡 容错处理：如果没搜到，尝试去掉所有空格再搜一次
+                        if (matchedUsers.length === 0 && searchName.includes(' ')) {
+                          return api.get('/users', { params: { search: searchName.replace(/\s/g, '') } }).then(res2 => {
+                            matchedUsers = (res2.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                            return matchedUsers;
+                          });
+                        }
+                        return matchedUsers;
+                      }).then(foundList => {
+                        if (foundList && foundList.length === 1) {
+                          const foundUser = foundList[0];
+                          params.approvers = [foundUser.id];
+                          params.approver_names = foundUser.display_name;
+                          // 💡 此处不再自动弹出窗口，由用户在 AI 聊天框点击“确认执行”
+                        } else {
+                          console.log("[Editor AI] Search for " + searchName + " returned " + (foundList?.length || 0) + " items");
+                        }
+                        }).catch(err => {
+                          console.error("[Editor AI] User search failed", err);
+                        });
+                      }
+                    }
+                    
+                    const displayNames = Array.isArray(params.approver_names) ? params.approver_names.join(', ') : params.approver_names;
                     aiMsg.action = {
                       action: "start_approval",
-                      params: actionData.params || actionData
+                      confirm_prompt: displayNames ? `立即发起审批：${displayNames}？` : undefined,
+                      params: params
                     };
-                    aiMsg.content = aiMsg.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
+                    aiMsg.content = aiMsg.content.replace(approvalRegex, "").replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                   }
-                } catch(e) {}
+                } catch(e) {
+                  console.error("AI Action parse failed", e);
+                }
               }
             }
-            if (chatScroll) {
+            if (chatScroll.value) {
               await nextTick();
-              chatScroll.value!.scrollTop = chatScroll.value!.scrollHeight;
+              const el = (chatScroll.value as any).$el || chatScroll.value;
+              el.scrollTop = el.scrollHeight;
             }
           } catch(e) {}
         }
@@ -822,7 +1028,33 @@ async function askAi() {
     asking.value = false;
   }
 }
-function insertChatToEditor(content: string) {
+
+// 💡 监听消息变化自动滚动
+watch(() => aiStore.globalMessages, async () => {
+  await nextTick();
+  if (chatScroll.value) {
+    const el = (chatScroll.value as any).$el || chatScroll.value;
+    el.scrollTop = el.scrollHeight;
+  }
+}, { deep: true });
+
+// 💡 监听来自 AI 助理的审批触发事件
+onMounted(() => {
+  const handler = (e: any) => {
+    console.log("[DEBUG] Received edms:trigger_approval", e.detail);
+    const { approvers, type } = e.detail;
+    if (approvers) {
+      // 兼容 ID 可能是字符串的情况
+      approverIds.value = approvers.map((id: any) => Number(id));
+    }
+    if (type) approvalType.value = type;
+    showApproval.value = true;
+    ElMessage.info(t("editor.ai.preselectedApprovers", "已根据 AI 建议为您预选审批人"));
+  };
+  window.addEventListener('edms:trigger_approval', handler);
+  onBeforeUnmount(() => window.removeEventListener('edms:trigger_approval', handler));
+});
+function insertChatToEditor_OLD(content: string) {
   if (!editor.value || !content) return;
   
   // 💡 Robustness: Aggressively strip ANY leftover JSON blocks to prevent leakage into document
@@ -927,20 +1159,6 @@ const threadedComments = computed(() => {
   return roots.map(r => map[r.id]);
 });
 
-const isOwner = computed(() => auth.user?.id === meta.value.owner_id);
-const isAdmin = computed(() => auth.user?.login_name === "admin");
-
-const statusLabel = computed(() => {
-  return t("common.status." + meta.value.status);
-});
-
-const statusTag = computed(() => {
-  const s = meta.value.status;
-  if (s === "approved") return "success";
-  if (s === "rejected") return "danger";
-  return s === "in_approval" ? "warning" : "info";
-});
-
 const filteredUserOptions = computed(() => {
   let list = userOptions.value;
   if (auth.user) {
@@ -1000,10 +1218,7 @@ function refreshCollabList() {
 const editor = useEditor({
   extensions: [
     StarterKit.configure({ 
-      history: {
-        depth: 20,
-        newGroupDelay: 300
-      }
+      history: false // 💡 Disable history because Collaboration handles it
     }),
     Underline, TextStyle, Color, FontFamily, CustomImage, TableRow, TableHeader, TableCell,
     Highlight.configure({ multicolor: true }),
@@ -1590,7 +1805,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("edms:status_changed", onStatusChanged);
   window.removeEventListener("edms:insert_content", onInsertContent);
 });
-watch(() => route.params.id, () => loadDoc());
 </script>
 
 <style scoped>

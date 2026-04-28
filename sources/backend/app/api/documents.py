@@ -321,9 +321,14 @@ def list_documents():
     if dept_id:
         q = q.join(User).filter(User.department_id == dept_id, Document.space_id == None)
 
-    docs = q.order_by(Document.updated_at.desc()).all()
-    print(f"[DEBUG] Query found {len(docs)} documents")
-    return jsonify({"items": [_doc_to_summary(d, user) for d in docs]})
+    try:
+        docs = q.order_by(Document.updated_at.desc()).all()
+        print(f"[DEBUG] Query found {len(docs)} documents")
+        return jsonify({"items": [_doc_to_summary(d, user) for d in docs]})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @bp.post("")

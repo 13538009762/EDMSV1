@@ -69,6 +69,10 @@ const carouselImages = ref([
   {
     src: "/images/carousel/pic4.png",
     alt: "Workflow Automation"
+  },
+  {
+    src: "/images/carousel/pic5.png",
+    alt: "Secure Data Storage"
   }
 ]);
 

@@ -114,13 +114,17 @@ def list_users():
     search = request.args.get("search")
 
     if search:
-        s = f"%{search}%"
+        print(f"[DEBUG] User search term: '{search}'")
+        s = f"%{search.strip().lower()}%"
+        from sqlalchemy import func
         query = query.filter(
-            (User.first_name.like(s)) | 
-            (User.last_name.like(s)) |
-            (User.login_name.like(s)) |
-            (User.employee_no.like(s)) |
-            (User.position_short.like(s))
+            (func.lower(User.first_name).like(s)) | 
+            (func.lower(User.last_name).like(s)) |
+            (func.lower(User.login_name).like(s)) |
+            (func.lower(User.employee_no).like(s)) |
+            (func.lower(User.position_short).like(s)) |
+            (func.concat(func.lower(User.last_name), func.lower(User.first_name)).like(s)) |
+            (func.concat(func.lower(User.last_name), " ", func.lower(User.first_name)).like(s))
         )
     
     page = int(request.args.get("page", 1))

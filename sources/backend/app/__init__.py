@@ -35,7 +35,20 @@ def create_app(config_class=Config):
                 cursor.execute("PRAGMA busy_timeout=10000")  # 10秒超时等待
                 cursor.close()
 
-    # 💡 增加：健康检查接口 (放在最前面确保不被拦截)
+    @app.errorhandler(500)
+    def handle_500(e):
+        import traceback
+        print("❌ [Global Error Handler] 500 Internal Server Error:")
+        traceback.print_exc()
+        return {"error": "Internal Server Error", "message": str(e)}, 500
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        import traceback
+        print("❌ [Global Error Handler] Unhandled Exception:")
+        traceback.print_exc()
+        return {"error": str(e)}, 500
+
     @app.route("/api/health")
     def health_check():
         return {"status": "ok"}

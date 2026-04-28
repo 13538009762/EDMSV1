@@ -13,21 +13,20 @@ def list_notifications():
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
     
-    # 💡 自动清理过期通知（仅清理未加星标的）
-    from datetime import datetime
-    Notification.query.filter(
-        Notification.expires_at < datetime.utcnow(),
-        Notification.is_starred == False
-    ).delete()
-    db.session.commit()
+    # notifications = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(50).all()
 
-    # Get last 50 notifications
-    nots = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(50).all()
-    
-    return jsonify({
-        "items": [n.to_dict() for n in nots],
-        "unread_count": sum(1 for n in nots if not n.is_read)
-    })
+    try:
+        # Get last 50 notifications
+        nots = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(50).all()
+        
+        return jsonify({
+            "items": [n.to_dict() for n in nots],
+            "unread_count": sum(1 for n in nots if not n.is_read)
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @bp.post("/<int:id>/read")
 @jwt_required()

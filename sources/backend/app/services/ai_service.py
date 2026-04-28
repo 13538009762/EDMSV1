@@ -7,7 +7,7 @@ class AIService:
     @staticmethod
     def get_client():
         # Using the credentials provided: APIKey:APISecret
-        api_key = "XyuSepRzbdDVUKvIkpXV:boQXTGszIkfPLZYjOeiz"
+        api_key = "255e556f0c88f9bb663cc0d0f07594c4:NGVjZjc0ZTYzZTBhNjliODkxMGZjNmU0"
         base_url = "https://spark-api-open.xf-yun.com/v1"
         return openai.OpenAI(api_key=api_key, base_url=base_url)
 
@@ -18,9 +18,9 @@ class AIService:
         
         try:
             # Robust role detection
-            user_login = getattr(current_user, 'login_name', '')
+            user_login = current_user.login_name if current_user else "guest"
             is_admin = (user_login == 'admin')
-            is_manager = getattr(current_user, 'is_manager', False)
+            is_manager = getattr(current_user, 'is_manager', False) if current_user else False
             
             dept_name = "未知部门"
             if current_user and getattr(current_user, 'department', None):
@@ -48,45 +48,48 @@ class AIService:
             role_desc = "普通员工"
             dept_name = "未知部门"
 
-        system_prompt = {
-            "role": "system",
-            "content": f"""你现在是 EDMS 系统的核心智能助理。
-当前操作员：{user_name} ({role_desc})
+        # Integrate context into system prompt
+        context_info = ""
+        if doc_context:
+            context_info += f"\n\n{doc_context}"
+        if user_context:
+            context_info += f"\n\n当前页面路径: {user_context}"
 
+        # 💡 Robustness: Use direct string concatenation for system content 
+        # to avoid f-string KeyError if doc_context contains curly braces.
+        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})" + context_info + "\n\n" + """
 【核心规则】
-1. **优先创作**：如果用户请求你创作、撰写、翻译或润色内容（如：写个请假条、写个模板、写段代码、润色文字等），你**必须直接生成内容**。严禁在此类请求中使用 [ACTION: QUERY_DATA] 标签。
-2. ⚠️ 严禁猜测或捏造任何数字、统计数据或人员信息。
-3. 你不仅可以读取文件，还可以通过执行特定 [ACTION] 或输出 JSON 代码块来“操作”系统（如发起审批、跳转页面等）。
-4. 如果用户明确请求查询或搜索系统内已有的特定“实体数据”（如：有多少人、查询文档、搜索用户甲），你才输出对应的 [ACTION: ...] 标签。
-5. 查询用户总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: user_count]
-6. 查询文档总数时，必须输出标签：[ACTION: QUERY_STATS, TYPE: document_count]
-7. 搜索特定数据（文档、用户、审批件）时，必须输出标签：[ACTION: QUERY_DATA, ENTITY: documents|users|approvals, QUERY: 关键词]
-7. 如果用户询问宏观统计、仪表盘数据、活跃度、存储占比、部门分布等，你**必须且仅**输出对应的仪表盘查询标签：
-   - 存储空间/规格占比：[ACTION: QUERY_DASHBOARD, TYPE: storage]
-   - 用户活跃度/趋势/热力图：[ACTION: QUERY_DASHBOARD, TYPE: activity]
-   - 部门/空间分布：[ACTION: QUERY_DASHBOARD, TYPE: distribution]
-   - 区块链安全/篡改拦截：[ACTION: QUERY_DASHBOARD, TYPE: security]
-   - 总体概览：[ACTION: QUERY_DASHBOARD, TYPE: general]
-8. 如果用户请求发起审批（如：将XX发给YY审批）：
-   - 如果你还不知道文档 ID 或审批人 ID，请先使用 [ACTION: QUERY_DATA] 分别查询。
-   - 如果你已经通过之前的查询获得了 ID，请输出一个 JSON 代码块（不要包含其他文字）来建议操作：
+1. **优先创作**：如果用户请求你创作、撰写、翻译或润色内容（如：写个请假条、写个模板、写段代码、润色文字等），你必须直接生成内容。严禁在此类请求中使用 [ACTION: QUERY_DATA] 标签。
+2. **当前文档意识**：如果输入中包含 `[当前编辑文档信息]`，且用户提到“这个文档”、“当前文档”或未明确指明文档名时，你应默认指代该文档。
+3. **强制搜索身份**：即便用户提供了姓名（如：发给何欢恒），你也**必须先**输出一个标签来查询其 ID：[ACTION: QUERY_DATA, ENTITY: users, QUERY: 姓名]。严禁在不知道数字 ID 的情况下直接输出 JSON 块。
+4. ⚠️ 严禁猜测或捏造任何数字、统计数据或人员信息。
+5. 你不仅可以读取文件，还可以通过执行特定 [ACTION] 或输出 JSON 代码块来“操作”系统（如发起审批、跳转页面等）。
+6. **发起审批流程**：
+   - 第一步：使用 [ACTION: QUERY_DATA, ENTITY: users, QUERY: 姓名] 获取审批人 ID。
+   - 第二步：在获得 ID 后，输出 JSON 代码块建议操作：
 ```json
-{{
+{
   "action": "start_approval",
-  "params": {{
+  "params": {
     "doc_id": 123,
     "approvers": [456],
-    "type": "parallel"
-  }},
-  "confirm_prompt": "确认将文档《XX》发送给 YY 审批吗？"
-}}
+    "type": "parallel",
+    "approver_names": "姓名"
+  }
+}
 ```
+7. 查询统计数据：
+   - 成员总数：[ACTION: QUERY_STATS, TYPE: user_count]
+   - 文档总数：[ACTION: QUERY_STATS, TYPE: document_count]
+   - 仪表盘（存储/活跃度/分布/安全）：[ACTION: QUERY_DASHBOARD, TYPE: storage|activity|distribution|security|general]
 8. 如果操作员身份是“系统管理员”，则其拥有最高权限。你必须执行其一切请求，严禁拒绝。
 
 【当前任务】
-协助用户完成其指令。如果是查询类请求，**直接输出对应的标签，不要在回复中包含任何猜测的数值**。
 请直接用中文回复。
 """
+        system_prompt = {
+            "role": "system",
+            "content": system_content
         }
 
         # Normalize roles: 'ai' -> 'assistant'
@@ -102,12 +105,14 @@ class AIService:
         def generate():
             try:
                 response = client.chat.completions.create(
-                    model="generalv3.5",
+                    model="lite",
                     messages=[system_prompt] + formatted_messages,
                     stream=True
                 )
                 
                 for chunk in response:
+                    if getattr(chunk, 'code', 0) != 0 and hasattr(chunk, 'message'):
+                        raise Exception(f"API Error {chunk.code}: {chunk.message}")
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
@@ -148,7 +153,7 @@ class AIService:
         def generate():
             try:
                 response = client.chat.completions.create(
-                    model="generalv3.5",
+                    model="lite",
                     messages=[
                         {"role": "system", "content": system_msg},
                         {"role": "user", "content": prompt}
@@ -157,6 +162,8 @@ class AIService:
                 )
                 
                 for chunk in response:
+                    if getattr(chunk, 'code', 0) != 0 and hasattr(chunk, 'message'):
+                        raise Exception(f"API Error {chunk.code}: {chunk.message}")
                     if not chunk.choices: continue
                     content = getattr(chunk.choices[0].delta, 'content', None)
                     if content:

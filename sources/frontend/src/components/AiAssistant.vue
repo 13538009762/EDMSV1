@@ -102,18 +102,25 @@ function insertToDoc(content: string) {
 
 const getActionDesc = (action: any) => {
   if (action.confirm_prompt) return action.confirm_prompt;
-  if (action.action === 'start_approval') return "发起审批流程";
+  if (action.action === 'start_approval') {
+    // 💡 优先显示人名而非 ID
+    const names = action.params?.approver_names || action.params?.approvers?.join(', ') || '选中人员';
+    return `发起审批流程: ${names}`;
+  }
   return "建议操作";
 };
 
 const executeAction = async (action: any, idx: number) => {
   try {
     if (action.action === 'start_approval') {
-      await api.post(`/documents/${action.params.doc_id}/approvals`, {
-        type: action.params.type || 'parallel',
-        approvers: action.params.approvers
-      });
-      ElMessage.success("审批流程已成功发起");
+      console.log("[DEBUG] Sidebar Dispatching edms:trigger_approval", action.params);
+      // 💡 优化：不再直接调接口，而是弹出带预选人的弹窗供用户确认
+      window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+        detail: { 
+          approvers: action.params.approvers, 
+          type: action.params.type || 'parallel'
+        } 
+      }));
     } else if (action.action === 'navigate') {
       router.push(action.params.path);
     }
@@ -129,15 +136,24 @@ const toggleExpand = () => {
 };
 
 const renderMarkdown = (text: string) => {
-  return marked.parse(text);
+  if (!text) return '';
+  // 💡 Hide internal action tags from the user to keep the chat clean
+  const cleanText = text.replace(/\[ACTION:[\s\S]*?\]/g, '').trim();
+  return marked.parse(cleanText);
 };
 
 const scrollToBottom = async () => {
   await nextTick();
   if (scrollContainer.value) {
-    scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight;
+    const el = (scrollContainer.value as any).$el || scrollContainer.value;
+    el.scrollTop = el.scrollHeight;
   }
 };
+
+// 💡 监听消息变化自动滚动
+watch(() => aiStore.globalMessages, () => {
+  scrollToBottom();
+}, { deep: true });
 
 onMounted(scrollToBottom);
 
@@ -149,8 +165,17 @@ const sendMessage = async () => {
   input.value = '';
   isTyping.value = true;
   scrollToBottom();
-
   try {
+    // Scoped RAG for Sidebar if in Editor
+    let doc_context = "";
+    if (isEditorPage.value) {
+       const docId = route.params.id;
+       const editorEl = document.querySelector('.tiptap.ProseMirror');
+       if (editorEl && (editorEl as any).textContent) {
+         doc_context = `[当前编辑文档信息] ID: ${docId}, 路径: ${route.path}\n\n内容摘要: ${(editorEl as any).textContent.slice(0, 3000)}`;
+       }
+    }
+
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: {
@@ -159,7 +184,8 @@ const sendMessage = async () => {
       },
       body: JSON.stringify({
         messages: aiStore.globalMessages,
-        context_url: route.path
+        context_url: route.path,
+        doc_context: doc_context
       })
     });
 
@@ -209,13 +235,42 @@ const sendMessage = async () => {
                   } else if (entity === 'users') {
                     res = await api.get('/users', { params: { search: query } });
                     const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
-                    if (items.length > 0) {
-                      resultHtml = "\n\n### 找到以下用户:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}, ID: ${u.id}) - ${u.department_name}`).join('\n');
+                    if (items.length > 1) {
+                      // 多个匹配结果：列出让用户选择
+                      resultHtml = "\n\n### 找到以下用户（请告知确认发给哪位）:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}) - ${u.department_name}`).join('\n');
+                    } else if (items.length === 1) {
+                      // 💡 只有1个结果：显示成功信息并直接触发弹窗
+                      const foundUser = items[0];
+                      const docIdStr = route.path.match(/\/doc\/(\d+)/)?.[1];
+                      resultHtml = `\n\n✅ 已定位到用户: **${foundUser.display_name}**`;
+                      
+                      // 构建 action 对象供界面展示（备用）
+                      assistantMessage.action = {
+                        action: 'start_approval',
+                        confirm_prompt: `立即发起审批：${foundUser.display_name}？`,
+                        params: {
+                          doc_id: docIdStr ? Number(docIdStr) : null,
+                          approvers: [foundUser.id],
+                          approver_names: foundUser.display_name,
+                          type: 'sequential'
+                        }
+                      };
+
+                      // 💡 自动触发：直接分发事件弹出标准审批窗口
+                      console.log("[DEBUG] Auto-triggering approval dialog for:", foundUser.display_name);
+                      window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+                        detail: { 
+                          approvers: [foundUser.id], 
+                          type: 'sequential'
+                        } 
+                      }));
                     } else {
                       resultHtml = "\n\n❌ 未找到相关用户。";
                     }
                   }
-                  assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
+                  if (resultHtml !== undefined) {
+                    assistantMessage.content = tempMsg + (resultHtml || "");
+                  }
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败。";
                 }
@@ -253,13 +308,73 @@ const sendMessage = async () => {
                 }
               }
 
-              // Handle JSON actions
+              // Handle JSON actions (fallback for AI-generated action blocks)
               const jsonMatch = assistantMessage.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-              if (jsonMatch) {
+              if (jsonMatch && !assistantMessage.action) {
                 try {
-                  assistantMessage.action = JSON.parse(jsonMatch[1]);
+                  let actionData = JSON.parse(jsonMatch[1]);
+                  
+                  // 💡 兼容性处理：支持 { start_approval: { ... } } 格式
+                  if (actionData.start_approval && !actionData.action) {
+                    actionData = { action: 'start_approval', params: actionData.start_approval };
+                  }
+
+                  if (actionData.action === 'start_approval') {
+                    const params = actionData.params || actionData;
+
+                    // 💡 强力补全：从加粗文字或 approvers 列表中提取人名
+                    if (!params.approver_names) {
+                      const nameMatch = assistantMessage.content.match(/\*\*([^\*]{2,10})\*\*/);
+                      if (nameMatch) {
+                        params.approver_names = nameMatch[1];
+                      } else if (params.approvers && Array.isArray(params.approvers)) {
+                        const nameList = params.approvers.filter((p: any) => typeof p === 'string');
+                        if (nameList.length > 0) params.approver_names = nameList.join(', ');
+                      }
+                    }
+
+                    // 💡 核心改进：如果只有姓名没有 ID，自动尝试匹配并弹出窗口
+                    if (params.approver_names && (!params.approvers || params.approvers.length === 0 || typeof params.approvers[0] === 'string')) {
+                      const searchName = params.approver_names.split(',')[0].trim();
+                      api.get('/users', { params: { search: searchName } }).then(res => {
+                        let matchedUsers = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                        
+                        // 💡 容错处理：如果没搜到，尝试去掉所有空格再搜一次
+                        if (matchedUsers.length === 0 && searchName.includes(' ')) {
+                          return api.get('/users', { params: { search: searchName.replace(/\s/g, '') } }).then(res2 => {
+                            matchedUsers = (res2.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                            return matchedUsers;
+                          });
+                        }
+                        return matchedUsers;
+                      }).then(foundList => {
+                        if (foundList && foundList.length === 1) {
+                          const foundUser = foundList[0];
+                          params.approvers = [foundUser.id];
+                          params.approver_names = foundUser.display_name;
+                          
+                          // 自动弹出窗口 (Dispatch to EditorView)
+                          window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+                            detail: { approvers: [foundUser.id], type: params.type || 'sequential' } 
+                          }));
+                        } else {
+                          console.log("[AI Assistant] Search for " + searchName + " returned " + (foundList?.length || 0) + " items");
+                        }
+                      }).catch(err => {
+                        console.error("[AI Assistant] User search failed", err);
+                      });
+                    }
+
+                    // 更新 confirm_prompt 确保显示名字
+                    const displayName = params.approver_names || '目标用户';
+                    actionData.confirm_prompt = `立即发起审批：${displayName}？`;
+                    
+                    assistantMessage.action = actionData;
+                  }
                   assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
-                } catch(e) {}
+                } catch(e) {
+                   console.error("AiAssistant action parse failed", e);
+                }
               }
             }
             scrollToBottom();
