@@ -64,8 +64,8 @@
         </div>
         <div class="spacer" />
         
-        <el-dropdown trigger="click" @command="readNotification" style="margin-right: 16px;">
-          <el-badge :value="unreadCount" :max="99" class="item" :hidden="unreadCount === 0">
+        <el-dropdown trigger="click" @command="readNotification" @visible-change="onNotifVisible" style="margin-right: 16px;">
+          <el-badge :value="unreadCount" :max="99" class="item" :hidden="unreadCount === 0 || badgeHiddenLocally">
             <el-button link class="notification-btn" style="padding-top: 4px;"><el-icon size="20"><Bell /></el-icon></el-button>
           </el-badge>
           <template #dropdown>
@@ -165,6 +165,7 @@ const { t } = useI18n();
 
 const notifications = ref<any[]>([]);
 const unreadCount = ref(0);
+const badgeHiddenLocally = ref(false);
 let notifTimer: any = null;
 
 async function loadNotifications() {
@@ -172,6 +173,11 @@ async function loadNotifications() {
   try {
     const { data } = await api.get('/notifications');
     notifications.value = data.items;
+    
+    // 如果未读数量增加了，说明有新消息，重新显示红点
+    if (data.unread_count > unreadCount.value) {
+      badgeHiddenLocally.value = false;
+    }
     unreadCount.value = data.unread_count;
   } catch(e) {}
 }
@@ -211,6 +217,12 @@ async function deleteNotif(n: any) {
 }
 
 const isCollapse = ref(false);
+
+const onNotifVisible = (v: boolean) => {
+  if (v) {
+    badgeHiddenLocally.value = true;
+  }
+};
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value;
