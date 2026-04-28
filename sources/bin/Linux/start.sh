@@ -121,19 +121,25 @@ else
     echo "Containers not found. Starting services..."
     echo ""
     
+    # Clean up potentially conflicting or orphaned containers
+    docker rm -f edms-mysql edms-backend edms-frontend &>/dev/null || true
+
     # Start containers
-    $COMPOSE_CMD -f "$COMPOSE_FILE" up -d --no-build 2>&1 | grep -E "Creating|Starting|Started|Created|network" || true
+    $COMPOSE_CMD -f "$COMPOSE_FILE" up -d --no-build
     
     # Wait for containers to start
+    echo "Waiting for services to initialize..."
     sleep 5
     
-    # Verify containers are actually running
-    if docker ps --format "{{.Names}}" | grep -E "edms-backend|edms-frontend" | wc -l | grep -q "2"; then
+    # Verify containers are actually running (check for all 3: backend, frontend, db)
+    RUNNING_COUNT=$(docker ps --format "{{.Names}}" | grep -E "edms-backend|edms-frontend|edms-mysql" | wc -l)
+    if [ "$RUNNING_COUNT" -eq "3" ]; then
         echo ""
-        echo -e "${GREEN}[OK]${NC} Containers started successfully"
+        echo -e "${GREEN}[OK]${NC} All containers started successfully"
     else
         echo ""
-        echo -e "${RED}ERROR: Failed to start containers${NC}"
+        echo -e "${RED}ERROR: Failed to start all containers (Running: $RUNNING_COUNT/3)${NC}"
+        echo "Check logs using: $COMPOSE_CMD -f \"$COMPOSE_FILE\" logs"
         exit 1
     fi
 fi

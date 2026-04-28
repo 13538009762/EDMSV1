@@ -1,6 +1,21 @@
-version: '3.8'
-
 services:
+  # 1. MySQL service
+  db:
+    image: mysql:8.0
+    container_name: edms-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootsecret}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-edms}
+      MYSQL_USER: ${MYSQL_USER:-edmsuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edmspass}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    networks:
+      - edms-network
+
   # Backend service
   backend:
     build:
@@ -9,12 +24,14 @@ services:
     image: edms-backend:latest
     container_name: edms-backend
     restart: unless-stopped
+    depends_on:
+      - db
     volumes:
       # Persist database and uploaded files
       - ./data/backend:/app/data
     environment:
       - FLASK_ENV=production
-      - DATABASE_URL=sqlite:////app/data/edms.db
+      - DATABASE_URL=${DATABASE_URL}
       - STORAGE_PATH=/app/data
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}

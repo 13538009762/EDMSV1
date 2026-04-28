@@ -136,23 +136,29 @@ if %ERRORLEVEL% EQU 0 (
     echo Containers not found. Starting services...
     echo.
     
-    :: Start containers (capture output but don't fail on stderr)
-    %COMPOSE_CMD% -f "%COMPOSE_FILE%" up -d 2>&1 | findstr /C:"Creating" /C:"Starting" /C:"Started" /C:"Created"
+    :: Clean up potentially conflicting or orphaned containers
+    docker rm -f edms-mysql edms-backend edms-frontend >nul 2>nul
+
+    :: Start containers
+    %COMPOSE_CMD% -f "%COMPOSE_FILE%" up -d
     
     :: Wait for containers to start
+    echo Waiting for services to initialize...
     timeout /t 5 /nobreak >nul
     
-    :: Verify containers are actually running (use different approach)
-    for /f "tokens=*" %%a in ('%COMPOSE_CMD% -f "%COMPOSE_FILE%" ps -q 2^>nul') do (
-        set CONTAINER_COUNT=1
+    :: Verify containers are actually running
+    set RUNNING_COUNT=0
+    for /f "tokens=*" %%a in ('docker ps --format "{{.Names}}" ^| findstr /R "edms-backend edms-frontend edms-mysql"') do (
+        set /a RUNNING_COUNT+=1
     )
     
-    if defined CONTAINER_COUNT (
+    if !RUNNING_COUNT! EQU 3 (
         echo.
-        echo [OK] Containers started successfully
+        echo [OK] All containers started successfully
     ) else (
         echo.
-        echo ERROR: Failed to start containers
+        echo ERROR: Failed to start all containers (Running: !RUNNING_COUNT!/3)
+        echo Check logs using: %COMPOSE_CMD% -f "%COMPOSE_FILE%" logs
         pause
         exit /b 1
     )
