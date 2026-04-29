@@ -226,12 +226,19 @@ def get_stats():
     heatmap_data = []
     try:
         if is_admin:
-            h_limit = datetime.now() - timedelta(days=90)
+            today_dt = datetime.now()
+            h_limit = today_dt - timedelta(days=90)
             h_q = db.session.query(func.date(AuditLog.created_at), func.count(AuditLog.id))\
                 .filter(AuditLog.created_at >= h_limit)\
                 .group_by(func.date(AuditLog.created_at))\
                 .order_by(func.date(AuditLog.created_at)).all()
-            heatmap_data = [[str(r[0]), r[1]] for r in h_q]
+            
+            h_map = {str(r[0]): r[1] for r in h_q}
+            # 补全 90 天数据，确保图表 timeline 完整
+            for i in range(89, -1, -1):
+                d = (today_dt - timedelta(days=i)).date()
+                d_str = d.isoformat()
+                heatmap_data.append([d_str, h_map.get(d_str, 0)])
     except Exception as e:
         print(f"[ERROR] Heatmap failed: {e}")
 

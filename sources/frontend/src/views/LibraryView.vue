@@ -163,7 +163,14 @@
             {{ formatDeptName(row.owner_department, row.owner_department_en) }}
           </template>
         </el-table-column>
-        <el-table-column prop="my_role" :label="t('library.colRole')" width="100" />
+        <el-table-column prop="my_role" :label="t('library.colRole')" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.my_role" size="small" :type="row.my_role === 'owner' ? 'primary' : row.my_role === 'approver' ? 'warning' : 'info'" effect="light">
+              {{ t('common.roles.' + row.my_role, row.my_role) }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="updated_at" :label="t('library.colUpdatedAt')" width="170">
           <template #default="{ row }">
             <div v-if="row.updated_at" style="font-size: 13px; color: var(--el-text-color-secondary);">

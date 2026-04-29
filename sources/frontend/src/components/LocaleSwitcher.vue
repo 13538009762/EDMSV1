@@ -1,8 +1,13 @@
 <template>
   <el-dropdown trigger="click" @command="onLocale">
     <span class="trigger">
-      {{ t("nav.language") }}
-      <span class="caret">▾</span>
+      <svg class="icon" viewBox="0 0 24 24" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="2" y1="12" x2="22" y2="12"></line>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+      </svg>
+      <span class="lang-text">{{ t("nav.language") }}</span>
+      <span class="caret">▼</span>
     </span>
     <template #dropdown>
       <el-dropdown-menu>
@@ -29,13 +34,49 @@ function onLocale(cmd: string) {
 
 <style scoped>
 .trigger {
+  display: inline-flex;
+  align-items: center;
   cursor: pointer;
-  color: var(--el-color-primary);
+  color: var(--el-text-color-regular);
   font-size: 14px;
+  font-weight: 500;
+  background-color: var(--el-bg-color);
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--el-border-color-light);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  user-select: none;
 }
+
+.trigger:hover {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.trigger:active {
+  transform: translateY(0);
+}
+
+.icon {
+  margin-right: 6px;
+  font-size: 16px;
+  color: var(--el-color-primary);
+}
+
+.lang-text {
+  margin-right: 6px;
+}
+
 .caret {
-  margin-left: 4px;
   font-size: 10px;
-  opacity: 0.7;
+  opacity: 0.5;
+  transition: transform 0.3s ease;
+}
+
+.el-dropdown-menu__item {
+  min-width: 120px;
 }
 </style>
