@@ -53,8 +53,8 @@
         <div class="avatar"><el-icon><MagicStick /></el-icon></div>
         <div class="content-box">
           <div class="role-label">{{ t('aiView.aiRole') }}</div>
-          <div class="typing-indicator">
-            <span></span><span></span><span></span>
+          <div style="display: flex; justify-content: flex-start; align-items: center; min-height: 50px;">
+            <ThinkingNineLoader />
           </div>
         </div>
       </div>
@@ -102,6 +102,7 @@ import { ElMessage } from 'element-plus';
 import api from '@/api/client';
 
 import { useRouter } from 'vue-router';
+import ThinkingNineLoader from '@/components/ThinkingNineLoader.vue';
 
 const { t } = useI18n();
 const aiStore = useAiStore();
@@ -746,28 +747,7 @@ const executeAction = async (action: any, idx: number) => {
   transform: translateY(15px);
 }
 
-.typing-indicator {
-  display: flex;
-  gap: 6px;
-  padding: 12px 0;
-}
 
-.typing-indicator span {
-  width: 8px;
-  height: 8px;
-  background: var(--el-color-primary);
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out both;
-  opacity: 0.6;
-}
-
-.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); opacity: 1; }
-}
 
 :deep(.text-content p) { margin: 0 0 16px 0; }
 :deep(.text-content p:last-child) { margin-bottom: 0; }

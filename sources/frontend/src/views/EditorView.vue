@@ -304,8 +304,8 @@
                     </div>
                   </template>
                   <div v-if="asking" key="typing" class="chat-msg ai typing">
-                    <div class="typing-indicator">
-                      <span></span><span></span><span></span>
+                    <div style="display: flex; justify-content: center; align-items: center; min-height: 50px;">
+                      <ThinkingNineLoader />
                     </div>
                   </div>
                 </transition-group>
@@ -483,6 +483,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import ThinkingNineLoader from "@/components/ThinkingNineLoader.vue";
 import { useI18n } from "vue-i18n";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
@@ -2235,26 +2236,5 @@ onBeforeUnmount(() => {
   transform: translateY(10px);
 }
 
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
 
-.typing-indicator span {
-  width: 6px;
-  height: 6px;
-  background: var(--el-color-primary);
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out both;
-  opacity: 0.6;
-}
-
-.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); opacity: 1; }
-}
 </style>

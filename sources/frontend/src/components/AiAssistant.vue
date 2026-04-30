@@ -37,10 +37,8 @@
           </div>
           <div v-if="isTyping" key="typing" class="message assistant typing">
             <div class="avatar-mini"><el-icon><MagicStick /></el-icon></div>
-            <div class="bubble">
-              <div class="typing-indicator">
-                <span></span><span></span><span></span>
-              </div>
+            <div class="bubble" style="display: flex; justify-content: center; align-items: center; min-height: 50px;">
+              <ThinkingNineLoader />
             </div>
           </div>
         </transition-group>
@@ -74,6 +72,7 @@ import { ElMessage } from 'element-plus';
 import { computed } from 'vue';
 import api from '@/api/client';
 import { useRouter } from 'vue-router';
+import ThinkingNineLoader from './ThinkingNineLoader.vue';
 
 const props = defineProps({
   isSidebarCollapsed: Boolean
@@ -580,28 +579,7 @@ const sendMessage = async () => {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important; 
 }
 
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
 
-.typing-indicator span {
-  width: 6px;
-  height: 6px;
-  background: var(--el-color-primary);
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out both;
-  opacity: 0.6;
-}
-
-.typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-.typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); opacity: 1; }
-}
 
 .expand-enter-active, .expand-leave-active {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
