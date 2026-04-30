@@ -98,6 +98,19 @@ def create_app(config_class=Config):
         # 💡 增加：检测并修复不匹配的数据库结构
         try:
             db.create_all()
+            # 💡 Self-healing: Ensure is_starred column exists
+            from sqlalchemy import text
+            try:
+                db.session.execute(text("SELECT is_starred FROM audit_logs LIMIT 1"))
+            except Exception:
+                db.session.rollback()
+                try:
+                    print("[Bootstrap] Adding missing is_starred column to audit_logs...")
+                    db.session.execute(text("ALTER TABLE audit_logs ADD COLUMN is_starred BOOLEAN DEFAULT FALSE"))
+                    db.session.commit()
+                except Exception as e2:
+                    db.session.rollback()
+                    print(f"[Bootstrap] Failed to auto-patch schema: {e2}")
         except Exception as e:
             print(f"❌ [Bootstrap] 数据库表创建失败! 请确保数据库已存在。 Error: {e}")
             if "Unknown database" in str(e):

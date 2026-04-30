@@ -37,6 +37,18 @@
 
     <div class="table-container" v-loading="loading">
       <el-table :data="items" border style="width: 100%" height="100%">
+        <el-table-column width="60">
+          <template #default="{ row }">
+            <el-icon 
+              class="star-icon" 
+              :class="{ 'is-starred': row.is_starred }"
+              @click="toggleStar(row)"
+            >
+              <StarFilled v-if="row.is_starred" />
+              <Star v-else />
+            </el-icon>
+          </template>
+        </el-table-column>
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column :label="t('auditLog.colTimestamp', 'Timestamp')" width="180">
           <template #default="{ row }">
@@ -81,7 +93,7 @@ import { useI18n } from 'vue-i18n';
 import api from '@/api/client';
 import { formatLocalDate } from '@/utils/date';
 import { ElMessage } from 'element-plus';
-import { Monitor } from "@element-plus/icons-vue";
+import { Monitor, Star, StarFilled } from "@element-plus/icons-vue";
 
 const { t } = useI18n();
 
@@ -110,6 +122,16 @@ function formatSummary(row: any) {
     return t('auditLog.tamperAlert');
   }
   return row.summary;
+}
+
+async function toggleStar(row: any) {
+  try {
+    const { data } = await api.post(`/admin/audit-logs/${row.id}/toggle-star`);
+    row.is_starred = data.is_starred;
+    ElMessage.success(row.is_starred ? t('common.starred', 'Starred') : t('common.unstarred', 'Unstarred'));
+  } catch (err) {
+    ElMessage.error(t('common.failed', 'Action failed'));
+  }
 }
 
 async function loadData() {
@@ -270,5 +292,21 @@ onMounted(() => {
   word-break: break-word;
   line-height: 1.5;
   font-size: 13px;
+}
+
+.star-icon {
+  font-size: 18px;
+  cursor: pointer;
+  color: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.star-icon:hover {
+  transform: scale(1.2);
+  color: #f59e0b;
+}
+
+.star-icon.is-starred {
+  color: #f59e0b;
 }
 </style>

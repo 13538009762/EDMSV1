@@ -326,6 +326,7 @@ def get_tamper_alerts():
             "created_at": log.created_at.isoformat() + "Z" if log.created_at else None,
             "description": log.summary,
             "ip_address": log.ip_address,
+            "is_starred": log.is_starred,
             "user_name": log.user.display_name() if log.user else "Unknown System"
         } for log in logs]
     })

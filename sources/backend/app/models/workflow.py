@@ -65,6 +65,7 @@ class AuditLog(db.Model):
     summary = db.Column(db.String(512), nullable=False)
     payload_json = db.Column(db.Text, nullable=True)
     ip_address = db.Column(db.String(64), nullable=True)
+    is_starred = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", foreign_keys=[user_id])

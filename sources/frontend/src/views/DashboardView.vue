@@ -341,6 +341,18 @@
         </el-table>
         
         <el-table v-else-if="metricType === 'tamper_alerts'" :data="metricData" stripe style="width: 100%" max-height="500">
+          <el-table-column width="60">
+            <template #default="{ row }">
+              <el-icon 
+                class="star-icon" 
+                :class="{ 'is-starred': row.is_starred }"
+                @click="toggleStar(row)"
+              >
+                <StarFilled v-if="row.is_starred" />
+                <Star v-else />
+              </el-icon>
+            </template>
+          </el-table-column>
           <el-table-column prop="created_at" label="拦截时间" width="180">
             <template #default="{ row }">
               {{ formatLocalDate(row.created_at) }}
@@ -389,7 +401,17 @@
                   <span class="alert-time">{{ formatLocalDate(alert.time) }}</span>
                 </div>
                 <div class="alert-body">{{ alert.description }}</div>
-                <div class="alert-footer">来源 IP: {{ alert.ip }} | 用户: {{ alert.user }}</div>
+                <div class="alert-footer">
+                  <span>来源 IP: {{ alert.ip }} | 用户: {{ alert.user }}</span>
+                  <el-icon 
+                    class="star-icon mini" 
+                    :class="{ 'is-starred': alert.is_starred }"
+                    @click="toggleStar(alert)"
+                  >
+                    <StarFilled v-if="alert.is_starred" />
+                    <Star v-else />
+                  </el-icon>
+                </div>
               </div>
             </div>
             <div v-else class="secure-state">
@@ -433,8 +455,9 @@ import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { 
   Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen,
-  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine
+  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Star, StarFilled
 } from "@element-plus/icons-vue";
+import { ElMessage } from "element-plus";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 
@@ -864,6 +887,20 @@ function calculatePercentage(hits: number | null | undefined) {
     const max = trendingDocs.value.length > 0 ? (trendingDocs.value[0].hits || 1) : 1;
     const p = Math.round((val / max) * 100);
     return isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
+}
+
+async function toggleStar(row: any) {
+  try {
+    const { data } = await api.post(`/admin/audit-logs/${row.id}/toggle-star`);
+    row.is_starred = data.is_starred;
+    // If we're in securityAlerts array, we need to update it too if the object is different
+    const alertInList = securityAlerts.value.find(a => a.id === row.id);
+    if (alertInList) alertInList.is_starred = data.is_starred;
+    
+    ElMessage.success(row.is_starred ? t('common.starred', 'Starred') : t('common.unstarred', 'Unstarred'));
+  } catch (err) {
+    ElMessage.error(t('common.failed', 'Action failed'));
+  }
 }
 
 async function loadData() {

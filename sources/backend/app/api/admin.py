@@ -102,6 +102,7 @@ def admin_import_master_data():
 
 from app.models.workflow import AuditLog
 from flask_jwt_extended import jwt_required
+from sqlalchemy import or_
 
 @bp.get("/audit-logs")
 @jwt_required()
@@ -113,7 +114,7 @@ def admin_list_audit_logs():
 
     from datetime import datetime, timedelta
     cutoff = datetime.utcnow() - timedelta(hours=24)
-    query = AuditLog.query.filter(AuditLog.created_at >= cutoff)
+    query = AuditLog.query.filter(or_(AuditLog.created_at >= cutoff, AuditLog.is_starred == True))
 
     # Filters
     document_id = request.args.get("document_id")
@@ -144,10 +145,28 @@ def admin_list_audit_logs():
             "action": lg.action,
             "summary": lg.summary,
             "ip_address": lg.ip_address,
+            "is_starred": lg.is_starred,
             "created_at": lg.created_at.isoformat() + "Z" if lg.created_at else None
         })
 
     return jsonify({"total": total, "items": items}), 200
+
+
+@bp.post("/audit-logs/<int:log_id>/toggle-star")
+@jwt_required()
+def admin_toggle_audit_star(log_id: int):
+    """Star or unstar an audit log."""
+    user = current_user()
+    if not user or user.login_name != 'admin':
+        return jsonify({"error": "Forbidden"}), 403
+    
+    log = db.session.get(AuditLog, log_id)
+    if not log:
+        return jsonify({"error": "Not found"}), 404
+    
+    log.is_starred = not log.is_starred
+    db.session.commit()
+    return jsonify({"is_starred": log.is_starred}), 200
 
 
 @bp.get("/master-data/template")
