@@ -111,6 +111,10 @@ def list_users():
         if dept_id:
             query = query.filter_by(department_id=dept_id)
 
+    is_mgr = request.args.get("is_manager")
+    if is_mgr is not None and is_mgr != "":
+        query = query.filter_by(is_manager=bool(int(is_mgr)))
+
     search = request.args.get("search")
 
     if search:

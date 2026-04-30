@@ -92,4 +92,10 @@ function onLocale(cmd: string) {
 .el-dropdown-menu__item {
   min-width: 120px;
 }
+
+:deep(.el-dropdown-menu__item:not(.is-disabled):focus),
+:deep(.el-dropdown-menu__item:not(.is-disabled):hover) {
+  background-color: rgba(139, 92, 246, 0.08) !important;
+  color: #8b5cf6 !important;
+}
 </style>

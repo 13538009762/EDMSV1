@@ -39,44 +39,56 @@ def inbox():
         else:
             continue
 
+        # Find the best participant record to show for this user
+        my_participant = None
         for p in flow.participants:
-            # NORMAL FILTER: only show if it is MY turn
-            is_my_turn = p.user_id == user.id and not p.decision
-            if flow.flow_type == "sequential" and p.step_order != flow.current_order:
-                is_my_turn = False
+            if p.user_id == user.id and not p.decision:
+                if flow.flow_type != "sequential" or p.step_order == flow.current_order:
+                    my_participant = p
+                    break
+        
+        # If not my turn but I'm admin and it's a registration, I can still see it
+        is_admin_override = (user.login_name == 'admin' and flow.flow_type == "registration")
+        
+        if not my_participant and not is_admin_override:
+            continue
             
-            # ADMIN OVERRIDE: admin can see and handle ANY registration flow active step
-            force_show = (user.login_name == 'admin' and flow.flow_type == "registration" and p.step_order == flow.current_order)
-            
-            if not is_my_turn and not force_show:
-                continue
-            participants = []
-            for p_detail in flow.participants:
-                user_name = p_detail.user.display_name() if p_detail.user else "Unknown"
-                participants.append({
-                    "user_id": p_detail.user_id,
-                    "user_name": user_name,
-                    "decision": p_detail.decision.decision if p_detail.decision else None,
-                    "reason": p_detail.decision.reason if p_detail.decision else None,
-                    "step_order": p_detail.step_order
-                })
+        # If admin override, and I don't have a specific participant record, use any active participant's ID
+        display_participant = my_participant or next((p for p in flow.participants if p.step_order == flow.current_order), flow.participants[0])
 
+        participants_data = []
+        for p_detail in flow.participants:
+            user_name = p_detail.user.display_name() if p_detail.user else "Unknown"
+            participants_data.append({
+                "user_id": p_detail.user_id,
+                "user_name": user_name,
+                "decision": p_detail.decision.decision if p_detail.decision else None,
+                "reason": p_detail.decision.reason if p_detail.decision else None,
+                "step_order": p_detail.step_order
+            })
+
+        # Progress logic: for registration, treat as 1 step total
+        if flow.flow_type == "registration":
+            total = 1
+            done = 1 if flow.status == "completed" else 0
+        else:
             total = len(flow.participants)
             done = sum(1 for x in flow.participants if x.decision)
-            items.append(
-                {
-                    "participant_id": p.id,
-                    "document_id": doc.id if doc else None,
-                    "title": title,
-                    "initiator_name": initiator_name,
-                    "flow_status": flow.status,
-                    "flow_type": flow.flow_type,
-                    "progress": {"done": done, "total": total},
-                    "current_order": flow.current_order,
-                    "submitted_at": flow.created_at.isoformat() + "Z" if flow.created_at else None,
-                    "details": participants,
-                }
-            )
+
+        items.append(
+            {
+                "participant_id": display_participant.id,
+                "document_id": doc.id if doc else None,
+                "title": title,
+                "initiator_name": initiator_name,
+                "flow_status": flow.status,
+                "flow_type": flow.flow_type,
+                "progress": {"done": done, "total": total},
+                "current_order": flow.current_order,
+                "submitted_at": flow.created_at.isoformat() + "Z" if flow.created_at else None,
+                "details": participants_data,
+            }
+        )
     return jsonify({"items": items})
 
 

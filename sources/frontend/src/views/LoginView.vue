@@ -214,25 +214,25 @@ const features = computed(() => [
     icon: Cpu,
     title: t("login.featureAiTitle"),
     desc: t("login.featureAiDesc"),
-    bg: "rgba(59, 130, 246, 0.1)"
+    bg: "rgba(167, 139, 250, 0.15)"
   },
   {
     icon: Finished,
     title: t("login.featureSecurityTitle"),
     desc: t("login.featureSecurityDesc"),
-    bg: "rgba(16, 185, 129, 0.1)"
+    bg: "rgba(139, 92, 246, 0.15)"
   },
   {
     icon: Connection,
     title: t("login.featureCollabTitle"),
     desc: t("login.featureCollabDesc"),
-    bg: "rgba(139, 92, 246, 0.1)"
+    bg: "rgba(124, 58, 237, 0.15)"
   },
   {
     icon: Monitor,
     title: t("login.featureSupportTitle"),
     desc: t("login.featureSupportDesc"),
-    bg: "rgba(245, 158, 11, 0.1)"
+    bg: "rgba(109, 40, 217, 0.15)"
   }
 ]);
 
@@ -271,7 +271,10 @@ async function handleRegister() {
     await ElMessageBox.alert(
       t('register.successInfo'),
       t('common.success'),
-      { confirmButtonText: t('common.ok') }
+      { 
+        confirmButtonText: t('common.ok'),
+        confirmButtonClass: 'purple-confirm-button'
+      }
     );
     mode.value = 'login';
   } catch (err: any) {
@@ -284,13 +287,22 @@ async function handleRegister() {
 
 <style scoped>
 .login-container {
+  /* 🌟 Local Theme Override: Purple */
+  --el-color-primary: #8b5cf6;
+  --el-color-primary-light-3: #a78bfa;
+  --el-color-primary-light-5: #c4b5fd;
+  --el-color-primary-light-7: #ddd6fe;
+  --el-color-primary-light-8: #ede9fe;
+  --el-color-primary-light-9: #f5f3ff;
+  --el-color-primary-dark-2: #7c3aed;
+
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   background: #f8fafc url('/images/v1.png') no-repeat center center;
   background-size: cover;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   color: #1e293b;
   position: relative;
 }
@@ -318,7 +330,7 @@ async function handleRegister() {
 .brand {
   font-size: 26px;
   font-weight: 900;
-  color: #2563eb;
+  color: #8b5cf6;
   letter-spacing: -1px;
 }
 
@@ -387,7 +399,7 @@ async function handleRegister() {
 }
 
 .text-gradient {
-  color: #1e3a8a; /* Deep blue */
+  color: #7c3aed; /* Deep purple */
 }
 
 .hero-subtitle {
@@ -430,7 +442,7 @@ async function handleRegister() {
   align-items: center;
   justify-content: center;
   font-size: 22px;
-  color: #2563eb;
+  color: #7c3aed;
   flex-shrink: 0;
 }
 
@@ -491,7 +503,7 @@ async function handleRegister() {
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   border: 1px solid rgba(255, 255, 255, 0.7) !important;
-  box-shadow: 0 20px 40px rgba(37, 99, 235, 0.05) !important; 
+  box-shadow: 0 20px 40px rgba(139, 92, 246, 0.05) !important; 
   border-radius: 24px;
   min-height: 460px; /* 减小最小高度 */
   transition: all 0.3s ease;
@@ -529,7 +541,7 @@ async function handleRegister() {
 }
 
 .tab-item.active {
-  color: #2563eb;
+  color: #8b5cf6;
 }
 /* 去掉孤立的下划线，让它更像一个标题 */
 
@@ -546,8 +558,8 @@ async function handleRegister() {
 
 :deep(.el-input__wrapper.is-focus) {
   background: #ffffff !important;
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.08) !important;
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.08) !important;
 }
 
 :deep(.el-input__inner) {
@@ -580,27 +592,35 @@ async function handleRegister() {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 2px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
   border: none;
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25) !important; /* 给按钮加一层蓝色的发光阴影 */
+  box-shadow: 0 8px 16px rgba(139, 92, 246, 0.25) !important; /* 给按钮加一层紫色的发光阴影 */
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: white !important;
 }
 
 .login-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 12px 28px rgba(139, 92, 246, 0.35);
   filter: brightness(1.05);
 }
 
-.purple-link {
+:deep(.el-checkbox.is-checked .el-checkbox__inner) {
+  background-color: #8b5cf6 !important;
+  border-color: #8b5cf6 !important;
+}
+:deep(.el-checkbox.is-checked .el-checkbox__label) {
   color: #8b5cf6 !important;
+}
+
+.purple-link {
+  color: #7c3aed !important;
   font-weight: 600;
   transition: all 0.3s;
 }
 
 .purple-link:hover {
-  color: #7c3aed !important;
+  color: #6d28d9 !important;
   opacity: 0.8;
 }
 
@@ -639,6 +659,32 @@ async function handleRegister() {
 .badge-item .el-icon {
   font-size: 18px;
   color: #cbd5e1;
+}
+
+/* Fix for Select border and dropdown items */
+:deep(.el-select .el-input.is-focus .el-input__wrapper),
+:deep(.el-select .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #8b5cf6 inset !important;
+  border-color: #8b5cf6 !important;
+}
+
+:deep(.el-select:hover:not(.el-select--disabled) .el-input__wrapper) {
+  box-shadow: 0 0 0 1px #8b5cf6 inset !important;
+}
+
+:deep(.el-select-dropdown__item.selected) {
+  color: #8b5cf6 !important;
+  font-weight: 700;
+}
+
+:deep(.el-select-dropdown__item.hover), 
+:deep(.el-select-dropdown__item:hover) {
+  background-color: rgba(139, 92, 246, 0.08) !important;
+  color: #8b5cf6 !important;
+}
+
+:deep(.el-form-item.is-required:not(.is-no-asterisk).asterisk-left > .el-form-item__label:before) {
+  color: #8b5cf6 !important;
 }
 
 /* Transitions */
@@ -693,5 +739,24 @@ async function handleRegister() {
   .top-nav {
     padding: 20px;
   }
+}
+</style>
+
+<style>
+/* Global styles for MessageBox in body */
+.purple-confirm-button {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600 !important;
+  padding: 8px 20px !important;
+  border-radius: 8px !important;
+  transition: all 0.3s !important;
+}
+
+.purple-confirm-button:hover {
+  transform: translateY(-1px) !important;
+  filter: brightness(1.1) !important;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2) !important;
 }
 </style>

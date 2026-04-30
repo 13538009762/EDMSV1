@@ -57,7 +57,12 @@
             
             <el-table-column :label="t('inbox.colTitle')" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">
-                {{ row.title }}
+                <template v-if="row.flow_type === 'registration'">
+                  {{ t('inbox.userRegistration') }}: {{ row.initiator_name }}
+                </template>
+                <template v-else>
+                  {{ row.title }}
+                </template>
               </template>
             </el-table-column>
 
@@ -153,7 +158,12 @@
 
             <el-table-column :label="t('inbox.colTitle')" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">
-                {{ row.title }}
+                <template v-if="row.flow_type === 'registration'">
+                  {{ t('inbox.userRegistration') }}: {{ row.initiator_name }}
+                </template>
+                <template v-else>
+                  {{ row.title }}
+                </template>
               </template>
             </el-table-column>
 

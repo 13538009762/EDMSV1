@@ -75,36 +75,34 @@ def register():
     # For now, we save the user and create the flow
     try:
         from app.models.workflow import ApprovalFlow, ApprovalParticipant
-        # Step 1: Dept Manager
         flow = ApprovalFlow(document_id=None, flow_type="registration", status="active")
         flow.rel_id = user.id # Link to user
         db.session.add(flow)
         db.session.flush()
 
-        # We'll need a way to find the manager of the department
-        # Step 1: All HR Managers (OR condition: any one passes)
+        # Single Step: Any manager of the target department OR the System Admin can approve
         from app.models.core import Department
-        hr_dept = Department.query.filter(Department.name.like("%Human Resources%")).first()
-        hr_managers = []
-        if hr_dept:
-            hr_managers = User.query.filter_by(department_id=hr_dept.id, is_manager=True).all()
+        target_dept_id = data["department_id"]
         
-        # If no HR managers found, use any system manager as fallback
-        if not hr_managers:
-            hr_managers = User.query.filter_by(is_manager=True).limit(1).all()
+        # 1. Target Department Managers
+        managers = User.query.filter_by(department_id=target_dept_id, is_manager=True).all()
+        
+        # 2. System Admin
+        admin_user = User.query.filter_by(login_name="admin").first()
+        
+        # Collect all eligible approvers for the SINGLE step
+        approvers = set()
+        if admin_user: approvers.add(admin_user.id)
+        for m in managers: approvers.add(m.id)
+        
+        # If no specific managers found, allow ANY manager as fallback
+        if not approvers:
+            any_mgr = User.query.filter_by(is_manager=True).first()
+            if any_mgr: approvers.add(any_mgr.id)
 
-        for mgr in hr_managers:
-            part = ApprovalParticipant(flow_id=flow.id, user_id=mgr.id, step_order=1)
+        for uid in approvers:
+            part = ApprovalParticipant(flow_id=flow.id, user_id=uid, step_order=1)
             db.session.add(part)
-
-        # Step 2: System Admin (Final Activation)
-        admin_user = User.query.filter_by(login_name="admin").first() 
-        if not admin_user: # Fallback to first manager
-            admin_user = User.query.filter_by(is_manager=True).first()
-            
-        if admin_user:
-            part2 = ApprovalParticipant(flow_id=flow.id, user_id=admin_user.id, step_order=2)
-            db.session.add(part2)
             
         db.session.commit()
     except Exception as e:

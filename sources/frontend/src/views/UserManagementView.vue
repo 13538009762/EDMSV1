@@ -14,6 +14,45 @@
 
     <el-card shadow="hover" class="mgmt-card">
       <div class="mgmt-toolbar">
+        <div class="toolbar-left">
+          <el-input
+            v-model="searchQuery"
+            :placeholder="t('nav.usersSearchPlaceholder')"
+            clearable
+            class="search-input"
+            @input="handleSearch"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+
+          <el-select 
+            v-if="auth.user?.login_name === 'admin'"
+            v-model="filterDept" 
+            :placeholder="t('profile.dept', 'Department')" 
+            clearable 
+            class="filter-select"
+            @change="loadUsers"
+          >
+            <el-option 
+              v-for="d in deptOptions" 
+              :key="d.id" 
+              :label="formatDeptName(d.name, d.name_en)" 
+              :value="d.id" 
+            />
+          </el-select>
+
+          <el-select 
+            v-model="filterManager" 
+            :placeholder="t('library.colRole', 'Role')" 
+            clearable 
+            class="filter-select mini"
+            @change="loadUsers"
+          >
+            <el-option :label="t('common.roles.manager', 'Manager')" :value="1" />
+            <el-option :label="t('common.roles.user', 'Staff')" :value="0" />
+          </el-select>
+        </div>
+
         <div class="header-actions">
           <el-button 
             v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" 
@@ -147,7 +186,7 @@
 import { ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
-import { Plus, Delete, User } from "@element-plus/icons-vue";
+import { Plus, Delete, User, Search } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAuthStore } from "@/stores/auth";
 
@@ -190,7 +229,19 @@ const total = ref(0);
 const loading = ref(false);
 const currentPage = ref(1);
 const pageSize = ref(15);
+const searchQuery = ref("");
+const filterDept = ref<number | null>(null);
+const filterManager = ref<number | null>(null);
 const selectedIds = ref<number[]>([]);
+
+let searchTimer: any = null;
+function handleSearch() {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentPage.value = 1;
+    loadUsers();
+  }, 400);
+}
 
 const isEdit = ref(false);
 const editingUserId = ref<number | null>(null);
@@ -289,7 +340,10 @@ async function loadUsers() {
       params: { 
         page: currentPage.value, 
         size: pageSize.value,
-        management: 1 
+        management: 1,
+        search: searchQuery.value,
+        department_id: filterDept.value,
+        is_manager: filterManager.value
       }
     });
     users.value = data.items;
@@ -396,8 +450,30 @@ onMounted(() => {
 /* 🚀 内部工具栏：将按钮移至右上方 */
 .mgmt-toolbar {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  width: 240px;
+}
+
+.filter-select {
+  width: 180px;
+}
+
+.filter-select.mini {
+  width: 120px;
 }
 .pagination {
   margin-top: 24px;

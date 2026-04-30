@@ -7,6 +7,7 @@ export default {
     untitled: "无标题",
     save: "保存",
     appName: "企业级文档管理系统",
+    appNameFull: "Ecosystem of Document Matrix & Security 全栈智能协同与可信文档管理平台",
     cancel: "取消",
     ok: "确定",
     apply: "应用",
@@ -55,6 +56,7 @@ export default {
     viewMore: "查看更多",
     masterData: "主数据",
     users: "成员管理",
+    usersSearchPlaceholder: "搜索成员...",
     logout: "退出",
     language: "语言",
     english: "English",
@@ -239,6 +241,7 @@ export default {
     reason: "意见",
     statusPending: "等待中",
     initiator: "发起人",
+    userRegistration: "用户注册",
   },
   diff: {
     title: "版本比对",

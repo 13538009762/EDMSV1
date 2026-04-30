@@ -60,7 +60,7 @@
           <el-icon class="collapse-btn" @click="toggleCollapse">
             <component :is="isCollapse ? Expand : Fold" />
           </el-icon>
-          <span class="logo-text">EDMS 零信任架构</span>
+          <span class="logo-text">{{ t('common.appNameFull') }}</span>
         </div>
         <div class="spacer" />
         
