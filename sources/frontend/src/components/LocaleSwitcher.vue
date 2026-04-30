@@ -1,6 +1,6 @@
 <template>
   <el-dropdown trigger="click" @command="onLocale">
-    <span class="trigger">
+    <span class="trigger" :class="{ 'is-purple': purple }">
       <svg class="icon" viewBox="0 0 24 24" width="1em" height="1em" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"></circle>
         <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -22,6 +22,10 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { saveLocale, type LocaleCode } from "@/i18n";
+
+const props = defineProps<{
+  purple?: boolean;
+}>();
 
 const { locale, t } = useI18n();
 
@@ -56,6 +60,12 @@ function onLocale(cmd: string) {
   transform: translateY(-1px);
 }
 
+.trigger.is-purple:hover {
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+}
+
 .trigger:active {
   transform: translateY(0);
 }
@@ -64,6 +74,10 @@ function onLocale(cmd: string) {
   margin-right: 6px;
   font-size: 16px;
   color: var(--el-color-primary);
+}
+
+.is-purple .icon {
+  color: #8b5cf6;
 }
 
 .lang-text {

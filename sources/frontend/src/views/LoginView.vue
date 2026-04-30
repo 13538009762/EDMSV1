@@ -11,7 +11,7 @@
         </div>
       </div>
       <div class="nav-right">
-        <LocaleSwitcher />
+        <LocaleSwitcher purple />
       </div>
     </div>
 
@@ -83,7 +83,7 @@
 
                 <div class="form-utils">
                   <el-checkbox v-model="rememberMe">{{ t('login.rememberMe') }}</el-checkbox>
-                  <el-link type="primary" :underline="false">{{ t('login.forgotPassword') }}</el-link>
+                  <el-link class="purple-link" :underline="false">{{ t('login.forgotPassword') }}</el-link>
                 </div>
 
                 <el-button type="primary" class="login-btn" :loading="loading" native-type="submit">
@@ -92,7 +92,7 @@
 
                 <div class="register-footer">
                   <span>{{ t('login.noAccount') }}</span>
-                  <el-link type="primary" @click="mode = 'register'">
+                  <el-link class="purple-link" @click="mode = 'register'">
                     {{ t('login.register') }}
                   </el-link>
                 </div>
@@ -286,7 +286,7 @@ async function handleRegister() {
 .login-container {
   width: 100vw;
   height: 100vh;
-  background: #f8fafc url('/images/premium_tech_bg.png') no-repeat center center;
+  background: #f8fafc url('/images/v1.png') no-repeat center center;
   background-size: cover;
   display: flex;
   flex-direction: column;
@@ -408,6 +408,7 @@ async function handleRegister() {
 
 .feature-item {
   display: flex;
+  align-items: center; /* 确保图标和文字垂直居中 */
   gap: 16px;
   background: rgba(255, 255, 255, 0.3);
   padding: 16px;
@@ -475,18 +476,24 @@ async function handleRegister() {
   font-weight: 500;
 }
 
+.login-panel {
+  flex-shrink: 0;
+  margin-right: 60px; /* 往左移一点，向中心靠拢 */
+  transition: all 0.5s ease;
+}
+
 /* 🌟 核心登录卡片：极光白亚克力材质 */
+/* 1. 修复登录舱，变得更加晶莹剔透 */
 .login-glass-card {
-  width: clamp(340px, 30vw, 440px);
-  padding: 48px 40px;
-  /* Reduced opacity for more transparency as requested */
-  background: rgba(255, 255, 255, 0.65); 
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 1); 
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.06); 
+  width: clamp(320px, 26vw, 400px); /* 缩小宽度 */
+  padding: 40px 32px; /* 减小内边距 */
+  background: rgba(255, 255, 255, 0.45) !important; 
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 20px 40px rgba(37, 99, 235, 0.05) !important; 
   border-radius: 24px;
-  min-height: 520px;
+  min-height: 460px; /* 减小最小高度 */
   transition: all 0.3s ease;
 }
 
@@ -508,38 +515,30 @@ async function handleRegister() {
 
 .login-tabs {
   display: flex;
-  border-bottom: 2px solid rgba(226, 232, 240, 0.5);
   margin-bottom: 32px;
 }
 
 .tab-item {
-  padding: 12px 0;
+  padding: 8px 0;
   font-size: 16px;
   font-weight: 700;
-  color: #94a3b8;
+  color: #1e293b;
   margin-right: 36px;
   position: relative;
+  opacity: 0.8;
 }
 
 .tab-item.active {
   color: #2563eb;
 }
-
-.tab-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: #2563eb;
-}
+/* 去掉孤立的下划线，让它更像一个标题 */
 
 /* 🌟 输入框重塑：融合进卡片 */
+/* 2. 强化输入框的边界感 */
 :deep(.el-input__wrapper) {
-  background: rgba(241, 245, 249, 0.4) !important;
-  box-shadow: none !important;
-  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3) inset !important; /* 加上极其精致的内边框 */
+  border: none !important;
   border-radius: 10px;
   height: 52px;
   transition: all 0.3s;
@@ -562,7 +561,18 @@ async function handleRegister() {
   margin: 12px 0 36px 0;
 }
 
+/* 强化 Checkbox 可视化 */
+:deep(.el-checkbox__inner) {
+  border-color: #cbd5e1 !important;
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+:deep(.el-checkbox__label) {
+  color: #475569 !important;
+  font-weight: 500;
+}
+
 /* 🌟 登录按钮：科技感主色调 */
+/* 3. 让登录按钮焕发微光 */
 .login-btn {
   width: 100%;
   height: 52px;
@@ -572,7 +582,7 @@ async function handleRegister() {
   letter-spacing: 2px;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
   border: none;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25) !important; /* 给按钮加一层蓝色的发光阴影 */
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: white !important;
 }
@@ -581,6 +591,17 @@ async function handleRegister() {
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(37, 99, 235, 0.35);
   filter: brightness(1.05);
+}
+
+.purple-link {
+  color: #8b5cf6 !important;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.purple-link:hover {
+  color: #7c3aed !important;
+  opacity: 0.8;
 }
 
 .register-footer {
@@ -600,7 +621,8 @@ async function handleRegister() {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #94a3b8;
+  color: #64748b; /* 加深辅助文字颜色 */
+  text-shadow: 0 0 4px rgba(255,255,255,0.8); /* 文字发光以剥离复杂背景 */
 }
 
 .security-badges {
