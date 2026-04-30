@@ -497,8 +497,7 @@ import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import FontFamily from "@tiptap/extension-font-family";
 import Image from "@tiptap/extension-image";
-import Dropcursor from "@tiptap/extension-dropcursor";
-import Gapcursor from "@tiptap/extension-gapcursor";
+
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
@@ -510,7 +509,7 @@ import api from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { useAiStore } from "@/stores/ai";
 import { attachDocCollab } from "@/composables/useDocSocket";
-import { fixPunctuation } from "@/utils/punctuation";
+
 import { ElMessage, ElMessageBox, ElNotification, ElLoading } from "element-plus";
 import { marked } from 'marked';
 import mammoth from "mammoth";
@@ -794,84 +793,6 @@ const confirmAiAction = async (action: any, idx: number) => {
   aiStore.editorMessages[idx].action = null;
 };
 
-// AI Agent Action Resolver
-function resolveApproverIds(names: any = []) {
-  const ids: number[] = [];
-  const notFound: string[] = [];
-  
-  // 💡 Robustness: Handle non-array or mixed case inputs
-  const list = Array.isArray(names) ? names : [String(names)];
-  
-  list.forEach(name => {
-    if (!name || typeof name !== 'string') return;
-    
-    // 💡 Normalized Search: Remove spaces and ignore case
-    const cleanName = name.replace(/[\[\]"'.\s]/g, "").toLowerCase();
-    if (!cleanName) return;
-
-    const match = userOptions.value.find((u: any) => {
-      const dName = (u.display_name || "").replace(/\s/g, "").toLowerCase();
-      const lName = (u.login_name || "").toLowerCase();
-      const eNo = (String(u.employee_no || "")).toLowerCase();
-      
-      return dName === cleanName || 
-             lName === cleanName || 
-             eNo === cleanName ||
-             dName.includes(cleanName) || 
-             cleanName.includes(dName);
-    });
-
-    if (match) ids.push(match.id);
-    else notFound.push(name);
-  });
-  return { ids, notFound };
-}
-
-async function confirmAiAction_OLD(action: any, msgIdx: number) {
-  if (action?.action === "start_approval") {
-    const params = action.params || action;
-    const rawApprovers = params.approvers || params.approver || [];
-    
-    let ids: number[] = [];
-    
-    // 💡 智能检测：如果审批人列表里是数字ID，直接使用；如果是姓名，再走解析逻辑
-    const firstItem = Array.isArray(rawApprovers) ? rawApprovers[0] : rawApprovers;
-    if (typeof firstItem === 'number' || (typeof firstItem === 'string' && /^\d+$/.test(firstItem))) {
-      // 直接是 ID，转换并使用
-      ids = (Array.isArray(rawApprovers) ? rawApprovers : [rawApprovers]).map((id: any) => Number(id));
-    } else {
-      // 是姓名，走搜索解析
-      const resolved = resolveApproverIds(rawApprovers);
-      if (resolved.notFound.length > 0) {
-        ElMessage.warning(t("editor.ai.approverNotFound", { name: resolved.notFound.join(", ") }));
-      }
-      ids = resolved.ids;
-    }
-    
-    if (ids.length === 0) {
-      ElMessage.warning("未能确定审批人，请手动选择");
-      approverIds.value = [];
-      showApproval.value = true;
-      return;
-    }
-    
-    try {
-      loading.value = true;
-      await api.post(`/documents/${docId.value}/approvals`, {
-        type: params.approval_type || params.type || "sequential",
-        approvers: ids,
-      });
-      ElMessage.success(t("editor.messages.sentToApproval"));
-      aiStore.globalMessages[msgIdx].action = null;
-      loadDoc(true);
-    } catch (err) {
-      ElMessage.error(t("common.failed"));
-    } finally {
-      loading.value = false;
-    }
-  }
-}
-
 async function runAutoTag() {
   if (!editor.value) return;
   tagging.value = true;
@@ -1150,42 +1071,7 @@ onMounted(() => {
   window.addEventListener('edms:trigger_approval', handler);
   onBeforeUnmount(() => window.removeEventListener('edms:trigger_approval', handler));
 });
-function insertChatToEditor_OLD(content: string) {
-  if (!editor.value || !content) return;
-  
-  // 💡 Robustness: Aggressively strip ANY leftover JSON blocks to prevent leakage into document
-  let cleanContent = content.replace(/```json[\s\S]*?```/g, "").replace(/\{[\s\n]*"approvers"[\s\S]*?\}/g, "").trim();
-  
-  if (cleanContent.startsWith('```')) {
-    const lines = cleanContent.split('\n');
-    if (lines.length > 2) {
-      cleanContent = lines.slice(1, -1).join('\n').trim();
-    }
-  }
 
-  if (!cleanContent) {
-    ElMessage.warning(t("editor.ai.noContentToInsert", "No text content found to insert."));
-    return;
-  }
-
-  try {
-    const mdStorage = (editor.value.storage as any).markdown;
-    // 💡 适配：tiptap-markdown 在不同版本中可能使用 getHtml 或 getHTML
-    const parseFn = mdStorage?.getHtml || mdStorage?.getHTML;
-    
-    if (parseFn) {
-      const html = parseFn.call(mdStorage, cleanContent);
-      editor.value.chain().focus().insertContent(html).run();
-    } else {
-      // 💡 兜底：如果扩展未暴露解析方法，则直接插入
-      editor.value.chain().focus().insertContent(cleanContent).run();
-    }
-  } catch (e) {
-    console.error("Markdown parse failed", e);
-    editor.value.chain().focus().insertContent(cleanContent).run();
-  }
-  ElMessage.success(t("editor.ai.insertToDoc"));
-}
 
 const versionList = ref<Array<any>>([]);
 
@@ -1362,55 +1248,7 @@ async function savePageSettings() {
   } catch { ElMessage.error(t("common.failed", "Failed")); }
 }
 
-async function fixPunc() {
-  if (!editor.value) return;
-  // Repurpose handleAiAction for whole document
-  const fullText = editor.value.getText();
-  if (!fullText.trim()) return;
-  
-  loading.value = true;
-  try {
-    const response = await fetch(`${api.defaults.baseURL || '/api'}/ai/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
-      body: JSON.stringify({ action: "fix_punctuation", prompt: fullText, lang: locale.value })
-    });
-    
-    if (!response.ok) throw new Error("AI request failed");
-    
-    let result = "";
-    const reader = response.body?.getReader();
-    if (!reader) return;
-    
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = new TextDecoder().decode(value);
-      const lines = chunk.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const raw = line.replace("data: ", "").trim();
-          if (raw === "[DONE]") break;
-          try {
-            const data = JSON.parse(raw);
-            if (data.type === "chunk" && data.content) {
-              result += data.content;
-            }
-          } catch(e) {}
-        }
-      }
-    }
-    
-    // Replace content carefully
-    editor.value.commands.setContent(result);
-    ElMessage.success(t("editor.messages.punctuationFixed"));
-  } catch (err) {
-    console.error("AI Punctuation fix failed:", err);
-    ElMessage.error(t("common.failed", "Failed"));
-  } finally {
-    loading.value = false;
-  }
-}
+
 
 async function startApproval() {
   if (!approverIds.value.length) return ElMessage.warning(t("editor.selectApprovers"));

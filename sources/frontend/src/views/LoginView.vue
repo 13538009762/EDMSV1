@@ -185,7 +185,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
 import api from "@/api/client";
 import { 
   User, Lock, Cpu, Finished, Connection, Monitor, 
-  CircleCheck, Bell, OfficeBuilding, Edit
+  Bell, Edit
 } from "@element-plus/icons-vue";
 
 const { t } = useI18n();

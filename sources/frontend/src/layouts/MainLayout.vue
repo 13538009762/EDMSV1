@@ -147,7 +147,7 @@
 import { useAiStore } from "@/stores/ai";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
+import { onMounted, onBeforeUnmount, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
@@ -252,7 +252,8 @@ onBeforeUnmount(() => {
 
 function onLogout() {
   const aiStore = useAiStore();
-  aiStore.clearHistory();
+  aiStore.clearHistory('global');
+  aiStore.clearHistory('editor');
   auth.logout();
   router.push({ name: "login" });
 }

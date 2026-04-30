@@ -73,13 +73,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import api from "@/api/client";
 import { 
-  Bell, Message, Star, StarFilled, Delete, Refresh, Check, 
-  Promotion, Monitor, Edit, Warning
+  Bell, Star, StarFilled, Delete, Refresh, Check, 
+  Monitor, Edit, Warning
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { ElMessage } from "element-plus";

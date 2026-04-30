@@ -432,8 +432,8 @@ import { ref, onMounted, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { 
-  Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen, Folder,
-  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Monitor
+  Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen,
+  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine
 } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";

@@ -84,7 +84,7 @@ import { useRouter } from 'vue-router';
 import api from '@/api/client';
 import {
   CopyDocument, Search, User, DocumentAdd,
-  Document, Tickets, DataAnalysis, Calendar, Money, EditPen,
+  Document, Tickets, DataAnalysis, Calendar, Money,
   Files, Folder, Memo, Postcard, Collection, Briefcase, Management,
   Monitor, PieChart, Stamp, List
 } from '@element-plus/icons-vue';

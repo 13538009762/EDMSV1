@@ -445,9 +445,6 @@ const executeAction = async (action: any, idx: number) => {
   const type = String(action.action || '').toUpperCase();
   const p = action.params || {};
   
-  // Create a wrapper for the assistant message if we need to update its content during execution
-  const assistantMessage = aiStore.globalMessages[idx].role === 'assistant' ? aiStore.globalMessages[idx] : null;
-
   try {
     const isQuery = ['QUERY', 'SEARCH', 'STATS', 'DASHBOARD', 'GET', 'LIST', 'COUNT', 'VIEW', 'SHOW', 'READ'].some(k => type.includes(k));
     if (isQuery) {

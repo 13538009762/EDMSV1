@@ -198,7 +198,7 @@ export const CommentMark = Mark.create({
       unsetComment: () => ({ commands }: any) => {
         return commands.unsetMark(this.name)
       },
-      unsetSpecificComment: (commentId: string | number) => ({ tr, dispatch }: any) => {
+      unsetSpecificComment: (_commentId: string | number) => () => {
         // Advanced: removing specific comments
         return true
       }
@@ -293,7 +293,7 @@ export const SearchAndReplace = Extension.create({
         key: new PluginKey('searchAndReplace'),
         state: {
           init() { return DecorationSet.empty },
-          apply(tr, oldState) {
+          apply(tr, _oldState) {
             const { searchTerm } = extension.storage
             if (!searchTerm || searchTerm.length < 1) return DecorationSet.empty
             const decorations: Decoration[] = []

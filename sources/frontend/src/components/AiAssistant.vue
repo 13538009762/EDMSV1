@@ -161,7 +161,7 @@ const sendMessage = async () => {
   if (!input.value.trim() || isTyping.value) return;
 
   const userQuery = input.value;
-  aiStore.addMessage('user', userQuery);
+  aiStore.addMessage('global', 'user', userQuery);
   input.value = '';
   isTyping.value = true;
   scrollToBottom();
@@ -384,7 +384,7 @@ const sendMessage = async () => {
     }
   } catch (error) {
     console.error('Chat error:', error);
-    aiStore.addMessage('assistant', '抱歉，我现在无法响应您的请求。');
+    aiStore.addMessage('global', 'assistant', '抱歉，我现在无法响应您的请求。');
   } finally {
     isTyping.value = false;
     scrollToBottom();

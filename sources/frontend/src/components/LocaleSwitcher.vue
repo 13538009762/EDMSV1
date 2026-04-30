@@ -13,7 +13,6 @@
       <el-dropdown-menu>
         <el-dropdown-item command="en">{{ t("nav.english") }}</el-dropdown-item>
         <el-dropdown-item command="zh-CN">{{ t("nav.chinese") }}</el-dropdown-item>
-        <el-dropdown-item command="ru">{{ t("nav.russian") }}</el-dropdown-item>
       </el-dropdown-menu>
     </template>
   </el-dropdown>
@@ -23,7 +22,7 @@
 import { useI18n } from "vue-i18n";
 import { saveLocale, type LocaleCode } from "@/i18n";
 
-const props = defineProps<{
+defineProps<{
   purple?: boolean;
 }>();
 

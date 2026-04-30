@@ -70,7 +70,7 @@ import type { UploadFile } from "element-plus";
 import { ElMessage } from "element-plus";
 import axios from "axios";
 import LocaleSwitcher from "@/components/LocaleSwitcher.vue";
-import { ArrowDown, Plus, Upload, Edit, Lock, Unlock } from "@element-plus/icons-vue";
+
 const { t } = useI18n();
 const router = useRouter();
 
@@ -135,10 +135,6 @@ function copyLogin(name: string) {
   void navigator.clipboard.writeText(name);
   ElMessage.success(name);
 }
-const roleTagMap: Record<string, string> = {
-  'Administrator': 'danger', // 管理员显示为红色
-  'User': 'info',            // 普通用户显示为灰色
-};
 onMounted(async () => {
   try {
     await loadStatus();

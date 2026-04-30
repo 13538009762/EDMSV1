@@ -218,7 +218,7 @@ import api from '@/api/client';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
 import {
-  Plus, Edit, EditPen, Delete, Search, Setting,
+  Plus, Edit, EditPen, Delete, Search,
   Document, View, Hide, Grid,
   Tickets, Files, Folder, Memo, Postcard, Collection,
   Briefcase, Management, DataAnalysis, Monitor, Calendar,
