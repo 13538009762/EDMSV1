@@ -222,23 +222,28 @@ def get_stats():
     except Exception as e:
         print(f"[ERROR] Storage failed: {e}")
 
-    # 10. 热力图
+    # 10. 用户活跃趋势 (90天，每天独立活跃用户数)
     heatmap_data = []
     try:
-        if is_admin:
-            today_dt = datetime.now()
-            h_limit = today_dt - timedelta(days=90)
-            h_q = db.session.query(func.date(AuditLog.created_at), func.count(AuditLog.id))\
-                .filter(AuditLog.created_at >= h_limit)\
-                .group_by(func.date(AuditLog.created_at))\
-                .order_by(func.date(AuditLog.created_at)).all()
-            
-            h_map = {str(r[0]): r[1] for r in h_q}
-            # 补全 90 天数据，确保图表 timeline 完整
-            for i in range(89, -1, -1):
-                d = (today_dt - timedelta(days=i)).date()
-                d_str = d.isoformat()
-                heatmap_data.append([d_str, h_map.get(d_str, 0)])
+        today_dt = datetime.now()
+        h_limit = today_dt - timedelta(days=90)
+
+        # Count distinct users per day based on any AuditLog action (LOGIN, VIEW, etc.)
+        h_q = db.session.query(
+                func.date(AuditLog.created_at),
+                func.count(func.distinct(AuditLog.user_id))
+            )\
+            .filter(AuditLog.created_at >= h_limit)\
+            .filter(AuditLog.user_id != None)\
+            .group_by(func.date(AuditLog.created_at))\
+            .order_by(func.date(AuditLog.created_at)).all()
+
+        h_map = {str(r[0]): r[1] for r in h_q}
+        # Fill all 90 days to ensure a complete timeline
+        for i in range(89, -1, -1):
+            d = (today_dt - timedelta(days=i)).date()
+            d_str = d.isoformat()
+            heatmap_data.append([d_str, h_map.get(d_str, 0)])
     except Exception as e:
         print(f"[ERROR] Heatmap failed: {e}")
 

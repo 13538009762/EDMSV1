@@ -33,6 +33,22 @@ def login():
         return jsonify({"error": "Invalid password"}), 401
         
     token = create_access_token(identity=str(user.id))
+
+    # Record login event for activity tracking
+    try:
+        from app.extensions import db
+        from app.models.workflow import AuditLog
+        log = AuditLog(
+            user_id=user.id,
+            action="LOGIN",
+            summary=f"User {user.login_name} logged in",
+            ip_address=request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception:
+        pass  # Non-critical, don't block login
+
     return jsonify(
         {
             "access_token": token,
