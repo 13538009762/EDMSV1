@@ -60,7 +60,7 @@
           <el-icon class="collapse-btn" @click="toggleCollapse">
             <component :is="isCollapse ? Expand : Fold" />
           </el-icon>
-          <span class="logo-text">{{ t('common.appNameFull') }}</span>
+          <span class="logo-text">Ecosystem of Document Matrix & Security 全栈智能协同与可信文档管理平台</span>
         </div>
         <div class="spacer" />
         
