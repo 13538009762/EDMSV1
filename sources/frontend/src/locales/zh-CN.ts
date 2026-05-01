@@ -466,7 +466,7 @@ export default {
     storageBreakdown: "存储规格占比",
     trendingDocs: "高频热门文档 (Top 5)",
     activityHeatmap: "用户活跃热力图",
-    activityTrend90: "用户活跃趋势 (90日)",
+    activityTrend30: "用户活跃趋势 (30日)",
     hits: "次浏览",
     activityUnit: "项活动",
     blockchainTitle: "区块链底层安全监控中心",

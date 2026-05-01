@@ -1239,7 +1239,8 @@ def verify_document(doc_id):
                 document_id=doc.id,             
                 action='INTRUSION_ALERT',          
                 ip_address=request.remote_addr, 
-                summary='【零信任拦截】用户发起确权审计，系统比对发现底层物理数据已被未知来源非法篡改，已阻断！' 
+                summary='【零信任拦截】用户发起确权审计，系统比对发现底层物理数据已被未知来源非法篡改，已阻断！',
+                is_starred=True
             )
             db.session.add(tamper_log)
             db.session.commit()

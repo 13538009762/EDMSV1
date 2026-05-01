@@ -453,7 +453,7 @@ export default {
     storageBreakdown: "Storage by File Type",
     trendingDocs: "Trending Documents (Top 5)",
     activityHeatmap: "User Activity Heatmap",
-    activityTrend90: "Activity Trend (90 Days)",
+    activityTrend30: "Activity Trend (30 Days)",
     hits: "views",
     activityUnit: "activities",
     blockchainTitle: "Blockchain Security Monitoring",

@@ -224,11 +224,11 @@ def get_stats():
     except Exception as e:
         print(f"[ERROR] Storage failed: {e}")
 
-    # 10. 用户活跃趋势 (90天，每天独立活跃用户数)
+    # 10. 用户活跃趋势 (30天，每天独立活跃用户数)
     heatmap_data = []
     try:
         today_dt = datetime.now()
-        h_limit = today_dt - timedelta(days=90)
+        h_limit = today_dt - timedelta(days=30)
 
         # Count distinct users per day based on any AuditLog action (LOGIN, VIEW, etc.)
         h_q = db.session.query(
@@ -241,8 +241,8 @@ def get_stats():
             .order_by(func.date(AuditLog.created_at)).all()
 
         h_map = {str(r[0]): r[1] for r in h_q}
-        # Fill all 90 days to ensure a complete timeline
-        for i in range(89, -1, -1):
+        # Fill all 30 days to ensure a complete timeline
+        for i in range(29, -1, -1):
             d = (today_dt - timedelta(days=i)).date()
             d_str = d.isoformat()
             heatmap_data.append([d_str, h_map.get(d_str, 0)])
@@ -286,7 +286,8 @@ def get_stats():
                 "description": str(log.summary or ""),
                 "time": log.created_at.isoformat() + "Z" if log.created_at else None,
                 "ip": str(log.ip_address or ""),
-                "user": str(log.user.display_name() if log.user else "Unknown")
+                "user": str(log.user.display_name() if log.user else "Unknown"),
+                "is_starred": log.is_starred
             })
     except Exception as e:
         print(f"[ERROR] Blockchain stats failed: {e}")

@@ -244,7 +244,7 @@
         <el-card shadow="hover" class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>{{ t('dashboard.activityTrend90', 'Activity Trend (90 Days)') }}</span>
+              <span>{{ t('dashboard.activityTrend30', 'Activity Trend (30 Days)') }}</span>
               <el-button link :icon="FullScreen" @click="zoomWidget('activityHeatmap')" />
             </div>
           </template>
