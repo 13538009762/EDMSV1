@@ -227,7 +227,7 @@ const sendMessage = async () => {
                     res = await api.get('/documents', { params: { search: query } });
                     const items = res.data.items || [];
                     if (items.length > 0) {
-                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (ID: ${d.id}, 状态: ${d.status})`).join('\n');
+                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (状态: ${d.status})`).join('\n');
                     } else {
                       resultHtml = "\n\n❌ 未找到相关文档。";
                     }

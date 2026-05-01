@@ -106,8 +106,23 @@
               :placeholder="t('editor.searchPlaceholder')"
               :prefix-icon="Search"
               clearable
-              style="width: 200px"
+              style="width: 180px"
             />
+            <el-select
+              v-show="authStore.user?.login_name === 'admin' || authStore.user?.is_manager"
+              v-model="currentDeptId"
+              clearable
+              style="width: 180px"
+              :placeholder="t('profile.dept', 'Department')"
+              @change="onDeptFilterChange"
+            >
+              <el-option 
+                v-for="d in deptOptions" 
+                :key="d.id" 
+                :label="formatDeptName(d.name, d.name_en)" 
+                :value="d.id.toString()" 
+              />
+            </el-select>
             <el-select
               v-model="scope"
               clearable
@@ -300,6 +315,7 @@ const currentSpaceName = ref("");
 const currentDeptId = ref<string | null>(null);
 const currentDeptName = ref("");
 const selectedIds = ref<number[]>([]);
+const deptOptions = ref<any[]>([]);
 
 const formatDeptName = (name: string, nameEn?: string) => {
   if (!name) return "";
@@ -398,6 +414,30 @@ async function loadTree() {
   } catch (err) {
     console.error(err);
   }
+}
+
+async function loadDeptOptions() {
+  try {
+    const { data } = await api.get('/users/departments');
+    deptOptions.value = data;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function onDeptFilterChange(val: string) {
+  currentSpaceId.value = null;
+  currentSpaceName.value = "";
+  if (!val) {
+    currentDeptId.value = null;
+    currentDeptName.value = "";
+  } else {
+    const dept = deptOptions.value.find(d => d.id.toString() === val);
+    if (dept) {
+      currentDeptName.value = formatDeptName(dept.name, dept.name_en);
+    }
+  }
+  load();
 }
 
 function handleNodeClick(data: any) {
@@ -582,6 +622,7 @@ async function confirmDelete(id: number) {
 onMounted(() => {
   load();
   loadTree();
+  loadDeptOptions();
 });
 </script>
 

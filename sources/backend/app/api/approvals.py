@@ -79,6 +79,7 @@ def inbox():
             {
                 "participant_id": display_participant.id,
                 "document_id": doc.id if doc else None,
+                "doc_number": doc.doc_number if doc else None,
                 "title": title,
                 "initiator_name": initiator_name,
                 "flow_status": flow.status,
@@ -224,6 +225,7 @@ def my_applications():
             
         items.append({
             "document_id": doc.id,
+            "doc_number": doc.doc_number,
             "title": doc.title,
             "initiator_name": user.display_name(),
             "flow_id": flow.id,

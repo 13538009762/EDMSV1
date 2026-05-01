@@ -14,8 +14,8 @@
 
     <div class="filters">
       <el-form :inline="true">
-        <el-form-item :label="t('auditLog.documentId', 'Doc ID')">
-          <el-input v-model="filters.document_id" clearable placeholder="e.g. 12" style="width: 120px"></el-input>
+        <el-form-item :label="t('auditLog.documentId', 'Doc Number')">
+          <el-input v-model="filters.doc_number" clearable placeholder="e.g. DOC-2026-0001" style="width: 160px"></el-input>
         </el-form-item>
         <el-form-item :label="t('auditLog.userId', 'User ID')">
           <el-input v-model="filters.user_id" clearable placeholder="e.g. 5" style="width: 120px"></el-input>
@@ -27,6 +27,7 @@
             <el-option label="EXPORT_DOCX" value="EXPORT_DOCX" />
             <el-option label="DELETE" value="DELETE" />
             <el-option label="CHANGE_PERM" value="CHANGE_PERM" />
+            <el-option label="INTRUSION_ALERT" value="INTRUSION_ALERT" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -49,7 +50,7 @@
             </el-icon>
           </template>
         </el-table-column>
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" label="Log ID" width="80" />
         <el-table-column :label="t('auditLog.colTimestamp', 'Timestamp')" width="180">
           <template #default="{ row }">
             {{ formatLocalDate(row.created_at) }}
@@ -61,7 +62,7 @@
             <el-tag :type="getActionTagType(row.action)" class="action-tag">{{ row.action }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="document_id" :label="t('auditLog.colDocId', 'Doc ID')" width="100" />
+        <el-table-column prop="doc_number" :label="t('auditLog.colDocId', 'Doc Number')" width="140" />
         <el-table-column prop="document_title" :label="t('auditLog.colDocTitle', 'Document Title')" min-width="200" show-overflow-tooltip />
         <el-table-column prop="ip_address" :label="t('auditLog.colIp', 'IP Address')" width="140" />
         <el-table-column :label="t('auditLog.colSummary', 'Summary')" min-width="300">
@@ -104,7 +105,7 @@ const page = ref(1);
 const size = ref(20);
 
 const filters = ref({
-  document_id: "",
+  doc_number: "",
   user_id: "",
   action: "",
 });
@@ -113,12 +114,12 @@ function getActionTagType(action: string) {
   if (!action) return "info";
   if (action === "VIEW") return "success";
   if (action.startsWith("EXPORT")) return "warning";
-  if (action === "DELETE" || action === "ALERT_TAMPER") return "danger";
+  if (action === "DELETE" || action === "INTRUSION_ALERT") return "danger";
   return "info";
 }
 
 function formatSummary(row: any) {
-  if (row.action === 'ALERT_TAMPER') {
+  if (row.action === 'INTRUSION_ALERT') {
     return t('auditLog.tamperAlert');
   }
   return row.summary;
@@ -138,7 +139,7 @@ async function loadData() {
   loading.value = true;
   try {
     const params: any = { page: page.value, size: size.value };
-    if (filters.value.document_id) params.document_id = filters.value.document_id;
+    if (filters.value.doc_number) params.doc_number = filters.value.doc_number;
     if (filters.value.user_id) params.user_id = filters.value.user_id;
     if (filters.value.action) params.action = filters.value.action;
 

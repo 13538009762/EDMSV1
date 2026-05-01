@@ -47,13 +47,35 @@ def audit_log_required(action: str):
                         action=action,
                         summary=f"{action}: {request.method} {request.path}",
                         ip_address=request.remote_addr,
+                        # 💡 NEW: Intrusion alerts are auto-starred
+                        is_starred=(action == "INTRUSION_ALERT")
                     )
                     db.session.add(log)
                     
-                    # 💡 Proactive Cleanup: Delete logs older than 24h
+                    # 💡 Proactive Cleanup: 
                     from datetime import datetime, timedelta
-                    cutoff = datetime.utcnow() - timedelta(hours=24)
-                    AuditLog.query.filter(AuditLog.created_at < cutoff).delete()
+                    now = datetime.utcnow()
+                    cutoff_24h = now - timedelta(hours=24)
+                    cutoff_2d = now - timedelta(days=2)
+                    
+                    # Delete logic:
+                    # 1. Normal unstarred logs older than 24h
+                    # 2. INTRUSION_ALERT unstarred logs older than 2 days (based on unstarred_at)
+                    
+                    # Delete normal unstarred logs
+                    AuditLog.query.filter(
+                        AuditLog.is_starred == False,
+                        AuditLog.action != "INTRUSION_ALERT",
+                        AuditLog.created_at < cutoff_24h
+                    ).delete()
+                    
+                    # Delete unstarred intrusion alerts after 2 days
+                    AuditLog.query.filter(
+                        AuditLog.is_starred == False,
+                        AuditLog.action == "INTRUSION_ALERT",
+                        AuditLog.unstarred_at != None,
+                        AuditLog.unstarred_at < cutoff_2d
+                    ).delete()
                     
                     db.session.commit()
             except Exception:

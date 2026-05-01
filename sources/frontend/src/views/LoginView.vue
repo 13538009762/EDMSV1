@@ -133,7 +133,7 @@
                     <el-option
                       v-for="dept in departments"
                       :key="dept.id"
-                      :label="t('dept.' + dept.name, dept.name)"
+                      :label="formatDeptName(dept.name, dept.name_en)"
                       :value="dept.id"
                     />
                   </el-select>
@@ -188,10 +188,17 @@ import {
   Bell, Edit
 } from "@element-plus/icons-vue";
 
-const { t } = useI18n();
+const { t, locale, te } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
+
+const formatDeptName = (name: string, nameEn?: string) => {
+  if (!name) return "";
+  if (te(`dept.${name}`)) return t(`dept.${name}`);
+  if (nameEn && te(`dept.${nameEn}`)) return t(`dept.${nameEn}`);
+  return locale.value === 'zh-CN' ? name : (nameEn || name);
+};
 
 const loginName = ref("");
 const password = ref("");

@@ -117,12 +117,13 @@ def admin_list_audit_logs():
     query = AuditLog.query.filter(or_(AuditLog.created_at >= cutoff, AuditLog.is_starred == True))
 
     # Filters
-    document_id = request.args.get("document_id")
+    doc_number = request.args.get("doc_number")
     action = request.args.get("action")
     user_id = request.args.get("user_id")
 
-    if document_id:
-        query = query.filter(AuditLog.document_id == document_id)
+    if doc_number:
+        from app.models.document import Document
+        query = query.join(Document, AuditLog.document_id == Document.id).filter(Document.doc_number == doc_number)
     if action:
         query = query.filter(AuditLog.action == action)
     if user_id:
@@ -139,6 +140,7 @@ def admin_list_audit_logs():
         items.append({
             "id": lg.id,
             "document_id": lg.document_id,
+            "doc_number": lg.document.doc_number if lg.document else None,
             "document_title": lg.document.title if lg.document else None,
             "user_id": lg.user_id,
             "user_login": lg.user.login_name if lg.user else None,
@@ -164,7 +166,16 @@ def admin_toggle_audit_star(log_id: int):
     if not log:
         return jsonify({"error": "Not found"}), 404
     
-    log.is_starred = not log.is_starred
+    from datetime import datetime
+    if log.is_starred:
+        # Unstarring
+        log.is_starred = False
+        log.unstarred_at = datetime.utcnow()
+    else:
+        # Starring
+        log.is_starred = True
+        log.unstarred_at = None
+    
     db.session.commit()
     return jsonify({"is_starred": log.is_starred}), 200
 

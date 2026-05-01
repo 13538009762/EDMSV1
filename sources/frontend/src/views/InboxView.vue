@@ -49,9 +49,9 @@
               </template>
             </el-table-column>
             
-            <el-table-column :label="t('inbox.colDocId')" width="100">
+            <el-table-column :label="t('inbox.colDocId')" width="140">
               <template #default="{ row }">
-                {{ row.document_id }}
+                {{ row.doc_number || (row.document_id ? '#' + row.document_id : '-') }}
               </template>
             </el-table-column>
             
@@ -150,9 +150,9 @@
               </template>
             </el-table-column>
 
-            <el-table-column :label="t('inbox.colDocId')" width="100">
+            <el-table-column :label="t('inbox.colDocId')" width="140">
               <template #default="{ row }">
-                {{ row.document_id }}
+                {{ row.doc_number || (row.document_id ? '#' + row.document_id : '-') }}
               </template>
             </el-table-column>
 

@@ -461,7 +461,7 @@
       </el-radio-group>
       <div style="margin-top: 12px; display: flex; gap: 8px;">
         <el-select v-model="selectedDeptId" clearable :placeholder="t('profile.dept')" style="width: 150px">
-          <el-option v-for="d in deptOptions" :key="d.id" :label="d.name" :value="d.id" />
+          <el-option v-for="d in deptOptions" :key="d.id" :label="locale === 'en' && d.name_en ? d.name_en : d.name" :value="d.id" />
         </el-select>
         <el-select
           v-model="approverIds"
@@ -878,7 +878,7 @@ async function askAi(isFeedback = false) {
                     res = await api.get('/documents', { params: { search: query } });
                     const items = res.data.items || [];
                     if (items.length > 0) {
-                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (ID: ${d.id}, 状态: ${d.status})`).join('\n');
+                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (状态: ${d.status})`).join('\n');
                     } else {
                       resultHtml = "\n\n❌ 未找到相关文档。";
                     }
@@ -1085,7 +1085,7 @@ const showApproval = ref(false);
 const approvalType = ref("parallel");
 const approverIds = ref<number[]>([]);
 const userOptions = ref<Array<{ id: number; login_name: string; display_name?: string; department_id?: number }>>([]);
-const deptOptions = ref<Array<{ id: number; name: string }>>([]);
+const deptOptions = ref<Array<{ id: number; name: string; name_en?: string }>>([]);
 const selectedDeptId = ref<number | null>(null);
 
 watch(showApproval, (val) => {

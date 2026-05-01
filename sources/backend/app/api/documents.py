@@ -114,15 +114,18 @@ def list_document_tree():
     
     # 1. Spaces (Project/Topic Groups)
     for s in spaces:
-        docs = Document.query.filter(
+        conditions = [
             Document.space_id == s.id,
             Document.is_template == False,
-            Document.deleted_at == None,
-            or_(
+            Document.deleted_at == None
+        ]
+        if user.login_name != 'admin':
+            conditions.append(or_(
                 Document.owner_id == user.id,
                 Document.is_public == True
-            )
-        ).all()
+            ))
+        
+        docs = Document.query.filter(*conditions).all()
         
         doc_map = {d.id: {
             "id": d.id,
@@ -152,18 +155,21 @@ def list_document_tree():
     for dpt in depts:
         # Show documents owned by users in this department that are NOT in a space
         # and are either public or owned by current user
-        docs = Document.query.join(User).filter(
+        conditions = [
             User.department_id == dpt.id,
             Document.space_id == None,
             Document.is_template == False,
-            Document.deleted_at == None,
-            or_(
+            Document.deleted_at == None
+        ]
+        if user.login_name != 'admin':
+            conditions.append(or_(
                 Document.owner_id == user.id,
                 Document.is_public == True
-            )
-        ).all()
+            ))
+            
+        docs = Document.query.join(User).filter(*conditions).all()
 
-        if not docs and dpt.id != user.department_id:
+        if not docs and dpt.id != user.department_id and user.login_name != 'admin':
             continue
 
         doc_map = {d.id: {
@@ -1220,20 +1226,23 @@ def verify_document(doc_id):
             "tx_hash": doc.tx_hash
         })
     else:
-        # ======= 新增：真正把内鬼行为写入数据库 =======
+        # ======= 新增：真正把内鬼行为写入数据库 (增加唯一性校验，防止重复计数) =======
         from app.models.workflow import AuditLog
         from flask import request
         user = current_user()
         
-        tamper_log = AuditLog(
-            user_id=user.id if user else None,
-            document_id=doc.id,             
-            action='ALERT_TAMPER',          
-            ip_address=request.remote_addr, 
-            summary='【零信任拦截】用户发起确权审计，系统比对发现底层物理数据已被未知来源非法篡改，已阻断！' 
-        )
-        db.session.add(tamper_log)
-        db.session.commit()
+        # 检查是否已经针对该文档记录过拦截（防止连续点击导致次数虚高）
+        exists = AuditLog.query.filter_by(document_id=doc.id, action='INTRUSION_ALERT').first()
+        if not exists:
+            tamper_log = AuditLog(
+                user_id=user.id if user else None,
+                document_id=doc.id,             
+                action='INTRUSION_ALERT',          
+                ip_address=request.remote_addr, 
+                summary='【零信任拦截】用户发起确权审计，系统比对发现底层物理数据已被未知来源非法篡改，已阻断！' 
+            )
+            db.session.add(tamper_log)
+            db.session.commit()
         # ===============================================
         return jsonify({
             "safe": False, 

@@ -76,7 +76,7 @@ def get_stats():
             .outerjoin(Department, User.department_id == Department.id)\
             .filter(*auth_filter)\
             .group_by(Department.name, Department.name_en).all()
-        dept_data = [{"name": row[0] or "Unknown", "name_en": row[1], "count": row[2]} for row in dept_counts]
+        dept_data = [{"name": str(row[0] or "Unknown"), "name_en": str(row[1] or ""), "count": row[2]} for row in dept_counts]
     except Exception as e:
         print(f"[ERROR] Dept breakdown failed: {e}")
 
@@ -155,9 +155,11 @@ def get_stats():
             .order_by(Document.updated_at.desc()).limit(20).all()
         for d in recent_docs:
             activities.append({
-                "id": d.id, "title": d.title, "status": d.status,
+                "id": d.id, 
+                "title": str(d.title or ""), 
+                "status": str(d.status or ""),
                 "updated_at": d.updated_at.isoformat() + "Z" if d.updated_at else None,
-                "owner_name": d.owner.display_name() if d.owner else "Unknown"
+                "owner_name": str(d.owner.display_name() if d.owner else "Unknown")
             })
     except Exception as e:
         print(f"[ERROR] Activity feed failed: {e}")
@@ -173,7 +175,7 @@ def get_stats():
             .filter(AuditLog.action.in_(['VIEW', 'EXPORT_PDF', 'EXPORT_DOCX']))\
             .group_by(Document.id, Document.title)\
             .order_by(text('hits DESC')).limit(5).all()
-        trending_docs = [{"id": r[0], "title": r[1], "hits": r[2]} for r in t_q]
+        trending_docs = [{"id": r[0], "title": str(r[1] or ""), "hits": r[2]} for r in t_q]
     except Exception as e:
         print(f"[ERROR] Trending failed: {e}")
 
@@ -248,11 +250,7 @@ def get_stats():
         print(f"[ERROR] Heatmap failed: {e}")
 
     # 💡 11. 区块链专项指标 (Blockchain Specialized Metrics)
-    blockchain_stats = {
-        "on_chain_count": 0,
-        "tamper_alerts": 0,
-        "block_height": 15000
-    }
+    blockchain_stats = {"on_chain_count": 0, "tamper_alerts": 0, "block_height": 15000}
     blockchain_history = []
     security_alerts = []
     
@@ -260,7 +258,7 @@ def get_stats():
         # 已上链文档总数
         on_chain_count = Document.query.filter(Document.tx_hash != None).count()
         # 零信任拦截次数
-        tamper_alerts = AuditLog.query.filter_by(action='ALERT_TAMPER').count()
+        tamper_alerts = AuditLog.query.filter_by(action='INTRUSION_ALERT').count()
         
         blockchain_stats = {
             "on_chain_count": on_chain_count,
@@ -274,21 +272,21 @@ def get_stats():
         for d in notarized_docs:
             blockchain_history.append({
                 "id": d.id,
-                "title": d.title,
-                "tx_hash": d.tx_hash,
+                "title": str(d.title or ""),
+                "tx_hash": str(d.tx_hash or ""),
                 "time": d.updated_at.isoformat() + "Z" if d.updated_at else None
             })
             
         # 威胁情报 (最新的5条篡改预警)
-        tamper_logs = AuditLog.query.filter_by(action='ALERT_TAMPER')\
+        tamper_logs = AuditLog.query.filter_by(action='INTRUSION_ALERT')\
             .order_by(AuditLog.created_at.desc()).limit(5).all()
         for log in tamper_logs:
             security_alerts.append({
                 "id": log.id,
-                "description": log.summary,
+                "description": str(log.summary or ""),
                 "time": log.created_at.isoformat() + "Z" if log.created_at else None,
-                "ip": log.ip_address,
-                "user": log.user.display_name() if log.user else "Unknown"
+                "ip": str(log.ip_address or ""),
+                "user": str(log.user.display_name() if log.user else "Unknown")
             })
     except Exception as e:
         print(f"[ERROR] Blockchain stats failed: {e}")
@@ -319,7 +317,7 @@ def get_tamper_alerts():
     if not user or user.login_name != 'admin':
         return jsonify({"error": "Unauthorized"}), 401
     
-    logs = AuditLog.query.filter_by(action='ALERT_TAMPER').order_by(AuditLog.created_at.desc()).all()
+    logs = AuditLog.query.filter_by(action='INTRUSION_ALERT').order_by(AuditLog.created_at.desc()).all()
     return jsonify({
         "items": [{
             "id": log.id,
