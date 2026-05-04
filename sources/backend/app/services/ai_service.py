@@ -5,16 +5,21 @@ import os
 
 class AIService:
     @staticmethod
-    def get_client():
-        # Using the credentials provided: APIKey:APISecret
+    def get_client(ai_model: str = 'spark-lite'):
+        if ai_model == 'deepseek':
+            api_key = os.getenv('DEEPSEEK_API_KEY')
+            base_url = "https://api.deepseek.com"
+            return openai.OpenAI(api_key=api_key, base_url=base_url)
+        # Default Spark client
         api_key = "255e556f0c88f9bb663cc0d0f07594c4:NGVjZjc0ZTYzZTBhNjliODkxMGZjNmU0"
         base_url = "https://spark-api-open.xf-yun.com/v1"
         return openai.OpenAI(api_key=api_key, base_url=base_url)
 
     @staticmethod
-    def stream_chat(messages, user_context=None, doc_context=None, current_user=None):
-        """Call the real Spark AI API with streaming."""
-        client = AIService.get_client()
+    def stream_chat(messages, user_context=None, doc_context=None, current_user=None, ai_model='spark-lite'):
+        """Call the real AI API with streaming."""
+        client = AIService.get_client(ai_model)
+        model_name = "deepseek-chat" if ai_model == 'deepseek' else "lite"
         
         try:
             # Robust role detection
@@ -112,7 +117,7 @@ class AIService:
         def generate():
             try:
                 response = client.chat.completions.create(
-                    model="lite",
+                    model=model_name,
                     messages=[system_prompt] + formatted_messages,
                     stream=True
                 )
@@ -141,9 +146,10 @@ class AIService:
         return generate()
 
     @staticmethod
-    def stream_generate(prompt, action, lang="zh"):
+    def stream_generate(prompt, action, lang="zh", ai_model='spark-lite'):
         """Task-specific generation for editor (summarize, polish, etc.)."""
-        client = AIService.get_client()
+        client = AIService.get_client(ai_model)
+        model_name = "deepseek-chat" if ai_model == 'deepseek' else "lite"
         
         prompts = {
             "summarize": "请帮我总结以下文字的核心要点，使用简洁的列表形式：",
@@ -160,7 +166,7 @@ class AIService:
         def generate():
             try:
                 response = client.chat.completions.create(
-                    model="lite",
+                    model=model_name,
                     messages=[
                         {"role": "system", "content": system_msg},
                         {"role": "user", "content": prompt}

@@ -15,12 +15,15 @@ def ai_chat():
         context_url = data.get("context_url", "")
         doc_context = data.get("doc_context", "")
 
+        ai_model = data.get("ai_model", "spark-lite")
+        
         return Response(
             stream_with_context(AIService.stream_chat(
                 messages, 
                 user_context=context_url, 
                 doc_context=doc_context, 
-                current_user=current_user()
+                current_user=current_user(),
+                ai_model=ai_model
             )),
             mimetype="text/event-stream"
         )
@@ -39,8 +42,10 @@ def ai_generate():
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
         
+    ai_model = data.get("ai_model", "spark-lite")
+    
     return Response(
-        stream_with_context(AIService.stream_generate(prompt, action, lang)),
+        stream_with_context(AIService.stream_generate(prompt, action, lang, ai_model=ai_model)),
         mimetype="text/event-stream"
     )
 

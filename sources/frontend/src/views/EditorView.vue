@@ -241,6 +241,16 @@
               <span>✨ {{ t("editor.ai.aiTab") }}</span>
             </template>
             <div class="ai-panel">
+              <!-- AI Model Selection -->
+              <div class="ai-model-selector" style="padding: 10px 12px; border-bottom: 1px solid var(--el-border-color-lighter); background: var(--el-color-primary-light-9);">
+                <el-select v-model="aiStore.selectedModel" size="small" style="width: 100%">
+                  <template #prefix>
+                    <el-icon><MagicStick /></el-icon>
+                  </template>
+                  <el-option label="Spark Lite" value="spark-lite" />
+                  <el-option label="DeepSeek Chat" value="deepseek" />
+                </el-select>
+              </div>
               <!-- AI Tags Section -->
               <div class="ai-tags-section">
                 <div class="section-title">
@@ -799,7 +809,7 @@ async function runAutoTag() {
   tagging.value = true;
   try {
     const text = editor.value.getText().slice(0, 500);
-    const response = await api.post("/ai/generate", { action: "auto_tag", prompt: text, lang: locale.value });
+    const response = await api.post("/ai/generate", { action: "auto_tag", prompt: text, lang: locale.value, ai_model: aiStore.selectedModel });
     if (response.data?.content) {
       aiTags.value = response.data.content.split(",").map((s: string) => s.trim());
     }
@@ -836,7 +846,8 @@ async function askAi(isFeedback = false) {
       body: JSON.stringify({ 
         messages: aiStore.editorMessages.filter(m => m.content && m.content.trim() !== '').slice(-15), 
         context_url: route.path,
-        doc_context: docContext 
+        doc_context: docContext,
+        ai_model: aiStore.selectedModel
       })
     });
     
@@ -1641,7 +1652,7 @@ async function handleAiAction(action: string) {
     const response = await fetch(genUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${auth.token}` },
-      body: JSON.stringify({ prompt: text, action, lang: locale.value })
+      body: JSON.stringify({ prompt: text, action, lang: locale.value, ai_model: aiStore.selectedModel })
     });
     if (!response.body) throw new Error("No response body");
     const reader = response.body.getReader();
