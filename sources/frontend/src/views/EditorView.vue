@@ -41,6 +41,8 @@
           {{ isRecording ? '停止录音并生成摘要' : '智能会议录音' }}
         </el-button>
 
+        
+
         <el-dropdown trigger="click" style="margin-right: 8px;">
           <el-button>{{ t("editor.actions") }} <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
@@ -233,12 +235,20 @@
           <editor-content :editor="editor" class="tiptap" :style="{ paddingTop: page.marginTop + 'px', paddingBottom: page.marginBottom + 'px' }" />
         </div>
       </div>
-      <div class="side">
+      <div class="resize-handle" @mousedown="startResizing" :class="{ 'is-resizing': isResizing }"></div>
+      <div class="side" :style="{ width: sideWidth + 'px' }" :class="{ 'is-collapsed': isSideCollapsed }">
+        <template v-if="!isSideCollapsed">
+        <div class="side-header">
+           <el-button link @click="toggleSideCollapse" class="side-collapse-btn">
+             <el-icon :size="18"><Fold /></el-icon>
+           </el-button>
+        </div>
         <el-tabs v-model="activeSideTab" stretch>
           <!-- AI Tab -->
           <el-tab-pane name="ai">
             <template #label>
-              <span>✨ {{ t("editor.ai.aiTab") }}</span>
+              <el-icon :size="16"><MagicStick /></el-icon>
+              <span style="margin-left: 4px;">{{ t("editor.ai.aiTab") }}</span>
             </template>
             <div class="ai-panel">
               <!-- AI Model Selection -->
@@ -342,7 +352,11 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane :label="t('editor.commentsTab')" name="comments">
+          <el-tab-pane name="comments">
+            <template #label>
+              <el-icon :size="16"><ChatDotSquare /></el-icon>
+              <span style="margin-left: 4px;">{{ t('editor.commentsTab') }}</span>
+            </template>
             <div class="comments-header">
               <el-button v-if="meta.can_comment" size="small" type="primary" style="width: 100%; margin-top: 8px; margin-bottom: 12px;" @click="addCommentOnSelection">
                 {{ t("editor.commentSelection") }}
@@ -406,7 +420,11 @@
             <el-button size="small" @click="loadComments" style="width:100%; margin-top: 12px;">{{ t("editor.refreshComments") }}</el-button>
           </el-tab-pane>
 
-          <el-tab-pane :label="t('editor.versionsTab')" name="versions">
+          <el-tab-pane name="versions">
+            <template #label>
+              <el-icon :size="16"><Collection /></el-icon>
+              <span style="margin-left: 4px;">{{ t('editor.versionsTab') }}</span>
+            </template>
             <div class="version-list-container">
               <div class="version-header">
                 <el-button size="small" type="primary" @click="$router.push(`/doc/${docId}/diff`)">{{ t("editor.viewDiff") }}</el-button>
@@ -423,7 +441,17 @@
               </div>
             </div>
           </el-tab-pane>
-        </el-tabs>
+                </el-tabs>
+        </template>
+        
+        <template v-else>
+          <div class="collapsed-indicator" @click="toggleSideCollapse">
+            <el-icon :size="20" class="expand-side-icon"><Expand /></el-icon>
+            <div class="vertical-text">
+              {{ activeSideTab === 'ai' ? t("editor.ai.aiTab") : (activeSideTab === 'comments' ? t('editor.commentsTab') : t('editor.versionsTab')) }}
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -513,7 +541,7 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { ArrowDown, Back, Right, MagicStick, Microphone, Finished } from "@element-plus/icons-vue";
+import { ArrowDown, Back, Right, MagicStick, Microphone, Finished, Fold, Expand, ChatDotSquare, Collection } from "@element-plus/icons-vue";
 
 import { FontSize, LineHeight, Indent, CommentMark, TableExit, SearchAndReplace } from "@/utils/tiptapExtensions";
 import api from "@/api/client";
@@ -628,6 +656,56 @@ const activeSideTab = ref("ai");
 const aiTags = ref<string[]>([]);
 const tagging = ref(false);
 const aiQuery = ref("");
+
+// Resizable sidebar logic
+const sideWidth = ref(320);
+const preCollapseWidth = ref(320);
+const isResizing = ref(false);
+const isSideCollapsed = ref(false);
+
+const toggleSideCollapse = () => {
+  if (isSideCollapsed.value) {
+    sideWidth.value = preCollapseWidth.value;
+    isSideCollapsed.value = false;
+  } else {
+    preCollapseWidth.value = sideWidth.value;
+    sideWidth.value = 40;
+    isSideCollapsed.value = true;
+  }
+};
+
+const startResizing = (_e: MouseEvent) => {
+  isResizing.value = true;
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', stopResizing);
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+};
+
+const handleMouseMove = (e: MouseEvent) => {
+  if (!isResizing.value) return;
+  // Calculate from right side
+  const newWidth = window.innerWidth - e.clientX;
+  if (newWidth > 30 && newWidth < 800) {
+    if (newWidth < 120) {
+      sideWidth.value = 40;
+      isSideCollapsed.value = true;
+    } else {
+      sideWidth.value = newWidth;
+      isSideCollapsed.value = false;
+    }
+  }
+};
+
+const stopResizing = () => {
+  if (!isResizing.value) return;
+  isResizing.value = false;
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', stopResizing);
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+};
+
 
 // --- Meeting Recording Logic ---
 const isRecording = ref(false);
@@ -1906,7 +1984,7 @@ onBeforeUnmount(() => {
 .main-paper.Legal { width: 816px; min-height: 1344px; }
 
 .side {
-  width: 320px;
+  flex-shrink: 0;
   background-color: white;
   border-left: 1px solid var(--el-border-color);
   display: flex;
@@ -2247,5 +2325,82 @@ onBeforeUnmount(() => {
   transform: translateY(10px);
 }
 
+.resize-handle {
+  width: 6px;
+  margin: 0 -3px;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.2s, width 0.2s;
+  z-index: 100;
+  position: relative;
+  flex-shrink: 0;
+}
+.resize-handle:hover, .resize-handle.is-resizing {
+  background-color: var(--el-color-primary);
+  width: 6px;
+}
 
+.side.is-collapsed {
+  overflow: hidden;
+  background-color: var(--el-bg-color-page);
+  cursor: pointer;
+}
+.side.is-collapsed:hover {
+  background-color: var(--el-fill-color-light);
+}
+.side.is-collapsed .collapsed-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 16px;
+  gap: 20px;
+  height: 100%;
+}
+.side.is-collapsed .vertical-text {
+  writing-mode: vertical-lr;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  letter-spacing: 4px;
+  font-weight: 500;
+  opacity: 0.8;
+  text-transform: uppercase;
+}
+.side.is-collapsed .expand-side-icon {
+  color: var(--el-text-color-secondary);
+}
+.side.is-collapsed :deep(.el-tabs__content) {
+  display: none;
+}
+.side.is-collapsed :deep(.el-tabs__header) {
+  margin-bottom: 0;
+}
+.side.is-collapsed :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+.side.is-collapsed :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.collapse-side-btn {
+  transition: all 0.3s ease;
+}
+.collapse-side-btn:hover {
+  color: var(--el-color-primary);
+  transform: scale(1.1);
+}
+
+
+.side-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+}
+.side-collapse-btn {
+  color: var(--el-text-color-secondary);
+}
+.side-collapse-btn:hover {
+  color: var(--el-color-primary);
+}
 </style>
