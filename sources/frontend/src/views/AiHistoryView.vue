@@ -160,10 +160,10 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 32px 40px;
-  background: linear-gradient(135deg, #7367f0 0%, #ce9ffc 130%) !important;
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, #7367f0 130%) !important;
   border-radius: 16px;
   margin-bottom: 24px;
-  box-shadow: 0 8px 24px rgba(115, 103, 240, 0.15);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
 }
 
 .header-left {
