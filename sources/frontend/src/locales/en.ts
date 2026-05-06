@@ -250,6 +250,19 @@ export default {
       sideBySide: "Side-by-Side",
     },
   },
+  aiHistory: {
+    title: "AI Q&A Audit",
+    subtitle: "Monitor and audit all AI interaction records within the system for compliance.",
+    colUser: "User",
+    colType: "Interaction Type",
+    colModel: "AI Model",
+    colQuestion: "Question/Command",
+    colAnswer: "AI Response",
+    colTime: "Timestamp",
+    chat: "Online Chat",
+    editor: "Editor Assistant",
+    noHistory: "No AI conversation records found.",
+  },
   editor: {
     ai: {
       assistant: "AI Assistant",

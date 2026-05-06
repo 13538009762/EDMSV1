@@ -17,6 +17,7 @@ class AIHistoryStore:
                         document_title: Optional[str] = None,
                         context_url: Optional[str] = None,
                         action_type: str = "chat",
+                        ai_model: Optional[str] = None,
                         tokens_used: Optional[int] = None) -> Dict:
         """添加对话记录"""
         with self._lock:
@@ -30,6 +31,7 @@ class AIHistoryStore:
                 "answer": answer,
                 "context_url": context_url,
                 "action_type": action_type,
+                "ai_model": ai_model,
                 "created_at": datetime.utcnow().isoformat(),
                 "tokens_used": tokens_used,
             }
@@ -38,7 +40,7 @@ class AIHistoryStore:
             
             # 控制台打印详细信息
             print("\n" + "="*80)
-            print(f"[AI HISTORY] New Conversation #{conversation['id']}")
+            print(f"[AI HISTORY] New Conversation #{conversation['id']} ({ai_model or 'default'})")
             print("="*80)
             print(f"User: {user_name} (ID: {user_id})")
             print(f"Document: {document_title or 'N/A'} (ID: {document_id or 'N/A'})")

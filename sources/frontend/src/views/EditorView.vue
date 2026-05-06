@@ -815,6 +815,25 @@ const confirmAiAction = async (action: any, idx: number) => {
     const p = action.params || action;
     const approvers = p.approvers || [];
     
+    // 💡 尝试解析姓名到 ID
+    if (approvers.length > 0 && typeof approvers[0] === 'string') {
+      try {
+        loading.value = true;
+        const res = await api.get('/users', { params: { search: approvers[0] } });
+        const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+        if (items.length === 1) {
+          await api.post(`/documents/${docId.value}/approvals`, {
+            type: p.type || "sequential",
+            approvers: [items[0].id],
+          });
+          ElMessage.success(t("editor.approvalStarted"));
+          aiStore.editorMessages[idx].action = null;
+          loadDoc(true);
+          return;
+        }
+      } catch (e) {} finally { loading.value = false; }
+    }
+
     // 💡 如果已经有具体的 ID，直接发起审批，不再弹窗
     if (approvers.length > 0 && typeof approvers[0] === 'number') {
       try {
@@ -823,7 +842,7 @@ const confirmAiAction = async (action: any, idx: number) => {
           type: p.type || p.approval_type || "sequential",
           approvers: approvers,
         });
-        ElMessage.success(t("editor.messages.sentToApproval") || "已成功发起审批");
+        ElMessage.success(t("editor.approvalStarted"));
         aiStore.editorMessages[idx].action = null;
         loadDoc(true);
         return;
@@ -833,7 +852,7 @@ const confirmAiAction = async (action: any, idx: number) => {
         loading.value = false;
       }
     } else {
-      // 💡 如果只有姓名没有 ID，则回退到弹窗让用户手动选
+      // 💡 如果无法确定唯一 ID，则回退到弹窗
       window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
         detail: { 
           approvers: approvers, 
@@ -992,10 +1011,13 @@ async function askAi(isFeedback = false) {
                         }
                       };
 
-                      console.log("[DEBUG] EditorView Auto-triggering approval dialog for:", foundUser.display_name);
+                      // 💡 不再自动弹出，等待用户点击聊天气泡中的按钮确认
+                      console.log("[DEBUG] EditorView match found, waiting for bubble click:", foundUser.display_name);
+                      /*
                       window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
                         detail: { approvers: [foundUser.id], type: 'sequential' } 
                       }));
+                      */
                     } else if (entity === 'approvals') {
                       res = await api.get('/approvals/inbox');
                       const items = res.data.items || [];

@@ -22,7 +22,16 @@
           <div v-for="(msg, i) in aiStore.globalMessages" :key="i" :class="['message', msg.role]">
             <div v-if="msg.role === 'assistant'" class="avatar-mini"><el-icon><MagicStick /></el-icon></div>
             <div class="bubble">
-              <div class="content" v-html="renderMarkdown(msg.content)"></div>
+              <div class="content">
+                <template v-if="msg.content">
+                  <div v-html="renderMarkdown(msg.content)"></div>
+                </template>
+                <template v-else-if="isTyping && i === aiStore.globalMessages.length - 1">
+                  <div style="display: flex; justify-content: center; align-items: center; min-height: 40px; min-width: 60px;">
+                    <ThinkingNineLoader />
+                  </div>
+                </template>
+              </div>
               
               <!-- Action Card in Sidebar -->
               <div v-if="msg.action" class="sidebar-action-card">
@@ -39,12 +48,6 @@
                   <el-icon><MagicStick /></el-icon> 插入到文档
                 </el-button>
               </div>
-            </div>
-          </div>
-          <div v-if="isTyping" key="typing" class="message assistant typing">
-            <div class="avatar-mini"><el-icon><MagicStick /></el-icon></div>
-            <div class="bubble" style="display: flex; justify-content: center; align-items: center; min-height: 50px;">
-              <ThinkingNineLoader />
             </div>
           </div>
         </transition-group>
@@ -74,7 +77,7 @@ import { MagicStick, ArrowUp, ArrowDown, Promotion } from '@element-plus/icons-v
 import { useAuthStore } from '@/stores/auth';
 import { useAiStore, type AiMessage } from '@/stores/ai';
 import { marked } from 'marked';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
 import api from '@/api/client';
 import ThinkingNineLoader from './ThinkingNineLoader.vue';
 
@@ -111,22 +114,99 @@ const getActionDesc = (action: any) => {
     const names = action.params?.approver_names || action.params?.approvers?.join(', ') || '选中人员';
     return `发起审批流程: ${names}`;
   }
+  if (action.action === 'QUERY_ORG') return "查看组织架构";
   return "建议操作";
+};
+
+// 💡 提取组织架构检索逻辑以便复用
+const fetchOrgData = async (assistantMessage: AiMessage) => {
+  const tempMsg = assistantMessage.content
+    .replace(/\[ACTION:\s*QUERY_ORG\]/i, '')
+    .replace(/```json\s*\{[\s\S]*?\}\s*```/, '')
+    .trim();
+    
+  assistantMessage.content = tempMsg + "\n\n⌛ *正在检索组织架构...*";
+  try {
+    const res = await api.get('/users/org');
+    const data = res.data;
+    let resultHtml = `\n\n### 🏢 组织架构 (${data.department})\n\n`;
+    
+    if (data.manager) {
+      resultHtml += `👤 **直属主管**:\n- **${data.manager.display_name}** (${data.manager.position || '主管'})\n\n`;
+    } else {
+      resultHtml += `👤 **直属主管**: 未设定\n\n`;
+    }
+    
+    if (data.peers && data.peers.length > 0) {
+      resultHtml += `👥 **同部门同事**:\n` + data.peers.map((p:any) => `- **${p.display_name}** (${p.position || '员工'})`).join('\n');
+    } else {
+      resultHtml += `👥 **同部门同事**: 暂无其他同事`;
+    }
+    
+    // 💡 流式打字效果注入结果
+    let i = 0;
+    const speed = 15; // 毫秒/字
+    const timer = setInterval(() => {
+      if (i < resultHtml.length) {
+        assistantMessage.content += resultHtml.charAt(i);
+        i++;
+        scrollToBottom();
+      } else {
+        clearInterval(timer);
+        // 💡 增加通知反馈
+        ElNotification({
+          title: '组织架构已更新',
+          message: `已自动为您获取 ${data.department} 的成员信息`,
+          type: 'success',
+          position: 'bottom-right',
+          duration: 3000
+        });
+      }
+    }, speed);
+  } catch (e) {
+    assistantMessage.content = tempMsg + "\n\n⚠️ 组织架构获取失败。";
+  }
 };
 
 const executeAction = async (action: any, idx: number) => {
   try {
     if (action.action === 'start_approval') {
-      console.log("[DEBUG] Sidebar Dispatching edms:trigger_approval", action.params);
-      // 💡 优化：不再直接调接口，而是弹出带预选人的弹窗供用户确认
-      window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
-        detail: { 
-          approvers: action.params.approvers, 
-          type: action.params.type || 'parallel'
-        } 
-      }));
+      const p = action.params || {};
+      const docId = p.doc_id || (isEditorPage.value ? Number(route.params.id) : null);
+      const approvers = p.approvers || [];
+      
+      if (docId && approvers.length > 0 && typeof approvers[0] === 'number') {
+        const loading = ElMessage({ message: '正在发起审批...', duration: 0 });
+        try {
+          await api.post(`/documents/${docId}/approvals`, {
+            type: p.type || 'sequential',
+            approvers: approvers
+          });
+          loading.close();
+          ElMessage.success("审批流程已成功发起");
+          // Refresh editor if on editor page
+          if (isEditorPage.value) {
+            window.dispatchEvent(new CustomEvent('edms:status_changed', { 
+              detail: { status: 'in_approval', can_edit: false } 
+            }));
+          }
+        } catch (err: any) {
+          loading.close();
+          ElMessage.error(err.response?.data?.error || "发起审批失败");
+        }
+      } else {
+        // Fallback to dialog if IDs missing or not on doc page
+        window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+          detail: { 
+            approvers: approvers, 
+            type: p.type || 'parallel'
+          } 
+        }));
+      }
     } else if (action.action === 'navigate') {
       router.push(action.params.path);
+    } else if (action.action === 'QUERY_ORG') {
+      await fetchOrgData(aiStore.globalMessages[idx]);
     }
   } catch (e: any) {
     ElMessage.error("执行失败");
@@ -261,14 +341,16 @@ const sendMessage = async () => {
                         }
                       };
 
-                      // 💡 自动触发：直接分发事件弹出标准审批窗口
-                      console.log("[DEBUG] Auto-triggering approval dialog for:", foundUser.display_name);
+                      // 💡 不再自动弹出，等待用户点击聊天气泡中的按钮确认
+                      console.log("[DEBUG] Match found, waiting for user confirmation in bubble:", foundUser.display_name);
+                      /*
                       window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
                         detail: { 
                           approvers: [foundUser.id], 
                           type: 'sequential'
                         } 
                       }));
+                      */
                     } else {
                       resultHtml = "\n\n❌ 未找到相关用户。";
                     }
@@ -279,6 +361,13 @@ const sendMessage = async () => {
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败。";
                 }
+              }
+
+              // Handle QUERY_ORG
+              const orgRegex = /\[ACTION:\s*QUERY_ORG\]/i;
+              const oMatch = assistantMessage.content.match(orgRegex);
+              if (oMatch) {
+                await fetchOrgData(assistantMessage);
               }
 
               // Handle QUERY_DASHBOARD
@@ -313,70 +402,82 @@ const sendMessage = async () => {
                 }
               }
 
+              // Handle QUERY_STATS
+              const statsRegex = /\[ACTION:\s*QUERY_STATS,\s*TYPE:\s*([a-z_]+)\]/i;
+              const sMatch = assistantMessage.content.match(statsRegex);
+              if (sMatch) {
+                const sType = sMatch[1];
+                assistantMessage.content = assistantMessage.content.replace(statsRegex, '').trim();
+                const tempMsg = assistantMessage.content;
+                assistantMessage.content = tempMsg + "\n\n⌛ *正在统计数据...*";
+                try {
+                  const res = await api.get('/dashboard/stats');
+                  const data = res.data;
+                  let resultHtml = "";
+                  if (sType === 'user_count') {
+                    resultHtml = `👥 **成员统计**:\n- 总注册用户数: **${data.total_users}**`;
+                  } else if (sType === 'document_count') {
+                    resultHtml = `📄 **文档统计**:\n- 系统文档总数: **${data.total_docs}**`;
+                  }
+                  assistantMessage.content = tempMsg + "\n\n" + resultHtml;
+                } catch (e) {
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 统计获取失败。";
+                }
+              }
+
               // Handle JSON actions (fallback for AI-generated action blocks)
               const jsonMatch = assistantMessage.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
               if (jsonMatch && !assistantMessage.action) {
                 try {
                   let actionData = JSON.parse(jsonMatch[1]);
                   
-                  // 💡 兼容性处理：支持 { start_approval: { ... } } 格式
+                  // 💡 兼容性处理
                   if (actionData.start_approval && !actionData.action) {
                     actionData = { action: 'start_approval', params: actionData.start_approval };
                   }
-
+                  
+                  // 💡 核心逻辑：自动执行安全指令 (极大增强容错：只要 JSON 中包含查询类关键字就自动执行)
+                  const aType = String(actionData.action || '').toUpperCase();
+                  const rawKeys = Object.keys(actionData).join(',').toUpperCase();
+                  const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD', 'ORG'];
+                  const isSafe = safeKeywords.some(k => aType.includes(k) || rawKeys.includes(k));
+                  
+                  if (isSafe && actionData.action !== 'start_approval') {
+                    console.log("[AI Assistant] 自动运行查询指令:", aType || 'CUSTOM_JSON');
+                    // 清理内容
+                    assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
+                    
+                    // 针对 QUERY_ORG 特殊处理，确保即刻触发
+                    if (actionData.action === 'QUERY_ORG') {
+                      await fetchOrgData(assistantMessage);
+                    } else {
+                      // 💡 普通动作执行
+                      executeAction(actionData, aiStore.globalMessages.indexOf(assistantMessage));
+                    }
+                    return; 
+                  }
+                  
+                  // 💡 审批等非安全动作保留手动确认
                   if (actionData.action === 'start_approval') {
                     const params = actionData.params || actionData;
-
-                    // 💡 强力补全：从加粗文字或 approvers 列表中提取人名
                     if (!params.approver_names) {
                       const nameMatch = assistantMessage.content.match(/\*\*([^\*]{2,10})\*\*/);
-                      if (nameMatch) {
-                        params.approver_names = nameMatch[1];
-                      } else if (params.approvers && Array.isArray(params.approvers)) {
-                        const nameList = params.approvers.filter((p: any) => typeof p === 'string');
-                        if (nameList.length > 0) params.approver_names = nameList.join(', ');
-                      }
+                      if (nameMatch) params.approver_names = nameMatch[1];
                     }
-
-                    // 💡 核心改进：如果只有姓名没有 ID，自动尝试匹配并弹出窗口
-                    if (params.approver_names && (!params.approvers || params.approvers.length === 0 || typeof params.approvers[0] === 'string')) {
+                    if (params.approver_names && (!params.approvers || params.approvers.length === 0)) {
                       const searchName = params.approver_names.split(',')[0].trim();
                       api.get('/users', { params: { search: searchName } }).then(res => {
-                        let matchedUsers = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
-                        
-                        // 💡 容错处理：如果没搜到，尝试去掉所有空格再搜一次
-                        if (matchedUsers.length === 0 && searchName.includes(' ')) {
-                          return api.get('/users', { params: { search: searchName.replace(/\s/g, '') } }).then(res2 => {
-                            matchedUsers = (res2.data.items || []).filter((u: any) => u.id !== auth.user?.id);
-                            return matchedUsers;
-                          });
+                        const found = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+                        if (found.length === 1) {
+                          params.approvers = [found[0].id];
+                          params.approver_names = found[0].display_name;
                         }
-                        return matchedUsers;
-                      }).then(foundList => {
-                        if (foundList && foundList.length === 1) {
-                          const foundUser = foundList[0];
-                          params.approvers = [foundUser.id];
-                          params.approver_names = foundUser.display_name;
-                          
-                          // 自动弹出窗口 (Dispatch to EditorView)
-                          window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
-                            detail: { approvers: [foundUser.id], type: params.type || 'sequential' } 
-                          }));
-                        } else {
-                          console.log("[AI Assistant] Search for " + searchName + " returned " + (foundList?.length || 0) + " items");
-                        }
-                      }).catch(err => {
-                        console.error("[AI Assistant] User search failed", err);
                       });
                     }
-
-                    // 更新 confirm_prompt 确保显示名字
-                    const displayName = params.approver_names || '目标用户';
-                    actionData.confirm_prompt = `立即发起审批：${displayName}？`;
-                    
+                    actionData.confirm_prompt = `立即发起审批：${params.approver_names || '目标用户'}？`;
                     assistantMessage.action = actionData;
+                    assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                   }
-                  assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                 } catch(e) {
                    console.error("AiAssistant action parse failed", e);
                 }

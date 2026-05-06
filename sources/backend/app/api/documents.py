@@ -230,18 +230,18 @@ def get_stats():
                    .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
                    .filter(ApprovalParticipant.user_id == user.id).all()]
         
-        conditions = [
-            Document.owner_id == user.id,
-            Document.is_public == True,
-            Document.id.in_(perm_ids),
-            Document.id.in_(flow_ids),
-        ]
-        
+        # 💡 Secure permission union
+        final_cond = (Document.owner_id == user.id) | (Document.is_public == True)
+        if perm_ids:
+            final_cond |= Document.id.in_(perm_ids)
+        if flow_ids:
+            final_cond |= Document.id.in_(flow_ids)
+            
         if user.is_manager and user.department_id:
             dept_users = select(User.id).where(User.department_id == user.department_id)
-            conditions.append(Document.owner_id.in_(dept_users))
+            final_cond |= Document.owner_id.in_(dept_users)
             
-        q = q.filter(or_(*conditions))
+        q = q.filter(final_cond)
 
     total_count = q.count()
     return jsonify({
@@ -308,20 +308,18 @@ def list_documents():
                        .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
                        .filter(ApprovalParticipant.user_id == user.id).all()]
             
-            conditions = [
-                Document.owner_id == user.id,
-                Document.is_public == True,
-                Document.id.in_(perm_ids),
-                Document.id.in_(flow_ids),
-            ]
+            # 💡 Secure permission union
+            final_cond = (Document.owner_id == user.id) | (Document.is_public == True)
+            if perm_ids:
+                final_cond |= Document.id.in_(perm_ids)
+            if flow_ids:
+                final_cond |= Document.id.in_(flow_ids)
             
-            # Managers automatically see their department's documents
             if user.is_manager and user.department_id:
-                from sqlalchemy import select
                 dept_users = select(User.id).where(User.department_id == user.department_id)
-                conditions.append(Document.owner_id.in_(dept_users))
+                final_cond |= Document.owner_id.in_(dept_users)
                 
-            q = q.filter(or_(*conditions))
+            q = q.filter(final_cond)
         else:  # scope == "mine"
             q = q.filter(Document.owner_id == user.id)
 

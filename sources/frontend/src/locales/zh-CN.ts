@@ -51,6 +51,7 @@ export default {
     templateAdmin: "模版管理",
     aiAssistant: "智能 AI 助手",
     auditLog: "合规审计",
+    aiHistory: "AI 审计",
     notifications: "消息通知",
     noNotifications: "暂无新消息",
     viewMore: "查看更多",
@@ -255,6 +256,19 @@ export default {
       inline: "行内对比",
       sideBySide: "左右对比",
     },
+  },
+  aiHistory: {
+    title: "AI 问答审计",
+    subtitle: "监控与审计系统内所有的 AI 交互记录，确保合规性。",
+    colUser: "提问用户",
+    colType: "交互类型",
+    colModel: "AI 大模型",
+    colQuestion: "问题/指令",
+    colAnswer: "AI 回答",
+    colTime: "发生时间",
+    chat: "在线对话",
+    editor: "编辑器助手",
+    noHistory: "暂无 AI 问答记录",
   },
   editor: {
     ai: {

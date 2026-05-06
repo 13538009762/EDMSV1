@@ -30,6 +30,7 @@ const router = createRouter({
         { path: "personal", name: "personal", component: () => import("@/views/PersonalView.vue") },
         { path: "users", name: "users", component: () => import("@/views/UserManagementView.vue"), meta: { requiresManager: true } },
         { path: "audit-log", name: "audit-log", component: () => import("@/views/AuditLogView.vue"), meta: { requiresAdmin: true } },
+        { path: "ai-history", name: "ai-history", component: () => import("@/views/AiHistoryView.vue"), meta: { requiresAdmin: true } },
         { path: "notifications", name: "notifications", component: () => import("@/views/NotificationsView.vue") },
         { path: "ai", name: "ai", component: () => import("@/views/AiView.vue") },
       ],

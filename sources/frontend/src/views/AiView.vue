@@ -28,7 +28,16 @@
           </div>
           <div class="content-box">
             <div class="role-label">{{ msg.role === 'user' ? t('aiView.userRole') : t('aiView.aiRole') }}</div>
-            <div class="text-content" v-html="renderMarkdown(msg.content)"></div>
+            <div class="text-content">
+              <template v-if="msg.content">
+                <div v-html="renderMarkdown(msg.content)"></div>
+              </template>
+              <template v-else-if="isTyping && i === aiStore.globalMessages.length - 1">
+                <div style="display: flex; justify-content: flex-start; align-items: center; min-height: 50px;">
+                  <ThinkingNineLoader />
+                </div>
+              </template>
+            </div>
             
             <!-- Action Card inside message -->
             <div v-if="msg.action" class="inline-action-card">
@@ -48,16 +57,6 @@
         </div>
         </div>
       </template>
-      
-      <div v-if="isTyping" key="typing" class="message-item assistant typing">
-        <div class="avatar"><el-icon><MagicStick /></el-icon></div>
-        <div class="content-box">
-          <div class="role-label">{{ t('aiView.aiRole') }}</div>
-          <div style="display: flex; justify-content: flex-start; align-items: center; min-height: 50px;">
-            <ThinkingNineLoader />
-          </div>
-        </div>
-      </div>
     </transition-group>
 
     <!-- Fixed Input Area -->
@@ -72,7 +71,13 @@
           class="chat-textarea"
         />
         <div class="input-footer">
-          <span class="hint">{{ t('aiView.inputHint') }}</span>
+          <div class="footer-left">
+            <el-select v-model="aiStore.selectedModel" size="small" class="model-select-mini">
+              <el-option label="Spark Lite" value="spark-lite" />
+              <el-option label="DeepSeek Chat" value="deepseek" />
+            </el-select>
+            <span class="hint">{{ t('aiView.inputHint') }}</span>
+          </div>
           <el-button 
             type="primary" 
             :disabled="!input.trim() || isTyping" 
@@ -203,7 +208,8 @@ const sendMessage = async (isFeedback = false) => {
       },
       body: JSON.stringify({
         messages: filteredMessages,
-        context_url: window.location.pathname
+        context_url: window.location.pathname,
+        ai_model: aiStore.selectedModel
       })
     });
 
@@ -241,13 +247,14 @@ const sendMessage = async (isFeedback = false) => {
                 try {
                   const actionData = JSON.parse(jsonMatch[1]);
                   const aType = String(actionData.action || '').toUpperCase();
+                  const rawKeys = Object.keys(actionData).join(',').toUpperCase();
                   
                   // 💡 Aggressive Auto-execute: catch ANY read-only or query action
-                  const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD'];
-                  const isSafe = safeKeywords.some(k => aType.includes(k));
+                  const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD', 'ORG'];
+                  const isSafe = safeKeywords.some(k => aType.includes(k) || rawKeys.includes(k));
                   
                   if (isSafe) {
-                    console.log("[AI] Auto-executing safe action:", aType);
+                    console.log("[AI] Auto-executing safe action:", aType || 'CUSTOM_QUERY');
                     assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                     const msgIdx = aiStore.globalMessages.indexOf(assistantMessage);
                     executeAction(actionData, msgIdx);
@@ -457,16 +464,75 @@ const executeAction = async (action: any, idx: number) => {
           const result = JSON.stringify(res.data.items || res.data);
           aiStore.addMessage('global', 'user', `[反馈]:\n${result}`, null, true);
           sendMessage(true);
-       } else if (type.includes('STATS') || type.includes('COUNT')) {
-          const sType = (p.TYPE || p.type || '').toLowerCase();
-          const res = await api.get(sType.includes('user') ? '/users/stats' : '/documents/stats');
-          const result = `📊 统计结果: ${res.data.total_count}`;
-          aiStore.addMessage('global', 'user', `[反馈]:\n${result}`, null, true);
-          sendMessage(true);
+       } else if (type.includes('STATS') || type.includes('COUNT') || p.document_count !== undefined || p.user_count !== undefined) {
+          const sType = (type.includes('USER') || p.user_count !== undefined) ? 'user_count' : 'document_count';
+          const res = await api.get(sType === 'user_count' ? '/users/stats' : '/documents/stats');
+          const result = sType === 'user_count' ? `👥 **当前成员总数**: **${res.data.total_count}**` : `📄 **当前文档总数**: **${res.data.total_count}**`;
+          
+          const msg = aiStore.globalMessages[idx];
+          if (msg) {
+            // 流式打字输出
+            let i = 0;
+            const timer = setInterval(() => {
+              if (i < result.length) {
+                msg.content += result.charAt(i);
+                i++;
+                scrollToBottom();
+              } else { clearInterval(timer); }
+            }, 15);
+          }
        } else if (type.includes('DASHBOARD')) {
           const res = await api.get('/dashboard/stats');
           aiStore.addMessage('global', 'user', `[反馈]:\n${JSON.stringify(res.data)}`, null, true);
           sendMessage(true);
+       } else if (type.includes('ORG')) {
+          const msg = aiStore.globalMessages[idx];
+          if (msg) {
+             msg.content += "\n\n⌛ *正在检索组织架构...*";
+             try {
+                const res = await api.get('/users/org');
+                const data = res.data;
+                let resultHtml = `\n\n### 🏢 组织架构 (${data.department})\n\n`;
+                
+                if (data.manager) {
+                  resultHtml += `👤 **直属主管**:\n- **${data.manager.display_name}** (${data.manager.position || '主管'})\n\n`;
+                } else {
+                  resultHtml += `👤 **直属主管**: 未设定\n\n`;
+                }
+                
+                if (data.peers && data.peers.length > 0) {
+                  resultHtml += `👥 **同部门同事**:\n` + data.peers.map((p:any) => `- **${p.display_name}** (${p.position || '员工'})`).join('\n');
+                } else {
+                  resultHtml += `👥 **同部门同事**: 暂无其他同事`;
+                }
+                
+                msg.content = msg.content.replace("\n\n⌛ *正在检索组织架构...*", "");
+                
+                // 💡 流式输出结果
+                let i = 0;
+                const speed = 15;
+                const timer = setInterval(() => {
+                  if (i < resultHtml.length) {
+                    msg.content += resultHtml.charAt(i);
+                    i++;
+                    scrollToBottom();
+                  } else {
+                    clearInterval(timer);
+                    import('element-plus').then(({ ElNotification }) => {
+                      ElNotification({
+                        title: '组织架构已更新',
+                        message: `已自动为您获取 ${data.department} 的成员信息`,
+                        type: 'success',
+                        position: 'bottom-right',
+                        duration: 3000
+                      });
+                    });
+                  }
+                }, speed);
+             } catch (e) {
+                msg.content = msg.content.replace("\n\n⌛ *正在检索组织架构...*", "") + "\n\n⚠️ 组织架构获取失败。";
+             }
+          }
        }
     } else if (type.includes('DELETE_DOC')) {
       await api.delete(`/documents/${p.id}`);
@@ -485,11 +551,34 @@ const executeAction = async (action: any, idx: number) => {
       ElMessage.success("文档创建成功");
       router.push(`/doc/${res.data.id}`);
     } else if (type === 'START_APPROVAL') {
-      await api.post(`/documents/${p.doc_id}/approvals`, {
-        type: p.type || 'parallel',
-        approvers: p.approvers
-      });
-      ElMessage.success("审批流程已成功发起");
+      const docId = p.doc_id || p.id;
+      if (!docId) return ElMessage.warning("未指定文档 ID");
+      
+      let approvers = p.approvers || [];
+      // 💡 尝试解析姓名到 ID
+      if (approvers.length > 0 && typeof approvers[0] === 'string') {
+        const loading = ElMessage({ message: '正在解析审批人...', duration: 0 });
+        try {
+          const res = await api.get('/users', { params: { search: approvers[0] } });
+          const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
+          if (items.length === 1) {
+            approvers = [items[0].id];
+          }
+        } catch (e) {} finally { loading.close(); }
+      }
+
+      if (approvers.length > 0 && typeof approvers[0] === 'number') {
+        await api.post(`/documents/${docId}/approvals`, {
+          type: p.type || 'parallel',
+          approvers: approvers
+        });
+        ElMessage.success("审批流程已成功发起");
+      } else {
+        // Fallback to dialog
+        window.dispatchEvent(new CustomEvent('edms:trigger_approval', { 
+          detail: { approvers, type: p.type || 'parallel' } 
+        }));
+      }
     } else if (type === 'RECALL_APPROVAL') {
       await api.post(`/approvals/recall`, { doc_id: p.doc_id });
       ElMessage.success("审批申请已成功撤销");
@@ -717,6 +806,26 @@ const executeAction = async (action: any, idx: number) => {
   justify-content: space-between;
   align-items: center;
   padding-top: 8px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-select-mini :deep(.el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  padding: 0 8px !important;
+  height: 24px !important;
+  border-radius: 6px !important;
+}
+
+.model-select-mini :deep(.el-input__inner) {
+  font-size: 11px !important;
+  color: var(--el-text-color-secondary) !important;
 }
 
 .hint {

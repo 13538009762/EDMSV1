@@ -45,6 +45,10 @@
           <el-icon><Monitor /></el-icon>
           <span>{{ t("nav.auditLog", "Audit Log") }}</span>
         </el-menu-item>
+        <el-menu-item v-if="auth.user?.login_name === 'admin'" index="/ai-history">
+          <el-icon><MagicStick /></el-icon>
+          <span>{{ t("nav.aiHistory", "AI Audit") }}</span>
+        </el-menu-item>
         <el-menu-item index="/ai" class="ai-menu-item">
           <el-icon class="magic-icon"><MagicStick /></el-icon>
           <template #title>

@@ -117,6 +117,24 @@ def meeting_summary():
         "data": result
     })
 
+@bp.get("/history")
+@jwt_required()
+def get_ai_history():
+    from app.services.ai_history_store import ai_history_store
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+    doc_id = request.args.get("document_id", type=int)
+    
+    # Only admin can see all, users see their own
+    user = current_user()
+    user_id = None if user.login_name == 'admin' else user.id
+    
+    history = ai_history_store.get_all(page=page, per_page=per_page, document_id=doc_id, user_id=user_id)
+    return jsonify({
+        "code": 200,
+        "data": history
+    })
+
 def random_str(length):
     import random
     import string

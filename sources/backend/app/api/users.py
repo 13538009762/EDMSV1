@@ -314,3 +314,46 @@ def reset_password(user_id: int):
         return jsonify({"error": f"Reset failed: {str(e)}"}), 500
         
     return jsonify({"message": "Password reset successfully"})
+
+@bp.get("/org")
+@jwt_required()
+def get_org():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    # Manager
+    manager = None
+    if user.manager_employee_no:
+        manager_user = User.query.filter_by(employee_no=user.manager_employee_no).first()
+        if manager_user:
+            manager = {
+                "id": manager_user.id,
+                "display_name": manager_user.display_name(),
+                "position": manager_user.position_short,
+                "login_name": manager_user.login_name,
+                "is_manager": manager_user.is_manager
+            }
+            
+    # Peers (same department, excluding self)
+    peers = []
+    if user.department_id:
+        peer_users = User.query.filter(
+            User.department_id == user.department_id,
+            User.id != user.id,
+            User.registration_status == 'active'
+        ).limit(15).all()
+        for p in peer_users:
+            peers.append({
+                "id": p.id,
+                "display_name": p.display_name(),
+                "position": p.position_short,
+                "login_name": p.login_name,
+                "is_manager": p.is_manager
+            })
+            
+    return jsonify({
+        "manager": manager,
+        "peers": peers,
+        "department": user.department.name if user.department else "未分配部门"
+    })
