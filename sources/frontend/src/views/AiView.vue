@@ -139,10 +139,12 @@ const suggestions = computed(() => [
   }
 ]);
 
-// 💡 Robust Tag Parser for AI Actions
+// 💡 Robust Tag Parser for AI Actions (Supports [ACTION] and <ACTION>)
 const parseTagParams = (text: string, actionType: string) => {
-  const regex = new RegExp(`\\[ACTION:\\s*${actionType}(?:,\\s*([^\\]]+))?\\]`, 'i');
-  const match = text.match(regex);
+  const regex = new RegExp(`[\\[<]ACTION:\\s*${actionType}(?:,\\s*([^\\s\\]>]+))?.*?[\\]> ]`, 'i');
+  // Optimized regex for multi-parameter capture
+  const multiRegex = new RegExp(`[\\[<]ACTION:\\s*${actionType}(?:,\\s*([^\\]>]+))?[\\]> ]`, 'i');
+  const match = text.match(multiRegex);
   if (!match) return null;
   
   const fullTag = match[0];
@@ -161,7 +163,7 @@ const parseTagParams = (text: string, actionType: string) => {
 
 const renderMarkdown = (text: string) => {
   if (!text) return '';
-  const cleanText = text.replace(/\[ACTION:[\s\S]*?\]/g, '').trim();
+  const cleanText = text.replace(/[\[<]ACTION:[\s\S]*?[\]>]/g, '').trim();
   return marked.parse(cleanText);
 };
 
@@ -222,10 +224,12 @@ const sendMessage = async (isFeedback = false) => {
     .slice(-15);
 
   let assistantMessage: any;
-  const lastMsg = aiStore.globalMessages[aiStore.globalMessages.length - 1];
-  if (isFeedback && lastMsg && lastMsg.role === 'assistant') {
-    assistantMessage = lastMsg;
-    // Spacing between turns in same bubble
+  // 💡 Find the last visible assistant message to reuse its bubble, skipping hidden system feedback
+  const visibleMessages = aiStore.globalMessages.filter(m => !m.hidden);
+  const lastVisible = visibleMessages[visibleMessages.length - 1];
+
+  if (isFeedback && lastVisible && lastVisible.role === 'assistant') {
+    assistantMessage = lastVisible;
     if (assistantMessage.content && !assistantMessage.content.endsWith('\n\n')) {
       assistantMessage.content += '\n\n';
     }
@@ -282,22 +286,16 @@ const sendMessage = async (isFeedback = false) => {
                 try {
                   const actionData = JSON.parse(jsonMatch[1]);
                   const aType = String(actionData.action || '').toUpperCase();
-                  const rawKeys = Object.keys(actionData).join(',').toUpperCase();
                   
-                  // 💡 Aggressive Auto-execute: catch ANY read-only or query action
+                  // 💡 JSON is only for confirmable write actions. 
+                  // 💡 Queries MUST use [ACTION] tags to prevent hallucinations.
                   const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD', 'ORG'];
-                  const isSafe = safeKeywords.some(k => aType.includes(k) || rawKeys.includes(k));
+                  const isQuery = safeKeywords.some(k => aType.includes(k));
                   
-                  if (isSafe) {
-                    console.log("[AI] Auto-executing safe action:", aType || 'CUSTOM_QUERY');
+                  if (!isQuery) {
+                    assistantMessage.action = actionData;
                     assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
-                    const msgIdx = aiStore.globalMessages.indexOf(assistantMessage);
-                    await executeAction(actionData, msgIdx);
-                    return; 
                   }
-
-                  assistantMessage.action = actionData;
-                  assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                 } catch(e) {}
               }
 
@@ -359,8 +357,12 @@ const sendMessage = async (isFeedback = false) => {
                     }
                   }
                   
-                  assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
-
+                  // 💡 UI Defense: If no results found or error, show it immediately 
+                  if (!resultHtml || resultHtml.includes('❌') || resultHtml.includes('⚠️')) {
+                    assistantMessage.content = tempMsg + (resultHtml || "\n\n❌ 未找到匹配项。");
+                  } else {
+                    assistantMessage.content = tempMsg;
+                  }
                   // 💡 Reflexive feedback: Send the results back to AI so it can "read and output" properly
                   if (resultHtml) {
                     const isError = resultHtml.includes('❌') || resultHtml.includes('⚠️');
@@ -391,12 +393,14 @@ const sendMessage = async (isFeedback = false) => {
                   } else {
                     const res = await api.get('/documents/stats'); 
                     const stats = res.data;
-                    resultText = `📊 **系统统计**: 当前权限下共有 **${stats.total_count}** 份可见文档。`;
+                    resultText = `📊 **系统统计**:\n- 您个人拥有: **${stats.owned_count}** 份文档\n- 当前总可见: **${stats.total_count}** 份文档 (含公开及部门共享)`;
                   }
-                  assistantMessage.content = tempMsg + "\n\n" + resultText;
+                  // 💡 UI Polish: Don't append the raw result here to avoid "Double Answering". 
+                  // Let the AI be the one to present the data in the feedback turn.
+                  assistantMessage.content = tempMsg; 
                   
                   // Feed back to AI using system role
-                  aiStore.addMessage('global', 'system', `[SYSTEM]: Statistical data retrieved:\n${resultText}\nPlease inform the user.`, null, true);
+                  aiStore.addMessage('global', 'system', `[SYSTEM]: Statistical data retrieved:\n${resultText}\nPlease present this to the user as a summary.`, null, true);
                   await sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
@@ -428,7 +432,8 @@ const sendMessage = async (isFeedback = false) => {
                   } else {
                     resultHtml = `📑 **系统总体概览**:\n- 总成员数: **${data.total_users}**\n- 权限内可见文档: **${data.total_docs}**\n- 待我审批: **${data.my_stats.pending}** 份`;
                   }
-                  assistantMessage.content = tempMsg + "\n\n" + resultHtml;
+                  // 💡 UI Polish: Don't append manually. Let the AI present the results.
+                  assistantMessage.content = tempMsg; 
                   
                   // Feed back to AI using system role
                   aiStore.addMessage('global', 'system', `[SYSTEM]: Dashboard ${dType} analysis results:\n${resultHtml}\nPlease summarize for the user.`, null, true);

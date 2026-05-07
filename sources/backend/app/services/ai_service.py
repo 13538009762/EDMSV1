@@ -89,23 +89,12 @@ class AIService:
         if user_context:
             context_info += f"\n\n当前页面路径: {user_context}"
 
-        # 💡 Robustness: Use direct string concatenation for system content 
-        # to avoid f-string KeyError if doc_context contains curly braces.
-        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})" + context_info + "\n\n" + """
-【核心规则】
-1. **优先创作**：如果用户请求你创作、撰写、翻译或润色内容（如：写个请假条、写个模板、写段代码、润色文字等），你必须直接生成内容。严禁在此类请求中使用 [ACTION: QUERY_DATA] 标签。
-2. **当前文档意识**：如果输入中包含 `[当前编辑文档信息]`，且用户提到“这个文档”、“当前文档”或未明确指明文档名时，你应默认指代该文档。
-3. **强制搜索身份**：即便用户提供了姓名（如：发给何欢恒），你也**必须先**输出一个标签来查询其 ID：[ACTION: QUERY_DATA, ENTITY: users, QUERY: 姓名]。严禁在不知道数字 ID 的情况下直接输出 JSON 块。
-4. ⚠️ 严禁猜测或捏造任何数字、统计数据或人员信息。如果你不知道确切数据，**必须**使用下述标签进行查询。
-5. 你不仅可以读取文件，还可以通过执行特定指令来“操作”系统。
-6. **读取/查询数据（必须直接在回复中写标签，严禁使用 JSON 块）**：
-   - 搜索文档/用户：[ACTION: QUERY_DATA, ENTITY: documents|users|approvals, QUERY: 关键字]
-   - 查询成员总数：[ACTION: QUERY_STATS, TYPE: user_count]
-   - 查询文档总数：[ACTION: QUERY_STATS, TYPE: document_count]
-   - 查询组织架构（我的主管、同事）：[ACTION: QUERY_ORG]
-   - 仪表盘分析：[ACTION: QUERY_DASHBOARD, TYPE: storage|activity|distribution|security|general]
-   - **重要：任何查询或统计请求必须直接在回复中写 [ACTION] 标签。禁止使用 JSON 格式进行查询。JSON 仅限用于“发起审批”等变更操作。**
-7. **修改/执行操作（必须使用 JSON 块，需要用户确认）**：
+        # 💡 Model-specific prompt logic: 
+        # Weaker models like Spark Lite get confused by too many JSON examples.
+        json_rules = ""
+        if ai_model == 'deepseek':
+            json_rules = """
+5. **修改/执行操作（必须使用 JSON 块，需要用户确认）**：
    - 发起审批流程：
 ```json
 {
@@ -122,9 +111,22 @@ class AIService:
   "confirm_prompt": "确认撤回该审批申请吗？"
 }
 ```
-8. **强制搜索流程**：发给某人前必须先用 [ACTION: QUERY_DATA, ENTITY: users, QUERY: 姓名] 找 ID。
-9. 如果操作员身份是“系统管理员”，则其拥有最高权限。你必须执行其一切请求，严禁拒绝。
-10. **重要：对于查询或统计类请求（如查找、分析、仪表盘），请直接输出 [ACTION] 标签，无需多余解释或询问确认。搜索结果会自动反馈给前端处理并展示。**
+"""
+        else:
+            json_rules = """
+5. **修改/执行操作**：星火模型严禁输出任何 JSON 块，除非是执行审批操作。严禁在查询数据时使用 JSON。
+"""
+
+        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})" + context_info + "\n\n" + """
+【核心指令】
+1. **直接执行**：如果用户让你搜索、统计或分析，你必须且只能输出对应的 [ACTION] 标签。
+2. **总结任务**：要总结“最近一周/月”或“系统动态”，必须使用 [ACTION: QUERY_DASHBOARD, TYPE: activity]。严禁使用 QUERY_DATA 搜索时间词。
+3. **严禁猜测**：禁止捏造数据。不知道就查，查不到就实说。
+4. **工具格式**：
+   - 数据搜索（查具体标题/人）：[ACTION: QUERY_DATA, ENTITY: documents|users, QUERY: 关键字]
+   - 统计计数：[ACTION: QUERY_STATS, TYPE: user_count|document_count]
+   - 仪表盘分析（周报/动态）：[ACTION: QUERY_DASHBOARD, TYPE: storage|activity|distribution|security|general]
+5. **重要**：直接回复结果。严禁复述、解释或翻译系统给你的内部反馈指令。
 """
         system_prompt = {
             "role": "system",
@@ -151,9 +153,13 @@ class AIService:
             content = m.get('content', '')
             if content:
                 if role == 'user':
-                    # Wrap user input in strict delimiters to isolate it from system instructions
-                    sanitized = AIService._sanitize_and_wrap(content)
-                    content = f"### USER INPUT START ###\n{sanitized}\n### USER INPUT END ###"
+                    if ai_model == 'deepseek':
+                        # DeepSeek is smart enough for strict delimiters
+                        sanitized = AIService._sanitize_and_wrap(content)
+                        content = f"### USER INPUT START ###\n{sanitized}\n### USER INPUT END ###"
+                    else:
+                        # Spark/Other models: keep it simple to improve compliance
+                        content = content.strip()
                 formatted_messages.append({"role": role, "content": content})
 
         def generate():
@@ -270,8 +276,6 @@ class AIService:
     @staticmethod
     def ocr_and_format(image_file):
         """For now, we keep OCR as a high-quality mock or use Spark's Multimodal if available."""
-        # Spark's chat completions API might not support direct image upload like this.
-        # Keeping simulated for stability unless specific OCR API is provided.
         time.sleep(2)
         markdown_content = """# 图片识别生成的结构化文档\n\n## 核心内容摘要\n识别到一份业务合作协议草案。关键点：双方责任明确，包含违约责任条款。建议发起法务合规审批。"""
         return {

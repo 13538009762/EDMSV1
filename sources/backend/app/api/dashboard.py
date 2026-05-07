@@ -7,7 +7,7 @@ from app.models.workflow import ApprovalFlow, ApprovalParticipant, AuditLog
 from app.utils.auth import current_user
 from app.extensions import db
 from datetime import datetime, timedelta
-from sqlalchemy import func, text, or_
+from sqlalchemy import func, text, or_, select
 import traceback
 import os
 
@@ -27,23 +27,23 @@ def get_stats():
         if is_admin:
             return (Document.is_template == False, Document.deleted_at == None)
         
-        perm_subq = db.session.query(DocumentPermission.document_id).filter_by(user_id=user.id).subquery()
-        flow_subq = db.session.query(ApprovalFlow.document_id)\
+        perm_stmt = select(DocumentPermission.document_id).where(DocumentPermission.user_id == user.id)
+        flow_stmt = select(ApprovalFlow.document_id)\
             .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
-            .filter(ApprovalParticipant.user_id == user.id).subquery()
+            .filter(ApprovalParticipant.user_id == user.id)
             
         # 💡 Secure permission union: same as documents.py
         final_cond = or_(
             Document.owner_id == user.id,
             Document.is_public == True,
-            Document.id.in_(perm_subq),
-            Document.id.in_(flow_subq)
+            Document.id.in_(perm_stmt),
+            Document.id.in_(flow_stmt)
         )
         
         # 💡 Manager can see department docs
         if user.is_manager and user.department_id:
-            dept_users_subq = db.session.query(User.id).filter_by(department_id=user.department_id).subquery()
-            final_cond = or_(final_cond, Document.owner_id.in_(dept_users_subq))
+            dept_users_stmt = select(User.id).where(User.department_id == user.department_id)
+            final_cond = or_(final_cond, Document.owner_id.in_(dept_users_stmt))
             
         return (
             Document.is_template == False,
@@ -131,11 +131,11 @@ def get_stats():
         today_dt = datetime.now()
         thirty_days_ago = today_dt - timedelta(days=30)
         
-        docs_subq = db.session.query(Document.id).filter(*auth_filter).subquery()
+        docs_stmt = select(Document.id).where(*auth_filter)
         
         # 针对 MySQL 优化：使用 func.date 进行日期截断
         doc_q = db.session.query(func.date(Document.updated_at), func.count(Document.id))\
-            .filter(Document.id.in_(docs_subq))\
+            .filter(Document.id.in_(docs_stmt))\
             .filter(Document.updated_at >= thirty_days_ago)\
             .group_by(func.date(Document.updated_at)).all()
         doc_map = {str(row[0]): row[1] for row in doc_q}
@@ -184,7 +184,7 @@ def get_stats():
         t_limit = datetime.now() - timedelta(days=30)
         t_q = db.session.query(Document.id, Document.title, func.count(AuditLog.id).label('hits'))\
             .join(AuditLog, AuditLog.document_id == Document.id)\
-            .filter(Document.id.in_(db.session.query(Document.id).filter(*auth_filter).subquery()))\
+            .filter(Document.id.in_(select(Document.id).where(*auth_filter)))\
             .filter(AuditLog.created_at >= t_limit)\
             .filter(AuditLog.action.in_(['VIEW', 'EXPORT_PDF', 'EXPORT_DOCX']))\
             .group_by(Document.id, Document.title)\
@@ -270,17 +270,17 @@ def get_stats():
     
     try:
         # 💡 Apply permission filter to blockchain stats too
-        docs_subq = db.session.query(Document.id).filter(*auth_filter).subquery()
+        docs_stmt = select(Document.id).where(*auth_filter)
         
         # 已上链文档总数 (只统计用户能看见的)
-        on_chain_count = Document.query.filter(Document.id.in_(docs_subq), Document.tx_hash != None).count()
+        on_chain_count = Document.query.filter(Document.id.in_(docs_stmt), Document.tx_hash != None).count()
         # 零信任拦截次数 (非管理员只能看到与自己文档相关的告警)
         if is_admin:
             tamper_alerts = AuditLog.query.filter_by(action='INTRUSION_ALERT').count()
         else:
             tamper_alerts = AuditLog.query.filter(
                 AuditLog.action == 'INTRUSION_ALERT',
-                AuditLog.document_id.in_(docs_subq)
+                AuditLog.document_id.in_(docs_stmt)
             ).count()
         
         blockchain_stats = {
@@ -303,7 +303,7 @@ def get_stats():
         # 威胁情报 (非管理员只看与自己文档相关的)
         log_q = AuditLog.query.filter_by(action='INTRUSION_ALERT')
         if not is_admin:
-            log_q = log_q.filter(AuditLog.document_id.in_(docs_subq))
+            log_q = log_q.filter(AuditLog.document_id.in_(docs_stmt))
             
         tamper_logs = log_q.order_by(AuditLog.created_at.desc()).limit(5).all()
         for log in tamper_logs:

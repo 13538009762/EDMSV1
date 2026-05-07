@@ -230,23 +230,27 @@ def get_stats():
                    .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
                    .filter(ApprovalParticipant.user_id == user.id).all()]
         
-        # 💡 Secure permission union
-        final_cond = (Document.owner_id == user.id) | (Document.is_public == True)
-        if perm_ids:
-            final_cond |= Document.id.in_(perm_ids)
-        if flow_ids:
-            final_cond |= Document.id.in_(flow_ids)
-            
+        # 💡 Secure permission union: consistent with dashboard.py
+        final_cond = or_(
+            Document.owner_id == user.id,
+            Document.is_public == True,
+            Document.id.in_(perm_ids),
+            Document.id.in_(flow_ids)
+        )
+        
         if user.is_manager and user.department_id:
-            dept_users = select(User.id).where(User.department_id == user.department_id)
-            final_cond |= Document.owner_id.in_(dept_users)
+            dept_users = select(User.id).where(User.department_id == user.department_id).scalar_subquery()
+            final_cond = or_(final_cond, Document.owner_id.in_(dept_users))
             
         q = q.filter(final_cond)
 
     total_count = q.count()
+    owned_count = Document.query.filter_by(owner_id=user.id, is_template=False, deleted_at=None).count()
+
     return jsonify({
         "total_count": total_count,
-        "status": "healthy"
+        "owned_count": owned_count,
+        "is_admin": user.login_name == 'admin'
     })
 
 @bp.get("")
