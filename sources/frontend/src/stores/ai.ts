@@ -4,7 +4,7 @@ import { ref } from 'vue';
 
 
 export interface AiMessage {
-  role: 'assistant' | 'user' | 'ai';
+  role: 'assistant' | 'user' | 'ai' | 'system';
   content: string;
   action?: any;
   hidden?: boolean;

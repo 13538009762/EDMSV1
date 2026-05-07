@@ -161,7 +161,7 @@ const editForm = ref({ first_name: '', last_name: '', gender: '', birth_date: ''
 
 async function loadUserInfo() {
   try {
-    const { data } = await api.get("/users/me");
+    const { data } = await api.get("/auth/me");
     user.value = data;
     editForm.value = { ...data };
   } catch (error) {}

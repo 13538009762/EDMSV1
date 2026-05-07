@@ -32,15 +32,23 @@ def get_stats():
             .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
             .filter(ApprovalParticipant.user_id == user.id).subquery()
             
+        # 💡 Secure permission union: same as documents.py
+        final_cond = or_(
+            Document.owner_id == user.id,
+            Document.is_public == True,
+            Document.id.in_(perm_subq),
+            Document.id.in_(flow_subq)
+        )
+        
+        # 💡 Manager can see department docs
+        if user.is_manager and user.department_id:
+            dept_users_subq = db.session.query(User.id).filter_by(department_id=user.department_id).subquery()
+            final_cond = or_(final_cond, Document.owner_id.in_(dept_users_subq))
+            
         return (
             Document.is_template == False,
             Document.deleted_at == None,
-            or_(
-                Document.owner_id == user.id,
-                Document.is_public == True,
-                Document.id.in_(perm_subq),
-                Document.id.in_(flow_subq)
-            )
+            final_cond
         )
 
     auth_filter = get_authorized_filter()
@@ -49,8 +57,14 @@ def get_stats():
     total_users = 0
     total_docs = 0
     try:
-        # 放宽用户统计口径，确保即使状态不是 'active' 也能看到基本盘
-        total_users = db.session.query(func.count(User.id)).scalar() or 0
+        # 💡 User count should also be scope-limited (e.g. within department) for non-admins
+        if is_admin:
+            total_users = db.session.query(func.count(User.id)).scalar() or 0
+        else:
+            if user.department_id:
+                total_users = User.query.filter_by(department_id=user.department_id).count()
+            else:
+                total_users = 1 # Just self
         total_docs = Document.query.filter(*auth_filter).count()
     except Exception as e:
         print(f"[CRITICAL ERROR] Basic metrics failed: {e}")
@@ -255,10 +269,19 @@ def get_stats():
     security_alerts = []
     
     try:
-        # 已上链文档总数
-        on_chain_count = Document.query.filter(Document.tx_hash != None).count()
-        # 零信任拦截次数
-        tamper_alerts = AuditLog.query.filter_by(action='INTRUSION_ALERT').count()
+        # 💡 Apply permission filter to blockchain stats too
+        docs_subq = db.session.query(Document.id).filter(*auth_filter).subquery()
+        
+        # 已上链文档总数 (只统计用户能看见的)
+        on_chain_count = Document.query.filter(Document.id.in_(docs_subq), Document.tx_hash != None).count()
+        # 零信任拦截次数 (非管理员只能看到与自己文档相关的告警)
+        if is_admin:
+            tamper_alerts = AuditLog.query.filter_by(action='INTRUSION_ALERT').count()
+        else:
+            tamper_alerts = AuditLog.query.filter(
+                AuditLog.action == 'INTRUSION_ALERT',
+                AuditLog.document_id.in_(docs_subq)
+            ).count()
         
         blockchain_stats = {
             "on_chain_count": on_chain_count,
@@ -277,9 +300,12 @@ def get_stats():
                 "time": d.updated_at.isoformat() + "Z" if d.updated_at else None
             })
             
-        # 威胁情报 (最新的5条篡改预警)
-        tamper_logs = AuditLog.query.filter_by(action='INTRUSION_ALERT')\
-            .order_by(AuditLog.created_at.desc()).limit(5).all()
+        # 威胁情报 (非管理员只看与自己文档相关的)
+        log_q = AuditLog.query.filter_by(action='INTRUSION_ALERT')
+        if not is_admin:
+            log_q = log_q.filter(AuditLog.document_id.in_(docs_subq))
+            
+        tamper_logs = log_q.order_by(AuditLog.created_at.desc()).limit(5).all()
         for log in tamper_logs:
             security_alerts.append({
                 "id": log.id,

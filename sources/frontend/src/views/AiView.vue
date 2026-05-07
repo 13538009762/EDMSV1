@@ -139,6 +139,26 @@ const suggestions = computed(() => [
   }
 ]);
 
+// 💡 Robust Tag Parser for AI Actions
+const parseTagParams = (text: string, actionType: string) => {
+  const regex = new RegExp(`\\[ACTION:\\s*${actionType}(?:,\\s*([^\\]]+))?\\]`, 'i');
+  const match = text.match(regex);
+  if (!match) return null;
+  
+  const fullTag = match[0];
+  const paramsStr = match[1] || '';
+  const params: Record<string, string> = {};
+  
+  // Parse KEY: VALUE pairs
+  const pairRegex = /([A-Z_]+):\s*([^,\]]+)/gi;
+  let pairMatch;
+  while ((pairMatch = pairRegex.exec(paramsStr)) !== null) {
+    params[pairMatch[1].toUpperCase()] = pairMatch[2].trim();
+  }
+  
+  return { fullTag, params };
+};
+
 const renderMarkdown = (text: string) => {
   if (!text) return '';
   const cleanText = text.replace(/\[ACTION:[\s\S]*?\]/g, '').trim();
@@ -183,8 +203,13 @@ const useSuggestion = (prompt: string) => {
 const sendMessage = async (isFeedback = false) => {
   if (!isFeedback && (!input.value.trim() || isTyping.value)) return;
 
-  const userQuery = input.value;
+  const userQuery = input.value.trim();
   if (!isFeedback) {
+    if (userQuery.toLowerCase() === 'clear' || userQuery === '清屏') {
+      aiStore.clearHistory('global');
+      input.value = '';
+      return;
+    }
     aiStore.addMessage('global', 'user', userQuery);
     input.value = '';
   }
@@ -196,8 +221,18 @@ const sendMessage = async (isFeedback = false) => {
     .filter(m => m.content && m.content.trim() !== '')
     .slice(-15);
 
-  let assistantMessage = { role: 'assistant' as const, content: '', action: null };
-  aiStore.globalMessages.push(assistantMessage);
+  let assistantMessage: any;
+  const lastMsg = aiStore.globalMessages[aiStore.globalMessages.length - 1];
+  if (isFeedback && lastMsg && lastMsg.role === 'assistant') {
+    assistantMessage = lastMsg;
+    // Spacing between turns in same bubble
+    if (assistantMessage.content && !assistantMessage.content.endsWith('\n\n')) {
+      assistantMessage.content += '\n\n';
+    }
+  } else {
+    assistantMessage = { role: 'assistant' as const, content: '', action: null };
+    aiStore.globalMessages.push(assistantMessage);
+  }
 
   try {
     const response = await fetch('/api/ai/chat', {
@@ -257,7 +292,7 @@ const sendMessage = async (isFeedback = false) => {
                     console.log("[AI] Auto-executing safe action:", aType || 'CUSTOM_QUERY');
                     assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
                     const msgIdx = aiStore.globalMessages.indexOf(assistantMessage);
-                    executeAction(actionData, msgIdx);
+                    await executeAction(actionData, msgIdx);
                     return; 
                   }
 
@@ -268,32 +303,29 @@ const sendMessage = async (isFeedback = false) => {
 
               // 2. Intercept Tags (Automatic actions)
               // Handle NAVIGATE
-              const navRegex = /\[ACTION:\s*NAVIGATE,\s*PATH:\s*([^\s\]]+)\]/i;
-              const navMatch = assistantMessage.content.match(navRegex);
-              if (navMatch && navMatch[1]) {
-                const path = navMatch[1];
+              const nav = parseTagParams(assistantMessage.content, 'NAVIGATE');
+              if (nav && nav.params.PATH) {
+                const path = nav.params.PATH;
                 ElMessage.success(t('aiView.messages.redirecting', { id: path }));
                 router.push(path);
-                assistantMessage.content = assistantMessage.content.replace(navRegex, '').trim();
+                assistantMessage.content = assistantMessage.content.replace(nav.fullTag, '').trim();
               }
 
               // Handle OPEN_DOC (legacy support)
-              const openDocRegex = /\[ACTION:\s*OPEN_DOC,\s*ID:\s*([a-zA-Z0-9_-]+)\]/i;
-              const openMatch = assistantMessage.content.match(openDocRegex);
-              if (openMatch && openMatch[1]) {
-                const docId = openMatch[1];
+              const open = parseTagParams(assistantMessage.content, 'OPEN_DOC');
+              if (open && open.params.ID) {
+                const docId = open.params.ID;
                 ElMessage.success(t('aiView.messages.redirecting', { id: docId }));
                 router.push(`/doc/${docId}`);
-                assistantMessage.content = assistantMessage.content.replace(openDocRegex, '').trim();
+                assistantMessage.content = assistantMessage.content.replace(open.fullTag, '').trim();
               }
 
               // Handle QUERY_DATA
-              const queryDataRegex = /\[ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+),\s*QUERY:\s*([^\]]+)\]/i;
-              const qMatch = assistantMessage.content.match(queryDataRegex);
-              if (qMatch) {
-                const entity = qMatch[1];
-                const query = qMatch[2];
-                assistantMessage.content = assistantMessage.content.replace(queryDataRegex, '').trim();
+              const qData = parseTagParams(assistantMessage.content, 'QUERY_DATA');
+              if (qData && qData.params.ENTITY && qData.params.QUERY) {
+                const entity = qData.params.ENTITY.toLowerCase();
+                const query = qData.params.QUERY;
+                assistantMessage.content = assistantMessage.content.replace(qData.fullTag, '').trim();
                 
                 const tempMsg = assistantMessage.content;
                 assistantMessage.content = tempMsg + "\n\n⌛ *正在检索 " + entity + "...*"; 
@@ -327,12 +359,17 @@ const sendMessage = async (isFeedback = false) => {
                     }
                   }
                   
-                    assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
+                  assistantMessage.content = tempMsg + (resultHtml || "\n\n✅ 查询完成。");
 
                   // 💡 Reflexive feedback: Send the results back to AI so it can "read and output" properly
                   if (resultHtml) {
-                    aiStore.addMessage('global', 'user', `[系统反馈搜索结果]:\n${resultHtml}\n请根据上述数据回答我的问题。`, null, true); 
-                    sendMessage(true); 
+                    const isError = resultHtml.includes('❌') || resultHtml.includes('⚠️');
+                    const feedbackPrompt = isError 
+                      ? `[SYSTEM]: Search for ${entity} (${query}) returned no results or failed. Briefly notify user and ask for clarification.`
+                      : `[SYSTEM]: Search results for ${entity} (${query}):\n${resultHtml}\nSummarize and present to user.`;
+                    
+                    aiStore.addMessage('global', 'system', feedbackPrompt, null, true); 
+                    await sendMessage(true); 
                   }
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败，请稍后重试。";
@@ -340,11 +377,10 @@ const sendMessage = async (isFeedback = false) => {
               }
 
               // Handle QUERY_STATS (legacy)
-              const queryStatsRegex = /\[ACTION:\s*QUERY_STATS,\s*TYPE:\s*([a-zA-Z0-9_-]+)\]/i;
-              const queryMatch = assistantMessage.content.match(queryStatsRegex);
-              if (queryMatch) {
-                const statType = queryMatch[1];
-                assistantMessage.content = assistantMessage.content.replace(queryStatsRegex, '').trim();
+              const qStats = parseTagParams(assistantMessage.content, 'QUERY_STATS');
+              if (qStats && qStats.params.TYPE) {
+                const statType = qStats.params.TYPE.toLowerCase();
+                assistantMessage.content = assistantMessage.content.replace(qStats.fullTag, '').trim();
                 const tempMsg = assistantMessage.content;
                 assistantMessage.content = tempMsg + "\n\n⌛ *...*"; 
                 try {
@@ -359,20 +395,19 @@ const sendMessage = async (isFeedback = false) => {
                   }
                   assistantMessage.content = tempMsg + "\n\n" + resultText;
                   
-                  // Feed back to AI
-                  aiStore.addMessage('global', 'user', `[系统反馈统计数据]:\n${resultText}`, null, true);
-                  sendMessage(true);
+                  // Feed back to AI using system role
+                  aiStore.addMessage('global', 'system', `[SYSTEM]: Statistical data retrieved:\n${resultText}\nPlease inform the user.`, null, true);
+                  await sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
                 }
               }
 
               // Handle QUERY_DASHBOARD
-              const dashboardRegex = /\[ACTION:\s*QUERY_DASHBOARD,\s*TYPE:\s*([a-z]+)\]/i;
-              const dMatch = assistantMessage.content.match(dashboardRegex);
-              if (dMatch) {
-                const dType = dMatch[1];
-                assistantMessage.content = assistantMessage.content.replace(dashboardRegex, '').trim();
+              const qDash = parseTagParams(assistantMessage.content, 'QUERY_DASHBOARD');
+              if (qDash && qDash.params.TYPE) {
+                const dType = qDash.params.TYPE.toLowerCase();
+                assistantMessage.content = assistantMessage.content.replace(qDash.fullTag, '').trim();
                 const tempMsg = assistantMessage.content;
                 assistantMessage.content = tempMsg + "\n\n⌛ *正在分析仪表盘数据...*";
                 try {
@@ -395,9 +430,9 @@ const sendMessage = async (isFeedback = false) => {
                   }
                   assistantMessage.content = tempMsg + "\n\n" + resultHtml;
                   
-                  // Feed back to AI
-                  aiStore.addMessage('global', 'user', `[系统反馈仪表盘信息]:\n${resultHtml}`, null, true);
-                  sendMessage(true);
+                  // Feed back to AI using system role
+                  aiStore.addMessage('global', 'system', `[SYSTEM]: Dashboard ${dType} analysis results:\n${resultHtml}\nPlease summarize for the user.`, null, true);
+                  await sendMessage(true);
                 } catch (e) {
                   assistantMessage.content = tempMsg + "\n\n⚠️ 仪表盘数据获取失败。";
                 }
@@ -462,8 +497,8 @@ const executeAction = async (action: any, idx: number) => {
           const q = p.QUERY || p.query || 'all';
           const res = await api.get(entity.includes('approval') ? '/approvals/inbox' : (entity.includes('user') ? '/users' : '/documents'), { params: { search: q } });
           const result = JSON.stringify(res.data.items || res.data);
-          aiStore.addMessage('global', 'user', `[反馈]:\n${result}`, null, true);
-          sendMessage(true);
+          aiStore.addMessage('global', 'system', `[SYSTEM]: Data retrieved: ${result}. Summarize for user.`, null, true);
+          await sendMessage(true);
        } else if (type.includes('STATS') || type.includes('COUNT') || p.document_count !== undefined || p.user_count !== undefined) {
           const sType = (type.includes('USER') || p.user_count !== undefined) ? 'user_count' : 'document_count';
           const res = await api.get(sType === 'user_count' ? '/users/stats' : '/documents/stats');
@@ -483,8 +518,8 @@ const executeAction = async (action: any, idx: number) => {
           }
        } else if (type.includes('DASHBOARD')) {
           const res = await api.get('/dashboard/stats');
-          aiStore.addMessage('global', 'user', `[反馈]:\n${JSON.stringify(res.data)}`, null, true);
-          sendMessage(true);
+          aiStore.addMessage('global', 'system', `[SYSTEM]: Dashboard results: ${JSON.stringify(res.data)}. Summarize for user.`, null, true);
+          await sendMessage(true);
        } else if (type.includes('ORG')) {
           const msg = aiStore.globalMessages[idx];
           if (msg) {
