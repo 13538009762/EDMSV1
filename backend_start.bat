@@ -2,6 +2,8 @@
 REM Start EDMS backend service (manual deployment)
 echo Starting EDMS backend service...
 
+set PYTHONUNBUFFERED=1
+
 REM Change to backend directory
 cd /d "%~dp0"
 cd sources\backend

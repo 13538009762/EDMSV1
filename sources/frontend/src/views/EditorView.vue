@@ -750,7 +750,7 @@ const handleAudioUpload = async (blob: Blob) => {
   try {
     const formData = new FormData();
     formData.append('audio', blob, 'meeting.webm');
-    const { data } = await api.post('/api/ai/meeting-summary', formData);
+    const { data } = await api.post('/ai/meeting-summary', formData);
     
     if (data.code === 200) {
       const summaryHtml = marked.parse(data.data.summary_markdown);

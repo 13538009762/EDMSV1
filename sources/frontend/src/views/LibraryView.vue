@@ -585,7 +585,7 @@ async function onImportImage(file: any) {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    const { data } = await api.post('/api/ai/import-image', formData);
+    const { data } = await api.post('/ai/import-image', formData);
     if (data.code === 200) {
       ElMessage.success('识别成功');
       router.push({ name: 'editor', params: { id: data.data.document_id } });

@@ -274,14 +274,147 @@ class AIService:
         return generate()
 
     @staticmethod
+    def _build_ocr_auth_url(url, method="POST"):
+        """Build authenticated URL for Xunfei Universal OCR API."""
+        import hmac
+        import hashlib
+        import base64
+        from datetime import datetime
+        from time import mktime
+        from wsgiref.handlers import format_date_time
+        from urllib.parse import urlencode, urlparse
+
+        api_key    = os.getenv('SPARK_API_KEY', '')
+        api_secret = os.getenv('SPARK_API_SECRET', '')
+        
+        parsed_url = urlparse(url)
+        host = parsed_url.netloc
+        path = parsed_url.path
+
+        # RFC1123 date
+        date = format_date_time(mktime(datetime.now().timetuple()))
+
+        # Signature string
+        tmp = f"host: {host}\n"
+        tmp += f"date: {date}\n"
+        tmp += f"{method} {path} HTTP/1.1"
+
+        # HMAC-SHA256
+        tmp_sha = hmac.new(api_secret.encode('utf-8'), tmp.encode('utf-8'), digestmod=hashlib.sha256).digest()
+        signature = base64.b64encode(tmp_sha).decode('utf-8')
+
+        authorization_origin = (
+            f'api_key="{api_key}", algorithm="hmac-sha256", '
+            f'headers="host date request-line", signature="{signature}"'
+        )
+        authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode('utf-8')
+
+        params = urlencode({
+            "authorization": authorization,
+            "date": date,
+            "host": host
+        })
+        return f"{url}?{params}"
+
+    @staticmethod
     def ocr_and_format(image_file):
-        """For now, we keep OCR as a high-quality mock or use Spark's Multimodal if available."""
-        time.sleep(2)
-        markdown_content = """# 图片识别生成的结构化文档\n\n## 核心内容摘要\n识别到一份业务合作协议草案。关键点：双方责任明确，包含违约责任条款。建议发起法务合规审批。"""
-        return {
-            "title": f"图片识别建档_{time.strftime('%Y%m%d_%H%M')}",
-            "content": markdown_content
-        }
+        """
+        Use Xunfei Universal OCR (通用文字识别) HTTP API.
+        As provided in user's demo code: hh_ocr_recognize_doc
+        """
+        import base64
+        import json as _json
+        import requests
+        import time
+
+        try:
+            # 1. Read image
+            image_data = image_file.read()
+            base64_image = base64.b64encode(image_data).decode('utf-8')
+            
+            app_id = os.getenv('SPARK_APPID', '')
+            api_url = "https://api.xf-yun.com/v1/private/hh_ocr_recognize_doc"
+            
+            print(f"\n[AI OCR START] Using Universal OCR API for {image_file.filename}")
+            
+            # 2. Build Payload per user's demo
+            body = {
+                "header": {
+                    "app_id": app_id,
+                    "status": 3
+                },
+                "parameter": {
+                    "hh_ocr_recognize_doc": {
+                        "recognizeDocumentRes": {
+                            "encoding": "utf8",
+                            "compress": "raw",
+                            "format": "json"
+                        }
+                    }
+                },
+                "payload": {
+                    "image": {
+                        "encoding": "jpg",
+                        "image": base64_image,
+                        "status": 3
+                    }
+                }
+            }
+
+            # 3. Sign and Request
+            request_url = AIService._build_ocr_auth_url(api_url, "POST")
+            headers = {
+                'content-type': "application/json",
+                'host': 'api.xf-yun.com',
+                'appid': app_id
+            }
+
+            response = requests.post(request_url, data=_json.dumps(body), headers=headers, timeout=15)
+            res_data = response.json()
+
+            # 4. Parse Response
+            code = res_data.get('header', {}).get('code', -1)
+            if code != 0:
+                raise Exception(f"API Error {code}: {res_data.get('header', {}).get('message', 'Unknown error')}")
+
+            # Universal OCR usually returns base64 encoded text in some versions or direct text
+            # Per user demo: str(base64.b64decode(renew_text), 'utf-8')
+            payload_res = res_data.get('payload', {}).get('recognizeDocumentRes', {})
+            raw_text_b64 = payload_res.get('text', '')
+            
+            if not raw_text_b64:
+                return {"title": "识别结果为空", "content": "未能从图片中识别出有效文字。"}
+
+            full_text_raw = base64.b64decode(raw_text_b64).decode('utf-8')
+            
+            # The decoded string is a JSON containing 'whole_text' and other metadata
+            try:
+                ocr_json = _json.loads(full_text_raw)
+                content = ocr_json.get('whole_text', full_text_raw)
+            except:
+                content = full_text_raw
+            
+            # Simple OCR parsing
+            # Try to extract a title from the first line
+            lines = [l.strip() for l in content.split('\n') if l.strip()]
+            title = lines[0][:50] if lines else "OCR 识别文档"
+
+            print(f"[AI OCR SUCCESS] Extracted whole_text, length: {len(content)} chars")
+            return {"title": title, "content": content}
+
+        except Exception as e:
+            print(f"[AI OCR ERROR]: {str(e)}")
+            # Fallback for demo stability
+            if "11200" in str(e) or "AppIdNoAuthError" in str(e):
+                return {
+                    "title": "OCR 识别结果 (模拟)",
+                    "content": "### 1. 识别说明\n当前 API 权限验证失败。如果您已在控制台开通，请检查 SPARK_API_KEY 是否与 OCR 业务对应。\n\n### 2. 模拟数据\n- 项目名称：EDMS 智能文档管理系统\n- 开发环境：Python 3.11 / Vue 3"
+                }
+            
+            return {
+                "title": f"识别失败_{time.strftime('%Y%m%d')}",
+                "content": f"图片识别过程中发生错误: {str(e)}"
+            }
 
     @staticmethod
     def process_meeting_audio(audio_file):

@@ -89,7 +89,7 @@ def import_image():
         # For simplicity, we'll return the ID and content preview.
         
         db.session.add(ver)
-        doc.current_version_id = ver.id
+        doc.current_version = ver # 💡 Use object relationship to ensure ID is handled correctly
         db.session.commit()
         
         return jsonify({
