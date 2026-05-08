@@ -67,7 +67,22 @@
           </template>
         </el-table-column>
         
-        <el-table-column prop="question" :label="t('aiHistory.colQuestion')" min-width="300" show-overflow-tooltip />
+        <el-table-column :label="t('aiHistory.colQuestion')" min-width="300">
+          <template #default="{ row }">
+            <div class="question-cell">
+              <div class="truncated-text">{{ row.question }}</div>
+              <el-button 
+                v-if="row.question && row.question.length > 80" 
+                link 
+                type="primary" 
+                size="small" 
+                @click="showDetail(row.question)"
+              >
+                {{ t('common.details') }}
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
         
         <el-table-column :label="t('common.actions')" width="100" fixed="right">
           <template #default="{ row }">
@@ -87,6 +102,18 @@
         @current-change="loadData"
       />
     </div>
+    <el-dialog
+      v-model="detailVisible"
+      :title="t('aiHistory.colQuestion')"
+      width="50%"
+      append-to-body
+      destroy-on-close
+    >
+      <div class="full-question-text">{{ detailText }}</div>
+      <template #footer>
+        <el-button @click="detailVisible = false">{{ t('common.ok') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -106,6 +133,14 @@ const items = ref<any[]>([]);
 const total = ref(0);
 const page = ref(1);
 const size = ref(20);
+
+const detailVisible = ref(false);
+const detailText = ref('');
+
+function showDetail(text: string) {
+  detailText.value = text;
+  detailVisible.value = true;
+}
 
 const renderMarkdown = (text: string) => {
   if (!text) return '';
@@ -132,12 +167,14 @@ async function handleDelete(id: number) {
     await ElMessageBox.confirm(t('editor.actions.deleteUserConfirm'), t('common.warning'), {
       type: 'warning'
     });
-    // Assuming backend has a delete endpoint or we just ignore for now
-    // Since AIHistoryStore has a delete method, let's assume it might work if we add an endpoint
-    // For now, let's just log it or tell user it's not implemented if endpoint is missing.
-    // I'll check if /api/ai/history/<id> DELETE exists. (It doesn't yet)
-    ElMessage.info("Delete functionality not yet exposed via API");
-  } catch (e) {}
+    await api.delete(`/ai/history/${id}`);
+    ElMessage.success(t("common.success"));
+    loadData();
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t("common.failed"));
+    }
+  }
 }
 
 onMounted(() => {
@@ -247,5 +284,35 @@ onMounted(() => {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+.question-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.truncated-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+
+.full-question-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 15px;
+  color: var(--el-text-color-primary);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 8px;
 }
 </style>

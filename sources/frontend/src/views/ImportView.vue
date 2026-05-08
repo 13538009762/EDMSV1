@@ -23,10 +23,10 @@
 
           <div class="type-selector">
             <el-radio-group v-model="importType">
-              <el-radio-button label="all">{{ t('import.typeAll') }}</el-radio-button>
-              <el-radio-button label="departments">{{ t('import.typeDepts') }}</el-radio-button>
-              <el-radio-button label="positions">{{ t('import.typePos') }}</el-radio-button>
-              <el-radio-button label="employees">{{ t('import.typeUsers') }}</el-radio-button>
+              <el-radio-button value="all">{{ t('import.typeAll') }}</el-radio-button>
+              <el-radio-button value="departments">{{ t('import.typeDepts') }}</el-radio-button>
+              <el-radio-button value="positions">{{ t('import.typePos') }}</el-radio-button>
+              <el-radio-button value="employees">{{ t('import.typeUsers') }}</el-radio-button>
             </el-radio-group>
           </div>
 

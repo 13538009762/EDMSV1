@@ -95,11 +95,13 @@
           </div>
           
           <div class="toolbar-right">
-            <el-button-group v-if="selectedIds.length > 0" style="margin-right: 12px;">
-              <el-button type="danger" @click="batchDelete">{{ t('common.delete', 'Batch Delete') }} ({{ selectedIds.length }})</el-button>
-              <el-button type="warning" @click="batchShare(true)">{{ t('common.share', 'Share All') }}</el-button>
-              <el-button type="info" @click="batchShare(false)">{{ t('common.unshare', 'Unshare All') }}</el-button>
-            </el-button-group>
+            <div v-if="selectedIds.length > 0" class="selection-actions">
+              <span class="selection-count">{{ t('common.selected', 'Selected') }}: {{ selectedIds.length }}</span>
+              <el-button type="danger" :icon="Delete" plain @click="batchDelete">{{ t('common.batchDelete') }}</el-button>
+              <el-button type="warning" :icon="Share" plain @click="batchShare(true)">{{ t('common.share') }}</el-button>
+              <el-button type="info" :icon="Lock" plain @click="batchShare(false)">{{ t('common.unshare') }}</el-button>
+              <el-divider direction="vertical" />
+            </div>
   
             <el-input
               v-model="searchQuery"
@@ -274,7 +276,7 @@ import { ElMessage, ElMessageBox, ElLoading } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading } from "@element-plus/icons-vue";
+import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 import { Editor } from "@tiptap/vue-3";
@@ -343,26 +345,65 @@ function handleSelectionChange(selection: DocRow[]) {
 }
 
 async function batchDelete() {
+  const selectedDocs = items.value.filter(item => selectedIds.value.includes(item.id));
+  const authorizedIds = selectedDocs
+    .filter(doc => doc.is_owner)
+    .map(doc => doc.id);
+
+  if (authorizedIds.length === 0) {
+    ElMessage.error(t('library.allUnauthorized'));
+    return;
+  }
+
+  if (authorizedIds.length < selectedIds.value.length) {
+    ElMessage.warning(t('library.someUnauthorized'));
+  }
+
   try {
     await ElMessageBox.confirm(
       t("editor.deleteDocConfirm"),
       t("common.warning"),
       { type: "warning" }
     );
-    await api.post("/documents/batch-delete", { doc_ids: selectedIds.value });
-    ElMessage.success(t("common.success"));
+    const { data } = await api.post("/documents/batch-delete", { doc_ids: authorizedIds });
+    if (data.errors && data.errors.length > 0) {
+      ElMessage.warning(data.errors.join('\n'));
+    } else {
+      ElMessage.success(t("common.success"));
+    }
     await load();
-  } catch {}
+    selectedIds.value = [];
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      const msg = err.response?.data?.error || err.message || t("common.failed");
+      ElMessage.error(msg);
+    }
+  }
 }
 
 async function batchShare(isPublic: boolean) {
+  const selectedDocs = items.value.filter(item => selectedIds.value.includes(item.id));
+  const authorizedIds = selectedDocs
+    .filter(doc => doc.can_manage_permissions)
+    .map(doc => doc.id);
+
+  if (authorizedIds.length === 0) {
+    ElMessage.error(t('library.allUnauthorized'));
+    return;
+  }
+
+  if (authorizedIds.length < selectedIds.value.length) {
+    ElMessage.warning(t('library.someUnauthorized'));
+  }
+
   try {
     await api.post("/documents/batch-share", { 
-      doc_ids: selectedIds.value,
+      doc_ids: authorizedIds,
       is_public: isPublic
     });
     ElMessage.success(t("common.success"));
     await load();
+    selectedIds.value = [];
   } catch {}
 }
 
@@ -885,5 +926,31 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--el-color-primary-light-9);
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--el-color-primary-light-8);
+  animation: slideIn 0.3s ease;
+}
+
+.selection-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  margin-right: 8px;
+  padding: 2px 8px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 </style>

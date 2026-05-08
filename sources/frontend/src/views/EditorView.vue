@@ -461,8 +461,8 @@
       <el-form label-width="120px">
         <el-form-item :label="t('editor.orientation')">
           <el-radio-group v-model="page.orientation">
-            <el-radio label="portrait" value="portrait">{{ t("editor.portrait") }}</el-radio>
-            <el-radio label="landscape" value="landscape">{{ t("editor.landscape") }}</el-radio>
+            <el-radio value="portrait">{{ t("editor.portrait") }}</el-radio>
+            <el-radio value="landscape">{{ t("editor.landscape") }}</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item :label="t('editor.paperSize')">
@@ -494,8 +494,8 @@
 
     <el-dialog v-model="showApproval" :title="t('editor.approvalTitle')" width="420px" destroy-on-close>
       <el-radio-group v-model="approvalType">
-        <el-radio label="parallel" value="parallel">{{ t("editor.parallel") }}</el-radio>
-        <el-radio label="sequential" value="sequential">{{ t("editor.sequential") }}</el-radio>
+        <el-radio value="parallel">{{ t("editor.parallel") }}</el-radio>
+        <el-radio value="sequential">{{ t("editor.sequential") }}</el-radio>
       </el-radio-group>
       <div style="margin-top: 12px; display: flex; gap: 8px;">
         <el-select v-model="selectedDeptId" clearable :placeholder="t('profile.dept')" style="width: 150px">

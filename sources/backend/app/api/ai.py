@@ -135,6 +135,15 @@ def get_ai_history():
         "data": history
     })
 
+@bp.delete("/history/<int:history_id>")
+@jwt_required()
+def delete_ai_history(history_id):
+    from app.services.ai_history_store import ai_history_store
+    success = ai_history_store.delete(history_id)
+    if success:
+        return jsonify({"code": 200, "message": "Success"})
+    return jsonify({"error": "Not found"}), 404
+
 def random_str(length):
     import random
     import string

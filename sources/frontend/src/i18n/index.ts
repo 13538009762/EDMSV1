@@ -30,5 +30,6 @@ export const i18n = createI18n({
   messages: {
     en,
     "zh-CN": zhCN,
+    zh: zhCN,
   },
 });

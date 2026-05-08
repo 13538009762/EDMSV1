@@ -103,14 +103,27 @@ def user_can_comment(user: User, doc: Document) -> bool:
 
 
 def user_can_manage_permissions(user: User, doc: Document) -> bool:
+    """Check if user can change sharing settings or public visibility."""
+    # 1. Admin always has full control
+    if user.login_name == 'admin':
+        return True
+        
+    # 2. Owner always has control
     if doc.owner_id == user.id:
         return True
-    # 审核过后的文档，审核人也可以管理权限
+        
+    # 3. Special rules for Approved documents
     if doc.status == "approved":
+        # 部门经理可以管理本部门已审批通过的文档
+        if user.is_manager and user.department_id == doc.owner.department_id:
+            return True
+            
+        # 审批过该文档的人也可以管理权限
         from app.models import ApprovalFlow, ApprovalParticipant
         flows = ApprovalFlow.query.filter_by(document_id=doc.id).all()
         for flow in flows:
             p = ApprovalParticipant.query.filter_by(flow_id=flow.id, user_id=user.id).first()
             if p:
                 return True
+                
     return False

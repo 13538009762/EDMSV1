@@ -1,0 +1,114 @@
+结合你上传的代码结构（Vue 3 前端 + Python 后端 + WebSockets 协作），你目前的工程骨架已经非常完整，甚至具备了真正的 SaaS 产品雏形。
+
+为了将上一轮提到的“企业级产品化体验”真正落地到你的代码库中，我为你梳理了以下具体的代码层面的优化和改造路径：
+
+一、 路由与入口架构改造 (Frontend 路由层)
+你现在的系统大概率是登录后直接进入后台。我们需要在 src/router/index.ts 中进行改造，建立“门户 + 后台”的三级结构。
+
+增加 Landing Page (独立门户页)
+
+操作：在 src/views/ 下新建 HomeView.vue（或 LandingView.vue），作为默认的 / 路由。
+
+代码逻辑：这个页面不使用 MainLayout.vue，而是用完全独立的 UI 设计（大标题、动态渐变、产品展示）。如果检测到已登录，Header 上显示“进入工作台”，否则显示“登录/注册”。
+
+重构登录重定向逻辑
+
+操作：在 src/router/index.ts 的路由守卫（router.beforeEach）中修改重定向规则。
+
+代码逻辑：用户在 LoginView.vue 登录成功后，不要统一下发到 /documents。而是根据 src/stores/auth.ts 中解析出的 user.role 进行跳转：
+
+Admin -> /dashboard/admin
+
+Manager -> /dashboard/department
+
+User -> /dashboard/personal
+
+二、 角色化 Dashboard 的组件化落地 (Frontend 视图层)
+针对 src/views/DashboardView.vue，千万不要在一个文件里写几千行代码，也不要用复杂的 v-if 堆砌整个页面。
+
+入口文件解耦
+
+现在的 DashboardView.vue 应该退化为一个分发器 (Dispatcher)。
+
+代码结构：
+
+代码段
+
+<template>
+  <component :is="currentDashboard" />
+</template>
+<script setup>
+import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import AdminDashboard from './dashboards/AdminDashboard.vue'
+import UserDashboard from './dashboards/UserDashboard.vue'
+
+const auth = useAuthStore()
+const currentDashboard = computed(() => auth.isAdmin ? AdminDashboard : UserDashboard)
+</script>
+侧边栏动态渲染
+
+在 src/layouts/MainLayout.vue 中，根据 auth.role 动态过滤菜单数组。确保普通用户绝对看不到“系统审计 (AuditLogView.vue)”或“模板管理 (TemplateAdminView.vue)”的入口，从 UI 层做好隔离。
+
+三、 AI 能力的“无处不在”改造 (AI 与协作层)
+你已经有了 src/views/AiView.vue 和 src/components/AiAssistant.vue，说明 AI 基础设施已经打通。现在的关键是提升 AI 的触达率。
+
+从“独立页面”升级为“全局侧边栏/悬浮窗”
+
+操作：将 AiAssistant.vue 从单独的路由视图中解放出来，引入到 MainLayout.vue 或 App.vue 中。
+
+视觉：做成类似右下角的悬浮按钮（✨），点击后在屏幕右侧滑出一个抽屉（Drawer）进行对话或文档分析。
+
+深度集成 Tiptap 编辑器 (src/views/EditorView.vue & tiptapExtensions.ts)
+
+操作：目前的协作可能更多是纯文字。你可以在 tiptapExtensions.ts 中开发一个自定义扩展，支持“划词 AI 解释/润色”。
+
+代码逻辑：用户在 EditorView.vue 选中文本，弹出悬浮菜单（划词菜单），点击“AI 润色”，前端调用 app/api/ai.py 的接口，获取流式（SSE）返回的数据，并直接通过 useDocSocket.ts 同步插入到编辑器中。
+
+四、 后端安全性与性能优化 (Backend 服务层)
+为了配得上“企业级”的定位，后端的容错和安全防御需要升级。
+
+严格的接口级 RBAC 权限控制
+
+问题：前端隐藏菜单是不够的，后端必须防越权。
+
+操作：在 backend/app/api/ 的各个模块中（尤其是 admin.py, audit.py, templates.py），确保使用了严格的角色校验装饰器（如 @require_roles(["ADMIN"])）。结合 backend/app/utils/auth.py 完善 Token 解析校验。
+
+WebSocket 连接优化 (backend/app/sockets/collab.py)
+
+优化方向：多人协同最怕内存泄漏和幽灵连接。
+
+操作：确保 WebSocket 断开时（disconnect），后端彻底清理该用户的锁和状态；前端在 EditorView.vue 的 onUnmounted 生命周期中必须显式关闭 Socket (useDocSocket.ts 的销毁逻辑要完善)。
+
+数据库工程化 (edms.db)
+
+你目前仓库里有一个 edms.db，这通常是 SQLite 数据库。作为学生项目或初期 Demo 完全可以，但如果为了在比赛或面试中展示“企业级架构”，建议在文档或 config.py 中写明：“本地开发使用 SQLite，生产环境支持无缝切换至 PostgreSQL/MySQL”。这能体现你的系统架构具备良好的 ORM 抽象能力。
+
+五、 体验细节拔高 (CSS 与 工具类)
+统一的高级感 UI (src/assets/theme.css)
+
+将之前提到的“科技白 + AI蓝 + 微紫渐变”定义为 CSS 变量（CSS Variables），替换掉默认的生硬颜色。
+
+增加通用的毛玻璃效果类：
+
+CSS
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+全局命令面板 (⌘K)
+
+这将是极大的加分项。可以使用开源库（如 vue-command-palette），或者自己写一个弹窗组件。
+
+在 App.vue 监听全局快捷键 Ctrl+K，唤出搜索框，调用后端 documents.py 的模糊检索接口，直接快速跳转到特定文档或审批任务。
+
+总结下一步你的开发顺序：
+建门户：写一个漂亮的静态 HomeView.vue 充当门面。
+
+拆仪表盘：重构 DashboardView.vue，为 Admin 和 User 提供完全不同的统计图表（例如接入 ECharts 展示 AuditLogView 的数据）。
+
+全局 AI：把 AiAssistant.vue 变成随叫随到的侧边栏。
+
+查漏补缺：跑一遍后端权限校验，确保逻辑严密。

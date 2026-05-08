@@ -60,7 +60,7 @@
                 <div class="tab-item active">{{ t('login.loginTab') }}</div>
               </div>
 
-              <el-form ref="loginFormRef" class="login-form" @submit.prevent="submit">
+              <el-form class="login-form" @submit.prevent="submit">
                 <el-form-item>
                   <el-input 
                     v-model="loginName" 
@@ -204,7 +204,7 @@ const loginName = ref("");
 const password = ref("");
 const rememberMe = ref(false);
 const loading = ref(false);
-const loginFormRef = ref();
+
 const mode = ref('login');
 
 const departments = ref<any[]>([]);

@@ -592,13 +592,42 @@ def delete_document(doc_id: int):
     if doc.status not in ("draft", "approved", "rejected"):
         return jsonify({"error": f"Forbidden: Cannot delete document in status {doc.status}"}), 400
     
-    # Manually clear AuditLog references to prevent FK issues in environments with enforced constraints
+    # Manually clear references to prevent FK issues
     from app.models.workflow import AuditLog
+    from app.models.notification import Notification
+    
     v_ids = [v.id for v in doc.versions]
+    # 1. Clear version references in AuditLog
     if v_ids:
         db.session.query(AuditLog).filter(AuditLog.document_version_id.in_(v_ids)).update(
             {AuditLog.document_version_id: None}, synchronize_session=False
         )
+        # Clear self-references in versions (parent_version_id) to avoid FK issues
+        db.session.query(DocumentVersion).filter(DocumentVersion.id.in_(v_ids)).update(
+            {DocumentVersion.parent_version_id: None}, synchronize_session=False
+        )
+    # 2. Clear document references in AuditLog
+    db.session.query(AuditLog).filter(AuditLog.document_id == doc.id).update(
+        {AuditLog.document_id: None}, synchronize_session=False
+    )
+    # 3. Clear document references in Notification
+    db.session.query(Notification).filter(Notification.related_doc_id == doc.id).update(
+        {Notification.related_doc_id: None}, synchronize_session=False
+    )
+    # 4. Clear parent_id for children
+    db.session.query(Document).filter(Document.parent_id == doc.id).update(
+        {Document.parent_id: None}, synchronize_session=False
+    )
+
+    # 5. Record the deletion in Audit Log
+    delete_log = AuditLog(
+        user_id=user.id,
+        action='DELETE',
+        document_id=doc.id,
+        ip_address=request.remote_addr,
+        summary=f"Deleted document: {doc.title} ({doc.doc_number})"
+    )
+    db.session.add(delete_log)
 
     db.session.delete(doc)
     db.session.commit()
@@ -1121,30 +1150,81 @@ def batch_delete_documents():
     errors = []
     
     from app.models.workflow import AuditLog
+    from app.models.notification import Notification
+    import traceback
     
-    for did in doc_ids:
-        doc = db.session.get(Document, did)
-        if not doc:
-            continue
-        
-        # Permission check
-        if doc.owner_id != user.id:
-            errors.append(f"Doc {did}: Forbidden")
-            continue
-        if doc.status not in ("draft", "rejected"):
-            errors.append(f"Doc {did}: Cannot delete in status {doc.status}")
-            continue
+    try:
+        # Step 1: Pre-filter and collect valid docs to delete
+        valid_docs = []
+        for did in doc_ids:
+            doc = db.session.get(Document, did)
+            if not doc:
+                continue
+            if doc.owner_id != user.id:
+                errors.append(f"Doc {did}: Forbidden")
+                continue
+            if doc.status not in ("draft", "approved", "rejected"):
+                errors.append(f"Doc {did}: Cannot delete in status {doc.status}")
+                continue
+            valid_docs.append(doc)
             
-        # Success path
-        v_ids = [v.id for v in doc.versions]
+        if not valid_docs:
+            return jsonify({"message": "No valid documents to delete", "errors": errors})
+
+        valid_ids = [d.id for d in valid_docs]
+        
+        # Step 2: Batch clear references to avoid FK issues
+        # Clear versions in AuditLog
+        v_ids = []
+        for d in valid_docs:
+            v_ids.extend([v.id for v in d.versions])
+        
         if v_ids:
             db.session.query(AuditLog).filter(AuditLog.document_version_id.in_(v_ids)).update(
                 {AuditLog.document_version_id: None}, synchronize_session=False
             )
-        db.session.delete(doc)
-        success_count += 1
+            # Clear self-references in versions (parent_version_id)
+            db.session.query(DocumentVersion).filter(DocumentVersion.id.in_(v_ids)).update(
+                {DocumentVersion.parent_version_id: None}, synchronize_session=False
+            )
         
-    db.session.commit()
+        # Clear document references in AuditLog and Notification
+        db.session.query(AuditLog).filter(AuditLog.document_id.in_(valid_ids)).update(
+            {AuditLog.document_id: None}, synchronize_session=False
+        )
+        db.session.query(Notification).filter(Notification.related_doc_id.in_(valid_ids)).update(
+            {Notification.related_doc_id: None}, synchronize_session=False
+        )
+        
+        # Clear parent_id for children
+        db.session.query(Document).filter(Document.parent_id.in_(valid_ids)).update(
+            {Document.parent_id: None}, synchronize_session=False
+        )
+        
+        # Flush these changes so the database knows references are gone
+        db.session.flush()
+        
+        # Step 3: Delete documents and log them
+        for doc in valid_docs:
+            # Record deletion in audit log
+            delete_log = AuditLog(
+                user_id=user.id,
+                action='DELETE',
+                document_id=doc.id,
+                ip_address=request.remote_addr,
+                summary=f"Batch deleted document: {doc.title} ({doc.doc_number})"
+            )
+            db.session.add(delete_log)
+            
+            db.session.delete(doc)
+            success_count += 1
+            
+        db.session.commit()
+    except Exception as e:
+        traceback.print_exc()
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+        
     return jsonify({"message": f"Deleted {success_count} documents", "errors": errors})
 
 @bp.post("/batch-share")

@@ -42,6 +42,12 @@ export default {
     delete: "删除",
     actions: "操作",
     send: "发送",
+    share: "全部共享",
+    unshare: "取消全部共享",
+    batchDelete: "批量删除",
+    selected: "已选择",
+    details: "详情",
+    search: "搜索",
   },
   nav: {
     library: "文档库",
@@ -170,6 +176,8 @@ export default {
     createFailed: "创建失败",
     showToolbar: "展开工具栏与筛选",
     hideToolbar: "收起工具栏",
+    someUnauthorized: "部分选中的文档由于权限不足无法操作，已自动跳过。",
+    allUnauthorized: "所选文档均无对应操作权限。",
   },
   import: {
     title: "主数据导入 (XLSX)",

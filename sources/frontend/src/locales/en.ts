@@ -43,6 +43,12 @@ export default {
     notifyRecipients: "Notify Recipients",
     warning: "Warning",
     send: "Send",
+    share: "Share All",
+    unshare: "Unshare All",
+    batchDelete: "Batch Delete",
+    selected: "Selected",
+    details: "Details",
+    search: "Search",
   },
   nav: {
     library: "Library",
@@ -168,6 +174,8 @@ export default {
     createFailed: "Failed to create document",
     showToolbar: "Show Filters & Actions",
     hideToolbar: "Hide Toolbar",
+    someUnauthorized: "Some selected documents were skipped due to insufficient permissions.",
+    allUnauthorized: "None of the selected documents have the required permissions.",
   },
   import: {
     title: "Master data import (XLSX)",
