@@ -66,6 +66,7 @@
 | DATABASE_URL | MySQL 连接串 | mysql+pymysql://root:123456@db:3306/edms_db?charset=utf8mb4 |
 | JWT_SECRET_KEY | 令牌签名密钥 | production-secure-key |
 | AI_API_KEY | 大模型 API Key | sk-xxxxxx |
+| CORS_ORIGINS | 允许的 CORS 来源 | http://localhost,http://your-domain.com |
 
 *注意：`DATABASE_URL` 必须包含 `charset=utf8mb4` 以支持复杂富文本。*
 
@@ -85,6 +86,10 @@
   proxy_set_header Connection "Upgrade";
   ```
 
+### 4.3 端口已被占用
+**错误**：`Port 80 is already in use`
+**解决方案**：修改 `.env` 文件中的 `WEB_PORT` 变量。
+
 ---
 
 ## 5. 维护与备份
@@ -97,3 +102,25 @@ docker exec edms-mysql mysqldump -u root -p'password' edms_db > backup.sql
 
 ### 5.2 文件资产备份
 请同步备份存放上传附件及区块链账本的持久化存储目录（通常为 `data/` 目录）。
+
+### 5.3 数据持久化
+所有持久化数据存储在挂载的目录中：
+- `data/backend/` - 应用上传的文件和其他持久化数据
+
+---
+
+## 6. 部署后验证
+
+1. **服务状态检查**
+   ```bash
+   docker ps
+   ```
+
+2. **日志验证**
+   ```bash
+   docker-compose logs -f
+   ```
+
+3. **前端访问测试**
+   - 打开浏览器访问 http://localhost
+   - 验证登录页面是否正常加载

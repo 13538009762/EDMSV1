@@ -112,7 +112,7 @@ You can customize the deployment by editing the `bin/.env` file:
 | `WEB_PORT` | Web service port | 80 | Yes |
 | `JWT_SECRET_KEY` | JWT signing key | Auto-generated | Yes |
 | `CORS_ORIGINS` | Allowed CORS origins | http://localhost | No |
-| `DATABASE_URL` | Database connection string | sqlite:///app/data/edms.db | No |
+| `DATABASE_URL` | Database connection string | mysql+pymysql://... | Yes |
 
 **Example configuration**:
 ```env
@@ -129,7 +129,7 @@ CORS_ORIGINS=http://localhost,http://your-domain.com
 ### Data Persistence
 
 All persistent data is stored in the `bin/data/` directory:
-- `bin/data/backend/` - Application data and SQLite database
+- `bin/data/backend/` - Application uploads and other persistent data
 
 **Important**: Back up this directory regularly to prevent data loss.
 

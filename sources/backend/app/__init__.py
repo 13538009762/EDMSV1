@@ -23,17 +23,6 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     socketio.init_app(app)
 
-    # 💡 核心并发优化：开启 SQLite WAL 模式并增加超时
-    from sqlalchemy import event
-    with app.app_context():
-        if app.config.get("SQLALCHEMY_DATABASE_URI", "").startswith("sqlite"):
-            @event.listens_for(db.engine, "connect")
-            def set_sqlite_pragma(dbapi_connection, connection_record):
-                cursor = dbapi_connection.cursor()
-                cursor.execute("PRAGMA journal_mode=WAL")
-                cursor.execute("PRAGMA synchronous=NORMAL")
-                cursor.execute("PRAGMA busy_timeout=10000")  # 10秒超时等待
-                cursor.close()
 
     @app.errorhandler(500)
     def handle_500(e):

@@ -3,6 +3,7 @@ import json
 import openai
 import os
 import re
+import httpx
 from app.services.ai_history_store import ai_history_store
 
 class AIService:
@@ -32,17 +33,22 @@ class AIService:
 
     @staticmethod
     def get_client(ai_model: str = 'spark-lite'):
+        # Determine if we should ignore system proxies
+        ignore_proxies = os.getenv('AI_IGNORE_PROXIES', 'true').lower() == 'true'
+        http_client = httpx.Client(proxies=None) if ignore_proxies else None
+
         if ai_model == 'deepseek':
             api_key = os.getenv('DEEPSEEK_API_KEY')
             base_url = "https://api.deepseek.com"
-            return openai.OpenAI(api_key=api_key, base_url=base_url)
+            return openai.OpenAI(api_key=api_key, base_url=base_url, http_client=http_client)
+        
         # Default Spark client
         spark_key = os.getenv('SPARK_API_KEY', "255e556f0c88f9bb663cc0d0f07594c4")
         spark_secret = os.getenv('SPARK_API_SECRET', "NGVjZjc0ZTYzZTBhNjliODkxMGZjNmU0")
         api_key = f"{spark_key}:{spark_secret}"
         
         base_url = "https://spark-api-open.xf-yun.com/v1"
-        return openai.OpenAI(api_key=api_key, base_url=base_url)
+        return openai.OpenAI(api_key=api_key, base_url=base_url, http_client=http_client)
 
     @staticmethod
     def stream_chat(messages, user_context=None, doc_context=None, current_user=None, ai_model='spark-lite'):
@@ -398,7 +404,13 @@ class AIService:
                 'appid': app_id
             }
 
-            response = requests.post(request_url, data=_json.dumps(body), headers=headers, timeout=15)
+            response = requests.post(
+                request_url, 
+                data=_json.dumps(body), 
+                headers=headers, 
+                timeout=15,
+                proxies={"http": None, "https": None}
+            )
             res_data = response.json()
 
             # 4. Parse Response

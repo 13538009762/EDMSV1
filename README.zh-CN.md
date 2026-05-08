@@ -44,6 +44,15 @@ python wsgi.py
 ```
 后端 API 默认运行在 `http://127.0.0.1:5000`
 
+环境变量（可选）：
+
+| 变量 | 说明 |
+|----------|-------------|
+| `DATABASE_URL` | SQLAlchemy URL（例如 `mysql+pymysql://...`） |
+| `JWT_SECRET_KEY` | JWT 签名密钥 |
+| `SECRET_KEY` | Flask 密钥 |
+| `ADMIN_IMPORT_TOKEN` | 如果设置，客户端在主数据导入时必须发送 `X-Admin-Token` |
+
 ## 🐳 Docker 容器化部署
 系统内置了完整的 Docker 支持，可一键部署：
 
@@ -86,4 +95,4 @@ docker-compose up -d --build
 - **部署指南**: [sources/docs/deployment-guide/deployment-guide.zh-CN.md](sources/docs/deployment-guide/deployment-guide.zh-CN.md)
 
 ## 📄 许可证
-本项目采用 MIT 许可证。详情请参阅项目中的 [LICENSE](LICENSE) 文件。
+本项目采用 MIT 许可证。详情请参阅项目中的 [LICENSE](LICENSE) file 为准。

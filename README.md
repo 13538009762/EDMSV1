@@ -44,6 +44,15 @@ python wsgi.py
 ```
 Backend API runs at `http://127.0.0.1:5000` by default.
 
+Environment variables (optional):
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | SQLAlchemy URL (e.g. `mysql+pymysql://...`) |
+| `JWT_SECRET_KEY` | JWT signing secret |
+| `SECRET_KEY` | Flask secret |
+| `ADMIN_IMPORT_TOKEN` | If set, clients must send `X-Admin-Token` on master data import |
+
 ## 🐳 Docker Deployment
 The system includes full Docker support for one-click deployment:
 
