@@ -112,18 +112,34 @@ class AIService:
 }
 ```
 """
-        else:
-            json_rules = """
-5. **修改/执行操作**：星火模型严禁输出任何 JSON 块，除非是执行审批操作。严禁在查询数据时使用 JSON。
-"""
+        # 💡 Inject real-time stats into system prompt to prevent AI hallucinations
+        pending_count = 0
+        if current_user:
+            from app.extensions import db
+            from sqlalchemy import text
+            try:
+                pending_count = db.session.execute(
+                    text("""
+                        SELECT COUNT(*) FROM approval_flows af
+                        JOIN approval_participants ap ON ap.flow_id = af.id
+                        LEFT JOIN approval_decisions ad ON ad.participant_id = ap.id
+                        WHERE ap.user_id = :uid 
+                          AND af.status = 'active'
+                          AND ad.id IS NULL
+                          AND (af.flow_type != 'sequential' OR ap.step_order = af.current_order)
+                    """), {"uid": current_user.id}
+                ).scalar() or 0
+            except:
+                pass
 
-        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})" + context_info + "\n\n" + """
+        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})\n[系统状态] 您当前有 {pending_count} 份待处理的审批申请。" + context_info + "\n\n" + """
 【核心指令】
 1. **直接执行**：如果用户让你搜索、统计或分析，你必须且只能输出对应的 [ACTION] 标签。
 2. **总结任务**：要总结“最近一周/月”或“系统动态”，必须使用 [ACTION: QUERY_DASHBOARD, TYPE: activity]。严禁使用 QUERY_DATA 搜索时间词。
 3. **严禁猜测**：禁止捏造数据。不知道就查，查不到就实说。
 4. **工具格式**：
-   - 数据搜索（查具体标题/人）：[ACTION: QUERY_DATA, ENTITY: documents|users, QUERY: 关键字]
+   - 数据搜索（查具体标题/人）：[ACTION: QUERY_DATA, ENTITY: documents|users|approvals, QUERY: 关键字]
+      * entity=approvals 时，忽略 QUERY 关键字，直接列出当前用户待处理的审批件。
    - 统计计数：[ACTION: QUERY_STATS, TYPE: user_count|document_count]
    - 仪表盘分析（周报/动态）：[ACTION: QUERY_DASHBOARD, TYPE: storage|activity|distribution|security|general]
 5. **重要**：直接回复结果。严禁复述、解释或翻译系统给你的内部反馈指令。

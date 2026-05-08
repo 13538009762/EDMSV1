@@ -24,6 +24,7 @@ def inbox():
         return jsonify({"error": "Unauthorized"}), 401
     items = []
     flows = ApprovalFlow.query.filter_by(status="active").all()
+    print(f"[DEBUG] Inbox: Found {len(flows)} active flows for user {user.id}")
     for flow in flows:
         doc = flow.document
         initiator_name = "Unknown"

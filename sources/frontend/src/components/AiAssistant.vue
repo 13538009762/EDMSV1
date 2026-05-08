@@ -298,11 +298,11 @@ const sendMessage = async () => {
               assistantMessage.content += data.content;
             } else if (data.type === 'done') {
               // Handle Tags
-              const queryDataRegex = /\[ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+),\s*QUERY:\s*([^\]]+)\]/i;
+              const queryDataRegex = /\[ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+)(?:,\s*QUERY:\s*([^\]]*))?\]/i;
               const qMatch = assistantMessage.content.match(queryDataRegex);
               if (qMatch) {
                 const entity = qMatch[1];
-                const query = qMatch[2];
+                const query = qMatch[2] || '';
                 assistantMessage.content = assistantMessage.content.replace(queryDataRegex, '').trim();
                 const tempMsg = assistantMessage.content;
                 assistantMessage.content = tempMsg + "\n\n⌛ *正在检索 " + entity + "...*"; 
@@ -353,6 +353,14 @@ const sendMessage = async () => {
                       */
                     } else {
                       resultHtml = "\n\n❌ 未找到相关用户。";
+                    }
+                  } else if (entity === 'approvals') {
+                    res = await api.get('/approvals/inbox');
+                    const items = res.data.items || [];
+                    if (items.length > 0) {
+                      resultHtml = "\n\n### ⏳ 待您处理的审批事项:\n" + items.map((a:any) => `- **[${a.doc_number || 'REG'}] ${a.title}**\n  - 发起人: ${a.initiator_name}\n  - 提交时间: ${new Date(a.submitted_at).toLocaleString()}`).join('\n');
+                    } else {
+                      resultHtml = "\n\n✅ 暂无需要您处理的审批申请。";
                     }
                   }
                   if (resultHtml !== undefined) {
