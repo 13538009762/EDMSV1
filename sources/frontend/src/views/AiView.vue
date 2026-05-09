@@ -139,28 +139,6 @@ const suggestions = computed(() => [
   }
 ]);
 
-// 💡 Robust Tag Parser for AI Actions (Supports [ACTION] and <ACTION>)
-const parseTagParams = (text: string, actionType: string) => {
-  const regex = new RegExp(`[\\[<]ACTION:\\s*${actionType}(?:,\\s*([^\\s\\]>]+))?.*?[\\]> ]`, 'i');
-  // Optimized regex for multi-parameter capture
-  const multiRegex = new RegExp(`[\\[<]ACTION:\\s*${actionType}(?:,\\s*([^\\]>]+))?[\\]> ]`, 'i');
-  const match = text.match(multiRegex);
-  if (!match) return null;
-  
-  const fullTag = match[0];
-  const paramsStr = match[1] || '';
-  const params: Record<string, string> = {};
-  
-  // Parse KEY: VALUE pairs
-  const pairRegex = /([A-Z_]+):\s*([^,\]]+)/gi;
-  let pairMatch;
-  while ((pairMatch = pairRegex.exec(paramsStr)) !== null) {
-    params[pairMatch[1].toUpperCase()] = pairMatch[2].trim();
-  }
-  
-  return { fullTag, params };
-};
-
 const renderMarkdown = (text: string) => {
   if (!text) return '';
   const cleanText = text.replace(/[\[<]ACTION:[\s\S]*?[\]>]/g, '').trim();
@@ -258,7 +236,6 @@ const sendMessage = async (isFeedback = false) => {
     }
 
     if (!response.body) throw new Error('No response body');
-    
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     
@@ -269,7 +246,7 @@ const sendMessage = async (isFeedback = false) => {
       
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep the last partial line in buffer
+      buffer = lines.pop() || '';
       
       for (const line of lines) {
         if (line.startsWith('data: ')) {
@@ -280,53 +257,16 @@ const sendMessage = async (isFeedback = false) => {
             if (data.content) {
               assistantMessage.content += data.content;
             } else if (data.type === 'done') {
-              // 1. Intercept JSON actions (Sensitive, need confirmation)
-              const jsonMatch = assistantMessage.content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-              if (jsonMatch) {
-                try {
-                  const actionData = JSON.parse(jsonMatch[1]);
-                  const aType = String(actionData.action || '').toUpperCase();
-                  
-                  // 💡 JSON is only for confirmable write actions. 
-                  // 💡 Queries MUST use [ACTION] tags to prevent hallucinations.
-                  const safeKeywords = ['QUERY', 'SEARCH', 'STATS', 'COUNT', 'GET', 'LIST', 'VIEW', 'SHOW', 'READ', 'DASHBOARD', 'ORG'];
-                  const isQuery = safeKeywords.some(k => aType.includes(k));
-                  
-                  if (!isQuery) {
-                    assistantMessage.action = actionData;
-                    assistantMessage.content = assistantMessage.content.replace(/```json\s*\{[\s\S]*?\}\s*```/, "").trim();
-                  }
-                } catch(e) {}
-              }
+              // 💡 Robust Tag Parsing
+              const content = assistantMessage.content;
+              const queryDataRegex = /[\[<]ACTION:\s*QUERY_DATA,\s*ENTITY:\s*([a-z]+)(?:,\s*QUERY:\s*([^\]>]*))?[\]>]/i;
+              const qMatch = content.match(queryDataRegex);
 
-              // 2. Intercept Tags (Automatic actions)
-              // Handle NAVIGATE
-              const nav = parseTagParams(assistantMessage.content, 'NAVIGATE');
-              if (nav && nav.params.PATH) {
-                const path = nav.params.PATH;
-                ElMessage.success(t('aiView.messages.redirecting', { id: path }));
-                router.push(path);
-                assistantMessage.content = assistantMessage.content.replace(nav.fullTag, '').trim();
-              }
-
-              // Handle OPEN_DOC (legacy support)
-              const open = parseTagParams(assistantMessage.content, 'OPEN_DOC');
-              if (open && open.params.ID) {
-                const docId = open.params.ID;
-                ElMessage.success(t('aiView.messages.redirecting', { id: docId }));
-                router.push(`/doc/${docId}`);
-                assistantMessage.content = assistantMessage.content.replace(open.fullTag, '').trim();
-              }
-
-              // Handle QUERY_DATA
-              const qData = parseTagParams(assistantMessage.content, 'QUERY_DATA');
-              if (qData && qData.params.ENTITY && qData.params.QUERY) {
-                const entity = qData.params.ENTITY.toLowerCase();
-                const query = qData.params.QUERY;
-                assistantMessage.content = assistantMessage.content.replace(qData.fullTag, '').trim();
-                
-                const tempMsg = assistantMessage.content;
-                assistantMessage.content = tempMsg + "\n\n⌛ *正在检索 " + entity + "...*"; 
+              if (qMatch) {
+                const entity = qMatch[1].toLowerCase();
+                const query = qMatch[2] || '';
+                const tempMsg = content.replace(queryDataRegex, '').trim();
+                assistantMessage.content = tempMsg + (tempMsg ? "\n\n" : "") + "⌛ *正在检索 " + entity + "...*"; 
                 
                 try {
                   let res;
@@ -334,112 +274,80 @@ const sendMessage = async (isFeedback = false) => {
                   if (entity === 'documents') {
                     res = await api.get('/documents', { params: { search: query } });
                     const items = res.data.items || [];
-                    if (items.length > 0) {
-                      resultHtml = "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (状态: ${d.status})`).join('\n');
-                    } else {
-                      resultHtml = "\n\n❌ 未找到相关文档。";
-                    }
+                    resultHtml = items.length > 0 
+                      ? "\n\n### 找到以下文档:\n" + items.map((d:any) => `- **[${d.doc_number}] ${d.title}** (状态: ${d.status})`).join('\n')
+                      : "\n\n❌ 未找到相关文档。";
                   } else if (entity === 'users') {
                     res = await api.get('/users', { params: { search: query } });
                     const items = (res.data.items || []).filter((u: any) => u.id !== auth.user?.id);
-                    if (items.length > 0) {
-                      resultHtml = "\n\n### 找到以下用户:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}, ID: ${u.id}) - ${u.department_name}`).join('\n');
-                    } else {
-                      resultHtml = "\n\n❌ 未找到相关用户。";
-                    }
+                    resultHtml = items.length > 0 
+                      ? "\n\n### 找到以下用户:\n" + items.map((u:any) => `- **${u.display_name}** (${u.login_name}) - ${u.department_name || '无部门'}`).join('\n')
+                      : "\n\n❌ 未找到相关用户。";
                   } else if (entity === 'approvals') {
                     res = await api.get('/approvals/inbox');
                     const items = res.data.items || [];
-                    if (items.length > 0) {
-                      resultHtml = "\n\n### 待处理审批:\n" + items.map((a:any) => `- **${a.title}** (来自: ${a.initiator_name}, 进度: ${a.progress.done}/${a.progress.total})`).join('\n');
-                    } else {
-                      resultHtml = "\n\n✅ 暂无待处理审批。";
-                    }
+                    resultHtml = items.length > 0 
+                      ? "\n\n### ⏳ 待您处理的审批事项:\n" + items.map((a:any) => `- **[${a.doc_number || 'REG'}] ${a.title}**\n  - 来自: ${a.initiator_name}\n  - 提交时间: ${new Date(a.submitted_at).toLocaleString()}`).join('\n')
+                      : "\n\n✅ 暂无待处理审批事项。";
                   }
                   
-                  // 💡 UI Defense: If no results found or error, show it immediately 
-                  if (!resultHtml || resultHtml.includes('❌') || resultHtml.includes('⚠️')) {
-                    assistantMessage.content = tempMsg + (resultHtml || "\n\n❌ 未找到匹配项。");
-                  } else {
-                    assistantMessage.content = tempMsg;
-                  }
-                  // 💡 Reflexive feedback: Send the results back to AI so it can "read and output" properly
-                  if (resultHtml) {
-                    const isError = resultHtml.includes('❌') || resultHtml.includes('⚠️');
-                    const feedbackPrompt = isError 
-                      ? `[SYSTEM]: Search for ${entity} (${query}) returned no results or failed. Briefly notify user and ask for clarification.`
-                      : `[SYSTEM]: Search results for ${entity} (${query}):\n${resultHtml}\nSummarize and present to user.`;
-                    
-                    aiStore.addMessage('global', 'system', feedbackPrompt, null, true); 
-                    await sendMessage(true); 
-                  }
+                  assistantMessage.content = tempMsg + (tempMsg ? "\n\n" : "") + resultHtml;
                 } catch (e) {
-                  assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败，请稍后重试。";
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 查询失败。";
                 }
               }
 
-              // Handle QUERY_STATS (legacy)
-              const qStats = parseTagParams(assistantMessage.content, 'QUERY_STATS');
-              if (qStats && qStats.params.TYPE) {
-                const statType = qStats.params.TYPE.toLowerCase();
-                assistantMessage.content = assistantMessage.content.replace(qStats.fullTag, '').trim();
-                const tempMsg = assistantMessage.content;
-                assistantMessage.content = tempMsg + "\n\n⌛ *...*"; 
+              // Handle QUERY_STATS
+              const statsMatch = content.match(/[\[<]ACTION:\s*QUERY_STATS,\s*TYPE:\s*([a-z_]+)[\]>]/i);
+              if (statsMatch) {
+                const sType = statsMatch[1].toLowerCase();
+                const tempMsg = content.replace(statsMatch[0], '').trim();
+                assistantMessage.content = tempMsg + (tempMsg ? "\n\n" : "") + "⌛ *正在统计数据...*";
                 try {
-                  let resultText = "";
-                  if (statType === 'user_count') {
+                  let resultHtml = "";
+                  if (sType.includes('user')) {
                     const res = await api.get('/users/stats');
-                    resultText = `📊 **系统统计**: 当前权限内共有 **${res.data.total_count}** 位可见成员。`;
+                    resultHtml = `📊 **用户统计**: 系统当前共有 **${res.data.total_count}** 位成员。`;
                   } else {
-                    const res = await api.get('/documents/stats'); 
-                    const stats = res.data;
-                    resultText = `📊 **系统统计**:\n- 您个人拥有: **${stats.owned_count}** 份文档\n- 当前总可见: **${stats.total_count}** 份文档 (含公开及部门共享)`;
+                    const res = await api.get('/documents/stats');
+                    resultHtml = `📊 **文档统计**: 系统当前共有 **${res.data.total_count}** 份文档。`;
                   }
-                  // 💡 UI Polish: Don't append the raw result here to avoid "Double Answering". 
-                  // Let the AI be the one to present the data in the feedback turn.
-                  assistantMessage.content = tempMsg; 
-                  
-                  // Feed back to AI using system role
-                  aiStore.addMessage('global', 'system', `[SYSTEM]: Statistical data retrieved:\n${resultText}\nPlease present this to the user as a summary.`, null, true);
-                  await sendMessage(true);
+                  assistantMessage.content = tempMsg + (tempMsg ? "\n\n" : "") + resultHtml;
                 } catch (e) {
-                  assistantMessage.content = tempMsg + "\n\n" + t('aiView.messages.dbTimeout');
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 统计失败。";
                 }
               }
 
-              // Handle QUERY_DASHBOARD
-              const qDash = parseTagParams(assistantMessage.content, 'QUERY_DASHBOARD');
-              if (qDash && qDash.params.TYPE) {
-                const dType = qDash.params.TYPE.toLowerCase();
-                assistantMessage.content = assistantMessage.content.replace(qDash.fullTag, '').trim();
-                const tempMsg = assistantMessage.content;
-                assistantMessage.content = tempMsg + "\n\n⌛ *正在分析仪表盘数据...*";
+              // Handle NAVIGATE
+              const navMatch = content.match(/[\[<]ACTION:\s*NAVIGATE,\s*PATH:\s*([^\]> ]+)[\]>]/i);
+              if (navMatch) {
+                const path = navMatch[1];
+                assistantMessage.content = assistantMessage.content.replace(navMatch[0], '').trim();
+                ElMessage.success(t('aiView.messages.redirecting', { id: path }));
+                router.push(path);
+              }
+
+              // Handle DASHBOARD
+              const dashMatch = content.match(/[\[<]ACTION:\s*QUERY_DASHBOARD,\s*TYPE:\s*([a-z]+)[\]>]/i);
+              if (dashMatch) {
+                const dType = dashMatch[1].toLowerCase();
+                const tempMsg = assistantMessage.content.replace(dashMatch[0], '').trim();
+                assistantMessage.content = tempMsg + (tempMsg ? "\n\n" : "") + "⌛ *正在分析仪表盘数据...*";
                 try {
                   const res = await api.get('/dashboard/stats');
                   const data = res.data;
                   let resultHtml = "";
                   if (dType === 'storage') {
-                    resultHtml = `📊 **存储规格占比分析**:\n- 总存储量: **${data.storage_info.total_size_mb} MB**\n` + 
-                                 data.storage_info.by_type.map((t:any) => `  - ${t.name}: ${t.value} MB`).join('\n');
+                    resultHtml = `📊 **存储占比分析**:\n- 总量: **${data.storage_info.total_size_mb} MB**\n` + data.storage_info.by_type.map((t:any) => `  - ${t.name}: ${t.value} MB`).join('\n');
                   } else if (dType === 'activity') {
-                    const todayTrend = data.trend_data[data.trend_data.length-1];
-                    resultHtml = `📈 **用户活跃度简报**:\n- 今日新增/更新文档: **${todayTrend.docs}**\n- 今日完成审批: **${todayTrend.approvals}**\n- 活跃热力指数: **${data.heatmap_data.length}** 个活跃日(近90天)`;
-                  } else if (dType === 'distribution') {
-                    resultHtml = `🏢 **部门分布**: \n` + data.dept_data.map((d:any) => `- ${d.name}: ${d.count} 份`).join('\n') + 
-                                 `\n\n📂 **空间分布**: \n` + data.space_data.map((s:any) => `- ${s.name}: ${s.count} 份`).join('\n');
-                  } else if (dType === 'security') {
-                    resultHtml = `🛡️ **安全合规监控**:\n- 已上链确权: **${data.blockchain_stats.on_chain_count}** 份\n- 零信任拦截次数: **${data.blockchain_stats.tamper_alerts}** 次\n- 模拟区块高度: **${data.blockchain_stats.block_height}**`;
+                    const today = data.trend_data[data.trend_data.length-1];
+                    resultHtml = `📈 **活跃简报**:\n- 今日新增/更新: **${today.docs}**\n- 今日审批: **${today.approvals}**`;
                   } else {
-                    resultHtml = `📑 **系统总体概览**:\n- 总成员数: **${data.total_users}**\n- 权限内可见文档: **${data.total_docs}**\n- 待我审批: **${data.my_stats.pending}** 份`;
+                    resultHtml = `📑 **系统概览**:\n- 成员: **${data.total_users}**\n- 文档: **${data.total_docs}**\n- 我的待办: **${data.my_stats.pending}** 份`;
                   }
-                  // 💡 UI Polish: Don't append manually. Let the AI present the results.
-                  assistantMessage.content = tempMsg; 
-                  
-                  // Feed back to AI using system role
-                  aiStore.addMessage('global', 'system', `[SYSTEM]: Dashboard ${dType} analysis results:\n${resultHtml}\nPlease summarize for the user.`, null, true);
-                  await sendMessage(true);
+                  assistantMessage.content = tempMsg + (tempMsg ? "\n\n" : "") + resultHtml;
                 } catch (e) {
-                  assistantMessage.content = tempMsg + "\n\n⚠️ 仪表盘数据获取失败。";
+                  assistantMessage.content = tempMsg + "\n\n⚠️ 获取失败。";
                 }
               }
             }

@@ -114,9 +114,13 @@ class AIService:
 """
         # 💡 Inject real-time stats into system prompt to prevent AI hallucinations
         pending_count = 0
+        total_users = 0
+        total_docs = 0
         if current_user:
             from app.extensions import db
             from sqlalchemy import text
+            from app.models.core import User
+            from app.models.document import Document
             try:
                 pending_count = db.session.execute(
                     text("""
@@ -129,10 +133,19 @@ class AIService:
                           AND (af.flow_type != 'sequential' OR ap.step_order = af.current_order)
                     """), {"uid": current_user.id}
                 ).scalar() or 0
+                
+                if is_admin:
+                    total_users = User.query.count()
+                    total_docs = Document.query.filter_by(is_template=False, deleted_at=None).count()
+                else:
+                    if current_user.department_id:
+                        total_users = User.query.filter_by(department_id=current_user.department_id).count()
+                    else:
+                        total_users = 1
             except:
                 pass
 
-        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})\n[系统状态] 您当前有 {pending_count} 份待处理的审批申请。" + context_info + "\n\n" + """
+        system_content = f"你现在是 EDMS 系统的核心智能助理。\n当前操作员：{user_name} ({role_desc})\n[系统状态] 系统内共有 {total_users} 位成员，{total_docs} 份文档。您当前有 {pending_count} 份待处理的审批申请。" + context_info + "\n\n" + """
 【核心指令】
 1. **直接执行**：如果用户让你搜索、统计或分析，你必须且只能输出对应的 [ACTION] 标签。
 2. **总结任务**：要总结“最近一周/月”或“系统动态”，必须使用 [ACTION: QUERY_DASHBOARD, TYPE: activity]。严禁使用 QUERY_DATA 搜索时间词。

@@ -24,7 +24,7 @@ export const useAiStore = defineStore('ai', () => {
 
   function addMessage(
     type: 'global' | 'editor',
-    role: 'assistant' | 'user' | 'ai',
+    role: 'assistant' | 'user' | 'ai' | 'system',
     content: string,
     action?: any,
     hidden?: boolean
