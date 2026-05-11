@@ -3,8 +3,15 @@ from typing import TYPE_CHECKING, Optional
 
 from app.extensions import db
 
-if TYPE_CHECKING:
-    from app.models.core import User
+
+
+
+document_spaces = db.Table(
+    "document_spaces",
+    db.Column("document_id", db.Integer, db.ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("space_id", db.Integer, db.ForeignKey("spaces.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 
 class Document(db.Model):
@@ -49,8 +56,13 @@ class Document(db.Model):
     )
     permissions = db.relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
     approval_flows = db.relationship("ApprovalFlow", back_populates="document", cascade="all, delete-orphan")
-    space = db.relationship("Space", back_populates="documents", foreign_keys=[space_id])
+    spaces = db.relationship("Space", secondary="document_spaces", back_populates="documents")
     parent = db.relationship("Document", remote_side="Document.id", foreign_keys=[parent_id], backref=db.backref("children", lazy="dynamic"))
+
+    @property
+    def space(self):
+        """Backward compatibility for single space access."""
+        return self.spaces[0] if self.spaces else None
 
 
 class DocumentVersion(db.Model):

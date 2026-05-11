@@ -37,9 +37,10 @@ def create_space():
     
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "New Space").strip()[:256]
+    name_en = (data.get("name_en") or "").strip()[:256]
     description = (data.get("description") or "").strip()
     
-    s = Space(name=name, description=description, owner_id=user.id)
+    s = Space(name=name, name_en=name_en, description=description, owner_id=user.id)
     db.session.add(s)
     db.session.commit()
     

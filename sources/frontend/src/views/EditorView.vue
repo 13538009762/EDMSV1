@@ -481,8 +481,7 @@
           <el-switch v-model="page.showPageNumber" />
         </el-form-item>
         <el-form-item :label="t('library.wikiTree')">
-          <el-select v-model="selectedSpaceId" style="width: 100%">
-            <el-option :label="t('library.scopeMine')" value="none" />
+          <el-select v-model="selectedSpaceIds" multiple collapse-tags style="width: 100%">
             <el-option v-for="s in spacesOptions" :key="s.id" :label="t('space.' + s.name, s.name)" :value="s.id" />
           </el-select>
         </el-form-item>
@@ -782,8 +781,9 @@ const scrollToBottom = async (force = false) => {
   }
 };
 
+
 const spacesOptions = ref<Array<{ id: any, name: string }>>([]);
-const selectedSpaceId = ref<any>(null);
+const selectedSpaceIds = ref<number[]>([]);
 
 // ==========================================
 // AI Core Helper Functions (Unified)
@@ -1352,7 +1352,7 @@ async function savePageSettings() {
   try {
     await api.patch(`/documents/${docId.value}`, { 
       page_settings_json: JSON.stringify(page.value),
-      space_id: selectedSpaceId.value === 'none' ? null : selectedSpaceId.value
+      space_ids: selectedSpaceIds.value
     });
     pageSettingsVisible.value = false;
     ElMessage.success(t("editor.pageSettingsSaved"));
@@ -1475,7 +1475,7 @@ async function loadDoc(silent = false) {
     console.log("[DEBUG] Doc data loaded, status:", data.status);
     title.value = data.title;
     meta.value = data;
-    selectedSpaceId.value = data.space_id || 'none';
+    selectedSpaceIds.value = data.space_ids || [];
     if (data.page_settings_json) {
         try {
             const ps = typeof data.page_settings_json === 'string' 

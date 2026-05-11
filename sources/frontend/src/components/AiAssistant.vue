@@ -77,7 +77,7 @@ import { MagicStick, ArrowUp, ArrowDown, Promotion } from '@element-plus/icons-v
 import { useAuthStore } from '@/stores/auth';
 import { useAiStore, type AiMessage } from '@/stores/ai';
 import { marked } from 'marked';
-import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
+import { ElMessage, ElNotification } from 'element-plus';
 import api from '@/api/client';
 import ThinkingNineLoader from './ThinkingNineLoader.vue';
 

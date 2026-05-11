@@ -1,6 +1,6 @@
 <template>
   <div class="thinking-nine-loader">
-    <svg viewBox="0 0 100 100" fill="none" aria-hidden="true" ref="svgRef">
+    <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
       <g id="group" ref="groupRef">
         <path id="path" ref="pathRef" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" opacity="0.1"></path>
         <circle v-for="i in config.particleCount" :key="i" fill="currentColor" :ref="el => setParticleRef(el, i - 1)"></circle>
@@ -12,7 +12,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 
-const svgRef = ref<SVGElement | null>(null);
 const groupRef = ref<SVGGElement | null>(null);
 const pathRef = ref<SVGPathElement | null>(null);
 const particles: (SVGCircleElement | null)[] = [];

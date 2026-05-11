@@ -94,6 +94,8 @@ def _doc_to_summary(doc: Document, user: User) -> dict:
         "pending_participant_id": pending_participant_id,
         "doc_type": doc.doc_type,
         "file_path": ver.file_path if ver else None,
+        "space_ids": [s.id for s in doc.spaces],
+        "space_names": [s.name for s in doc.spaces],
     }
 
 @bp.get("/tree")
@@ -114,18 +116,18 @@ def list_document_tree():
     
     # 1. Spaces (Project/Topic Groups)
     for s in spaces:
-        conditions = [
-            Document.space_id == s.id,
+        from app.models.document import document_spaces
+        docs = db.session.query(Document).join(document_spaces).filter(
+            document_spaces.c.space_id == s.id,
             Document.is_template == False,
             Document.deleted_at == None
-        ]
+        )
         if user.login_name != 'admin':
-            conditions.append(or_(
+            docs = docs.filter(or_(
                 Document.owner_id == user.id,
                 Document.is_public == True
             ))
-        
-        docs = Document.query.filter(*conditions).all()
+        docs = docs.all()
         
         doc_map = {d.id: {
             "id": d.id,
@@ -147,6 +149,7 @@ def list_document_tree():
             "id": f"space_{s.id}",
             "space_id": s.id,
             "name": s.name,
+            "name_en": s.name_en,
             "is_space": True,
             "children": roots
         })
@@ -157,7 +160,7 @@ def list_document_tree():
         # and are either public or owned by current user
         conditions = [
             User.department_id == dpt.id,
-            Document.space_id == None,
+            ~Document.id.in_(db.session.query(document_spaces.c.document_id)),
             Document.is_template == False,
             Document.deleted_at == None
         ]
@@ -197,15 +200,22 @@ def list_document_tree():
             "children": roots
         })
         
-    orphan_docs = Document.query.filter(
-        Document.space_id == None,
+    # 2. Unassigned Documents
+    unassigned_conditions = [
         Document.is_template == False,
-        Document.deleted_at == None,
-        Document.owner_id == user.id
-    ).all()
+        Document.deleted_at == None
+    ]
+    if user.login_name != 'admin':
+        unassigned_conditions.append(or_(
+            Document.owner_id == user.id,
+            Document.is_public == True
+        ))
     
-    # Filter out docs already included in departments to avoid duplicates for the user
-    # Actually, keep "Personal Documents" as a catch-all if needed, but usually dept is enough.
+    # Documents without any spaces in junction table
+    from app.models.document import document_spaces
+    unassigned_docs = Document.query.filter(*unassigned_conditions).filter(
+        ~Document.id.in_(db.session.query(document_spaces.c.document_id))
+    ).all()
     
     return jsonify({"items": tree})
 
@@ -335,13 +345,17 @@ def list_documents():
 
     # Re-apply space filter at the end
     if space_id:
+        from app.models.document import document_spaces
         if space_id == "unassigned":
-            q = q.filter(Document.space_id == None)
+            q = q.filter(~Document.id.in_(db.session.query(document_spaces.c.document_id)))
         else:
-            q = q.filter(Document.space_id == space_id)
+            q = q.join(document_spaces).filter(document_spaces.c.space_id == space_id)
 
     if dept_id:
-        q = q.join(User).filter(User.department_id == dept_id, Document.space_id == None)
+        from app.models.document import document_spaces
+        q = q.join(User).filter(User.department_id == dept_id).filter(
+            ~Document.id.in_(db.session.query(document_spaces.c.document_id))
+        )
 
     try:
         docs = q.order_by(Document.updated_at.desc()).all()
@@ -381,7 +395,13 @@ def create_document():
         doc_number = f"{today_str}001"
     
     try:
-        doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number, space_id=space_id)
+        doc = Document(owner_id=user.id, title=title, status="draft", doc_number=doc_number)
+        if space_id:
+            from app.models.space import Space
+            sp = db.session.get(Space, space_id)
+            if sp:
+                doc.spaces.append(sp)
+                
         db.session.add(doc)
         db.session.flush()
         ver = DocumentVersion(
@@ -513,6 +533,16 @@ def patch_document(doc_id: int):
         doc.title = str(data["title"])[:512]
     if "page_settings_json" in data:
         doc.page_settings_json = data["page_settings_json"]
+    if "space_id" in data or "space_ids" in data:
+        from app.models.space import Space
+        sids = data.get("space_ids")
+        if sids is None: # Fallback to single ID
+            sid = data.get("space_id")
+            sids = [sid] if sid and sid != 'none' else []
+        
+        # Filter out invalid IDs
+        valid_spaces = Space.query.filter(Space.id.in_(sids)).all() if sids else []
+        doc.spaces = valid_spaces
     if "is_public" in data:
         if not user_can_manage_permissions(user, doc):
             return jsonify({"error": "Forbidden: only owner or approver (after approval) can change visibility"}), 403
@@ -1331,3 +1361,38 @@ def verify_document(doc_id):
             "safe": False, 
             "msg": "致命警告：底层数据哈希异常，文件已遭非法篡改！"
         })
+
+@bp.post("/batch-move")
+@jwt_required()
+def batch_move_documents():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    doc_ids = data.get("doc_ids", [])
+    space_ids = data.get("space_ids", [])
+    append_mode = data.get("append", False) # Whether to add or replace
+    
+    if not doc_ids:
+        return jsonify({"error": "No document IDs provided"}), 400
+        
+    from app.models.space import Space
+    target_spaces = Space.query.filter(Space.id.in_(space_ids)).all() if space_ids else []
+    
+    docs = Document.query.filter(Document.id.in_(doc_ids)).all()
+    updated_count = 0
+    for doc in docs:
+        if user_can_edit_metadata(user, doc):
+            if append_mode:
+                # Add unique spaces
+                existing_ids = {s.id for s in doc.spaces}
+                for ts in target_spaces:
+                    if ts.id not in existing_ids:
+                        doc.spaces.append(ts)
+            else:
+                # Replace
+                doc.spaces = target_spaces
+            updated_count += 1
+            
+    db.session.commit()
+    return jsonify({"success": True, "count": updated_count})

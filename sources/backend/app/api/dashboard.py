@@ -97,11 +97,14 @@ def get_stats():
     # 4. 空间分布
     space_data = []
     try:
-        space_counts = db.session.query(Space.name, func.count(Document.id))\
-            .outerjoin(Document, Document.space_id == Space.id)\
+        from app.models.document import document_spaces
+        space_counts = db.session.query(Space.name, Space.name_en, func.count(Document.id))\
+            .select_from(Document)\
+            .outerjoin(document_spaces, Document.id == document_spaces.c.document_id)\
+            .outerjoin(Space, document_spaces.c.space_id == Space.id)\
             .filter(*auth_filter)\
-            .group_by(Space.name).all()
-        space_data = [{"name": row[0] or "Unassigned", "count": row[1]} for row in space_counts]
+            .group_by(Space.name, Space.name_en).all()
+        space_data = [{"name": row[0] or "Unassigned", "name_en": row[1] or "", "count": row[2]} for row in space_counts]
     except Exception as e:
         print(f"[ERROR] Space breakdown failed: {e}")
 

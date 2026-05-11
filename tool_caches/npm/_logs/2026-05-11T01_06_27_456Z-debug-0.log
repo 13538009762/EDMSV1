@@ -1,0 +1,89 @@
+0 verbose cli D:\app文件\No.js\node.exe D:\app文件\No.js\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.8.2
+2 info using node@v20.19.3
+3 silly config load:file:D:\app文件\No.js\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\JasonHe\AppData\Local\Microsoft\TypeScript\5.9\.npmrc
+5 silly config load:file:C:\Users\JasonHe\.npmrc
+6 silly config load:file:C:\Users\JasonHe\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install types-registry@latest
+8 verbose argv "install" "--ignore-scripts" "types-registry@latest"
+9 verbose logfile logs-max:10 dir:E:\English Encoding\competition\last\edms\tool_caches\npm\_logs\2026-05-11T01_06_27_456Z-
+10 verbose logfile E:\English Encoding\competition\last\edms\tool_caches\npm\_logs\2026-05-11T01_06_27_456Z-debug-0.log
+11 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+12 silly logfile done cleaning log files
+13 silly packumentCache corgi:https://registry.npmmirror.com/types-registry cache-miss
+14 http fetch GET 200 https://registry.npmmirror.com/types-registry 250ms (cache updated)
+15 silly packumentCache corgi:https://registry.npmmirror.com/types-registry set size:155235 disposed:false
+16 silly idealTree buildDeps
+17 silly fetch manifest types-registry@0.1.769
+18 silly packumentCache full:https://registry.npmmirror.com/types-registry cache-miss
+19 http fetch GET 200 https://registry.npmmirror.com/types-registry 83ms (cache updated)
+20 silly packumentCache full:https://registry.npmmirror.com/types-registry set size:244193 disposed:false
+21 silly placeDep ROOT types-registry@0.1.769 REPLACE for:  want: 0.1.769
+22 silly reify mark retired [
+22 silly reify   'C:\\Users\\JasonHe\\AppData\\Local\\Microsoft\\TypeScript\\5.9\\node_modules\\types-registry'
+22 silly reify ]
+23 silly reify moves {
+23 silly reify   'C:\\Users\\JasonHe\\AppData\\Local\\Microsoft\\TypeScript\\5.9\\node_modules\\types-registry': 'C:\\Users\\JasonHe\\AppData\\Local\\Microsoft\\TypeScript\\5.9\\node_modules\\.types-registry-ptd6m1n0'
+23 silly reify }
+24 silly audit bulk request {
+24 silly audit   '@types/bindings': [ '1.5.5' ],
+24 silly audit   '@types/buffer-crc32': [ '0.2.4' ],
+24 silly audit   '@types/bundle-name': [ '4.1.0' ],
+24 silly audit   '@types/debug': [ '4.1.13' ],
+24 silly audit   '@types/default-browser-id': [ '5.0.0' ],
+24 silly audit   '@types/json-bigint': [ '1.0.4' ],
+24 silly audit   '@types/jws': [ '3.2.11' ],
+24 silly audit   '@types/kerberos': [ '1.1.5' ],
+24 silly audit   '@types/less': [ '3.0.8' ],
+24 silly audit   '@types/ms': [ '2.1.0' ],
+24 silly audit   '@types/node': [ '25.5.0' ],
+24 silly audit   '@types/nprogress': [ '0.2.3' ],
+24 silly audit   '@types/react': [ '19.2.14' ],
+24 silly audit   '@types/stylus': [ '0.48.43' ],
+24 silly audit   '@types/yauzl': [ '2.10.3' ],
+24 silly audit   '@types/yazl': [ '3.3.0' ],
+24 silly audit   csstype: [ '3.2.3' ],
+24 silly audit   'undici-types': [ '7.18.2' ],
+24 silly audit   'types-registry': [ '0.1.769' ]
+24 silly audit }
+25 silly tarball no local data for types-registry@https://registry.npmmirror.com/types-registry/-/types-registry-0.1.769.tgz. Extracting by manifest.
+26 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk 14ms
+27 silly audit bulk request failed [object Object]
+28 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/audits/quick 18ms
+29 verbose audit error HttpErrorGeneral: 404 Not Found - POST https://registry.npmmirror.com/-/npm/v1/security/audits/quick - [NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet
+29 verbose audit error     at D:\app文件\No.js\node_modules\npm\node_modules\npm-registry-fetch\lib\check-response.js:95:15
+29 verbose audit error     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+29 verbose audit error     at async [getReport] (D:\app文件\No.js\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:336:21)
+29 verbose audit error     at async AuditReport.run (D:\app文件\No.js\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:106:19) {
+29 verbose audit error   headers: [Object: null prototype] {
+29 verbose audit error     server: [ 'Tengine' ],
+29 verbose audit error     date: [ 'Mon, 11 May 2026 01:06:46 GMT' ],
+29 verbose audit error     'content-type': [ 'application/json' ],
+29 verbose audit error     'transfer-encoding': [ 'chunked' ],
+29 verbose audit error     connection: [ 'keep-alive' ],
+29 verbose audit error     'strict-transport-security': [ 'max-age=5184000' ],
+29 verbose audit error     via: [ 'kunlun7.cn9041[,404666]' ],
+29 verbose audit error     'timing-allow-origin': [ '*' ],
+29 verbose audit error     eagleid: [ '7171640c17784616069512236e' ],
+29 verbose audit error     'x-fetch-attempts': [ '1' ]
+29 verbose audit error   },
+29 verbose audit error   statusCode: 404,
+29 verbose audit error   code: 'E404',
+29 verbose audit error   method: 'POST',
+29 verbose audit error   uri: 'https://registry.npmmirror.com/-/npm/v1/security/audits/quick',
+29 verbose audit error   body: {
+29 verbose audit error     error: '[NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet'
+29 verbose audit error   },
+29 verbose audit error   pkgid: undefined
+29 verbose audit error }
+30 silly audit error [object Object]
+31 silly audit report null
+32 http fetch GET 200 https://cdn.npmmirror.com/packages/types-registry/0.1.769/types-registry-0.1.769.tgz 254ms (cache miss)
+33 silly CHANGE node_modules/types-registry
+34 verbose cwd C:\Users\JasonHe\AppData\Local\Microsoft\TypeScript\5.9
+35 verbose os Windows_NT 10.0.26200
+36 verbose node v20.19.3
+37 verbose npm  v10.8.2
+38 verbose exit 0
+39 info ok

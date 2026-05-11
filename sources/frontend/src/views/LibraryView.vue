@@ -19,6 +19,17 @@
             <template v-if="!sidebarCollapsed">
               <div class="header-title">
                 <el-icon><Folder /></el-icon> {{ t("library.wikiTree", "Wiki Directory") }}
+                <el-tooltip :content="t('library.createSpace')" placement="top">
+                  <el-button 
+                    v-if="authStore.user?.login_name === 'admin'" 
+                    size="small" 
+                    circle 
+                    :icon="Plus" 
+                    @click="showCreateSpace = true" 
+                    class="add-space-btn"
+                    style="margin-left: 8px; transform: scale(0.8);"
+                  />
+                </el-tooltip>
               </div>
               <el-button link @click="toggleSidebar" class="collapse-btn">
                 <el-icon><Fold /></el-icon>
@@ -100,6 +111,8 @@
               <el-button type="danger" :icon="Delete" plain @click="batchDelete">{{ t('common.batchDelete') }}</el-button>
               <el-button type="warning" :icon="Share" plain @click="batchShare(true)">{{ t('common.share') }}</el-button>
               <el-button type="info" :icon="Lock" plain @click="batchShare(false)">{{ t('common.unshare') }}</el-button>
+              <el-button type="success" :icon="Folder" plain @click="showMove = true">{{ t('library.moveToSpace', 'Move to Space') }}</el-button>
+              <el-button type="info" :icon="Close" plain @click="batchClearSpace">{{ t('library.clearSpaces', 'Clear Categories') }}</el-button>
               <el-divider direction="vertical" />
             </div>
   
@@ -166,7 +179,16 @@
       <el-table :data="paginatedItems" v-loading="loading" stripe style="width: 100%" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
         <el-table-column prop="doc_number" :label="t('library.colId')" width="140" />
-        <el-table-column prop="title" :label="t('library.colTitle')" min-width="180" />
+        <el-table-column prop="title" :label="t('library.colTitle')" min-width="180">
+          <template #default="{ row }">
+            <div style="font-weight: 500; margin-bottom: 4px;">{{ row.title }}</div>
+            <div v-if="row.space_names && row.space_names.length" style="display: flex; flex-wrap: wrap; gap: 4px;">
+              <el-tag v-for="name in row.space_names" :key="name" size="small" type="info" effect="light" round>
+                {{ t('space.' + name, name) }}
+              </el-tag>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" :label="t('library.colStatus')" width="160">
           <template #default="{ row }">
             <el-tag :type="row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : row.status === 'in_approval' ? 'warning' : 'info'">
@@ -227,6 +249,14 @@
                     >
                       {{ t("library.diff") }}
                     </el-dropdown-item>
+
+                    <el-dropdown-item 
+                      v-if="row.is_owner || authStore.user?.login_name === 'admin'"
+                      command="move"
+                      :icon="Folder"
+                    >
+                      {{ t("library.moveToSpace", "Move to Space") }}
+                    </el-dropdown-item>
                     
                     <el-dropdown-item 
                       v-if="(row.is_owner || authStore.user?.login_name === 'admin') && (row.status === 'draft' || row.status === 'rejected' || row.status === 'approved')"
@@ -264,6 +294,17 @@
       :document-id="shareDocId"
       @saved="load"
     />
+
+    <DocumentMoveDialog
+      v-model="showMove"
+      :doc-ids="selectedIds"
+      @saved="onMoved"
+    />
+
+    <SpaceCreateDialog
+      v-model="showCreateSpace"
+      @saved="loadTree"
+    />
   </div>
 </template>
 
@@ -276,7 +317,9 @@ import { ElMessage, ElMessageBox, ElLoading } from "element-plus";
 import mammoth from "mammoth";
 import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
-import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock } from "@element-plus/icons-vue";
+import DocumentMoveDialog from "@/components/DocumentMoveDialog.vue";
+import SpaceCreateDialog from "@/components/SpaceCreateDialog.vue";
+import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock, Close } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 import { Editor } from "@tiptap/vue-3";
@@ -318,16 +361,45 @@ const currentDeptId = ref<string | null>(null);
 const currentDeptName = ref("");
 const selectedIds = ref<number[]>([]);
 const deptOptions = ref<any[]>([]);
+const showMove = ref(false);
+const showCreateSpace = ref(false);
 
-const formatDeptName = (name: string, nameEn?: string) => {
-  if (!name) return "";
-  // Try translating the primary name (usually Chinese)
-  if (te(`dept.${name}`)) return t(`dept.${name}`);
-  // Try translating the English name if available
-  if (nameEn && te(`dept.${nameEn}`)) return t(`dept.${nameEn}`);
-  // Fallback to raw values based on current locale
+async function batchClearSpace() {
+  if (selectedIds.value.length === 0) return;
+  try {
+    await ElMessageBox.confirm(
+      t('library.clearSpacesConfirm', 'Are you sure you want to remove all categories from selected documents?'),
+      t('common.warning'),
+      { type: 'warning' }
+    );
+    const loading = ElLoading.service({ text: t('common.processing') });
+    await api.post('/documents/batch-move', {
+      doc_ids: selectedIds.value,
+      space_ids: [],
+      append: false
+    });
+    loading.close();
+    ElMessage.success(t('common.success'));
+    onMoved();
+  } catch {}
+}
+
+function onMoved() {
+  selectedIds.value = [];
+  load();
+  loadTree();
+}
+
+const formatName = (name: string, nameEn?: string, type: 'dept' | 'space' = 'dept') => {
+  if (!name || name === 'Unknown' || name === 'Unassigned') {
+    return name === 'Unassigned' ? t('library.scopeMine') : t('common.unknown');
+  }
+  if (te(`${type}.${name}`)) return t(`${type}.${name}`);
+  if (nameEn && te(`${type}.${nameEn}`)) return t(`${type}.${nameEn}`);
   return locale.value === 'zh-CN' ? name : (nameEn || name);
 };
+const formatDeptName = (name: string, nameEn?: string) => formatName(name, nameEn, 'dept');
+const formatSpaceName = (name: string, nameEn?: string) => formatName(name, nameEn, 'space');
 
 const sidebarCollapsed = ref(false);
 const toolbarCollapsed = ref(false);
@@ -443,7 +515,7 @@ const defaultProps = {
   children: "children",
   label: (data: any) => {
     if (data.is_dept) return formatDeptName(data.name, data.name_en);
-    if (data.is_space) return t('space.' + data.name, data.name);
+    if (data.is_space) return formatSpaceName(data.name, data.name_en);
     return data.title || data.name;
   },
 };
@@ -497,7 +569,7 @@ function handleNodeClick(data: any) {
       currentSpaceName.value = t("library.scopeMine");
     } else {
       currentSpaceId.value = sid.toString().replace("space_", "");
-      currentSpaceName.value = t('space.' + data.name, data.name);
+      currentSpaceName.value = formatSpaceName(data.name, data.name_en);
     }
     load();
   } else if (data.id && !data.is_space && !data.is_dept) {
@@ -508,6 +580,10 @@ function handleNodeClick(data: any) {
 function handleCommand(cmd: string, row: DocRow) {
     if (cmd === 'share') openShare(row.id);
     if (cmd === 'diff') router.push({ name: 'diff', params: { id: row.id } });
+    if (cmd === 'move') {
+      selectedIds.value = [row.id];
+      showMove.value = true;
+    }
     if (cmd === 'delete') confirmDelete(row.id);
 }
 

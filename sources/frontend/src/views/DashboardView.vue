@@ -497,7 +497,7 @@ const totalDocs = ref(0);
 const totalUsers = ref(0);
 const statusData = ref<{ status: string; count: number }[]>([]);
 const deptData = ref<{ name: string; name_en?: string; count: number }[]>([]);
-const spaceData = ref<{ name: string; count: number }[]>([]);
+const spaceData = ref<{ name: string; name_en?: string; count: number }[]>([]);
 const trendData = ref<{ date: string; docs: number; approvals: number }[]>([]);
 const activities = ref<any[]>([]);
 const trendingDocs = ref<any[]>([]);
@@ -513,15 +513,16 @@ const blockchainStats = ref({ on_chain_count: 0, tamper_alerts: 0, block_height:
 const blockchainHistory = ref<any[]>([]);
 const securityAlerts = ref<any[]>([]);
 
-const formatDeptName = (name: string, nameEn?: string) => {
-  if (!name || name === 'Unknown') return t('common.unknown');
-  // Try translating the primary name (usually Chinese)
-  if (te(`dept.${name}`)) return t(`dept.${name}`);
-  // Try translating the English name if available
-  if (nameEn && te(`dept.${nameEn}`)) return t(`dept.${nameEn}`);
-  // Fallback to raw values based on current locale
+const formatName = (name: string, nameEn?: string, type: 'dept' | 'space' = 'dept') => {
+  if (!name || name === 'Unknown' || name === 'Unassigned') {
+    return name === 'Unassigned' ? t('dashboard.unassigned') : t('common.unknown');
+  }
+  if (te(`${type}.${name}`)) return t(`${type}.${name}`);
+  if (nameEn && te(`${type}.${nameEn}`)) return t(`${type}.${nameEn}`);
   return locale.value === 'zh-CN' ? name : (nameEn || name);
 };
+const formatDeptName = (name: string, nameEn?: string) => formatName(name, nameEn, 'dept');
+const formatSpaceName = (name: string, nameEn?: string) => formatName(name, nameEn, 'space');
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.is_manager);
@@ -747,7 +748,7 @@ const spaceOption = computed(() => {
         avoidLabelOverlap: true,
         data: spaceData.value.map((s) => ({
           value: s.count,
-          name: s.name || 'Unassigned',
+          name: formatSpaceName(s.name, s.name_en),
         })),
         itemStyle: {
             borderRadius: 6,
