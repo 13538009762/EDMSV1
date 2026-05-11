@@ -1,71 +1,89 @@
-# EDMS — 电子文档管理系统
+# EDMS — 企业级电子文档管理系统 (Electronic Document Management System)
 
 [English](./README.md) | [简体中文](./README.zh-CN.md) 
 
-Vue 3 + Element Plus 前端，Flask 后端。支持主数据导入、多维文档分类、AI 识图建档、协作编辑、评论和审批工作流。
+基于 Vue 3 + Element Plus 的前端与 Flask 后端构建的企业级文档管理系统。支持主数据（Master Data）导入、多空间分类、AI 智能辅助创作、实时协同编辑、文档差异对比、评论互动以及完整的审批工作流。
 
-## 核心特性
+## ✨ 核心特性
 
-- **多维分类系统**：文档支持关联多个“知识空间”（Many-to-Many），支持跨空间检索。
-- **AI 智能增强**：内置智能助手，支持 AI 对话生成、AI 识图建档（OCR 识别 + 自动排版）。
-- **灵活权限控制**：支持基于用户、部门和空间的多维度权限管理（查看、编辑、评论）。
-- **审批工作流**：完整的文档生命周期管理，支持草稿、审批中、已批准、已驳回状态流转。
-- **全栈国际化**：支持中英文无缝切换，包括系统生成的分类标签和部门名称。
+- **多空间分类 (Multi-Space Categorization)**：打破传统单文件夹限制，文档可同时关联多个“知识空间”（多对多关系），实现灵活的多维度知识管理。
+- **AI 智能辅助 (AI-Powered Intelligence)**：内置 AI 助手，支持对话式文档生成、知识问答以及“图生文”（OCR + 智能排版）等功能。
+- **实时协同与版本控制 (Real-time Collab & Versioning)**：基于 WebSocket 支持多人实时协同编辑，内置文档历史版本管理与双向差异对比（Diff）视图。
+- **审批工作流 (Approval Workflows)**：提供完整的文档生命周期管理，涵盖“草稿”、“审批中”、“已批准”与“已拒绝”等状态。
+- **灵活的权限控制 (Flexible Access Control)**：基于用户、部门和空间（只读、编辑、评论）的多维度 RBAC 权限管理体系。
+- **文档防篡改溯源 (Blockchain Traceability)**：底层集成 Mock 区块链服务，对核心文档进行哈希上链存证，确保企业数据资产的完整性与不可篡改性。
+- **全栈国际化 (Full-Stack i18n)**：支持中英文无缝切换，包含系统生成的标签、空间名称及部门职级等数据的国际化处理。
 
-## 前提条件
+## 🛠️ 环境准备
 
 - Python 3.10+（推荐）
-- Node.js 18+ 和 **cnpm**（或 npm）用于前端
+- Node.js 18+
+- Docker & Docker Compose（如需容器化部署）
 
-### 前端包安装（中国/受限网络）
+## 🚀 快速开始 (本地开发)
 
-如果 `npm` 速度慢或不可用，请使用 **cnpm**（使用相同的 `package.json`）：
+### 1. 前端启动
 
 ```bash
 cd sources/frontend
-cnpm install
-cnpm run dev
+npm install
+npm run dev
 ```
+前端默认运行在 `http://localhost:5173`
 
-## 后端
+### 2. 后端启动
 
 ```bash
 cd sources/backend
 python -m venv .venv
-# Windows: .venv\Scripts\activate
+# Windows 环境激活虚拟环境: .venv\Scripts\activate
+# Linux/Mac 环境激活: source .venv/bin/activate
+
 pip install -r requirements.txt
 python wsgi.py
 ```
+后端 API 默认运行在 `http://127.0.0.1:5000`
 
-API 默认运行在 `http://127.0.0.1:5000`。
+## 🐳 Docker 容器化部署
+系统内置了完整的 Docker 支持，可一键部署：
 
-## 文档 API（精选）
+```bash
+# 进入 docker 目录
+cd sources/docker
 
-- `GET /api/documents?scope=all|mine|collab` — 多维度文档列表查询。
-- `GET /api/documents/tree` — 获取分层目录结构（支持空间与部门视图）。
-- `PATCH /api/documents/:id` — 更新文档元数据。支持 `space_ids` (List) 批量分配分类。
-- `POST /api/documents/batch-move` — 批量操作分类。参数 `append: true` 可实现增量添加分类。
-- `POST /api/spaces` — 管理员/经理可在此接口创建新的知识空间分类。
+# 复制环境变量模板
+cp .env.example .env
 
-## 首次设置（尚无用户）
+# 一键构建并启动 (或者运行 build.sh / build.bat)
+docker-compose up -d --build
+```
+部署完成后，可通过 Nginx 代理的地址直接访问系统。
 
-如果登录时提示"无效的用户名"，说明数据库中没有员工数据。
+## 🖥️ 一键手动启停脚本
+对于 Windows / Linux 本地环境，代码库提供了便捷的批处理脚本：
 
-1. 系统预留 `admin` 账号，密码为 `123456`。
-2. 登录后可在 **主数据** 页面上传组织架构 XLSX，或手动添加成员。
-3. **增加分类**：管理员可在文库左侧“知识库目录”点击 `+` 按钮直接新增分类种类。
+- **Windows**: 运行根目录下的 `start_manual.bat`（启动前后端）和 `stop_manual.bat`（停止服务）；或使用 `sources/bin/Windows/` 下的脚本。
+- **Linux**: 运行 `sources/bin/Linux/start.sh` 和 `stop.sh`。
 
-## 手动部署（Windows）
+## ⚙️ 初次使用与配置
+- **初始超管账号**：默认管理员账号为 `admin`，密码为 `123456`。
+- **主数据导入**：首次登录后，请导航至 “主数据管理 (Master Data)”，上传组织架构表格（包含部门、岗位、员工信息的 XLSX 文件）或手动添加成员。
+- **空间与分类管理**：管理员/经理可以直接在左侧边栏（Library）点击 `+` 按钮，快速创建和管理新的知识空间。
 
-项目根目录下提供了一键启动脚本：
-- **`start_manual.bat`** - 同时启动前后端服务。
-- **`stop_manual.bat`** - 停止所有 EDMS 相关服务。
+## 📡 核心 API 概览
+- `GET /api/documents?scope=all|mine|collab` — 多维度查询文档列表（全部/我的/协作）。
+- `GET /api/documents/tree` — 获取层级目录结构（支持空间视图和部门视图）。
+- `PATCH /api/documents/:id` — 更新文档元数据。支持通过 `space_ids`（列表）进行批量空间关联。
+- `POST /api/documents/batch-move` — 批量管理分类。使用 `append: true` 支持增量追加空间。
+- `GET /api/documents/:id/diff` — 获取文档历史版本的差异对比数据。
+- `POST /api/spaces` — 管理员/空间负责人创建新知识空间的端点。
 
-## 文档
+## 📚 文档说明
+如需深入了解系统架构或查阅用户手册，请参考以下文档（同时提供 Markdown 与 PDF 版本）：
 
-- [docs/architecture.md](docs/architecture.zh-CN.md) — 架构与数据流
-- [docs/user-guide.md](docs/user-guide.zh-CN.md) — 用户操作指南
+- **用户指南**: [sources/docs/user-guide.zh-CN.md](sources/docs/user-guide.zh-CN.md)
+- **技术文档**: [sources/docs/technical-documentation/technical-documentation.zh-CN.md](sources/docs/technical-documentation/technical-documentation.zh-CN.md)
+- **部署指南**: [sources/docs/deployment-guide/deployment-guide.zh-CN.md](sources/docs/deployment-guide/deployment-guide.zh-CN.md)
 
-## 许可证
-
-MIT (参阅 [LICENSE](LICENSE))
+## 📄 许可证
+本项目采用 MIT 许可证。详情请参阅项目中的 [LICENSE](LICENSE) 文件。

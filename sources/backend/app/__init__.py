@@ -139,7 +139,7 @@ def create_app(config_class=Config):
                         is_manager=True,
                         registration_status='active'
                     )
-                    admin.set_password('123')
+                    admin.set_password('123456')
                     db.session.add(admin)
                     db.session.commit()
                     print("[Bootstrap] Admin user created.")
