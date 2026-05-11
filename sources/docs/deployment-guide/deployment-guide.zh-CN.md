@@ -1,238 +1,99 @@
 # EDMS 系统部署手册
 
-本手册供系统管理员进行 EDMS（电子文档管理系统）的安装部署操作。
-
-## 目录
-
-1. [系统要求](#系统要求)
-2. [部署步骤](#部署步骤)
-3. [配置指南](#配置指南)
-4. [部署后验证](#部署后验证)
-5. [故障排查](#故障排查)
-6. [维护操作](#维护操作)
+本手册供系统管理员进行 EDMS（电子文档管理系统）的安装部署操作。当前架构基于 **MySQL 8.0+** 并集成了 AI 与 WebSocket 服务。
 
 ---
 
-## 系统要求
+## 1. 系统要求
 
-### 硬件要求
-
+### 1.1 硬件要求
 | 组件 | 最低配置 | 推荐配置 |
-|------|----------|----------|
-| CPU | 2 核 | 4 核 |
-| 内存 | 2 GB | 4 GB |
-| 磁盘空间 | 5 GB | 20 GB |
-| 网络 | 100 Mbps | 1 Gbps |
+| :--- | :--- | :--- |
+| CPU | 2 核 | 4 核+ |
+| 内存 | 4 GB | 8 GB+ |
+| 磁盘空间 | 20 GB | 50 GB+ |
 
-### 软件要求
-
-- Docker 20.10+
-- Docker Compose 2.0+
-
-### 支持的操作系统
-
-- 支持主流 Windows、Linux 及所有可以正常安装 Docker 的 X86 架构系统
+### 1.2 软件要求
+- **容器引擎**：Docker 20.10+ 及 Docker Compose 2.0+ (容器化部署必备)。
+- **数据库**：**MySQL 8.0+** (必须支持 `utf8mb4` 字符集)。
+- **操作系统**：Windows、Linux (Ubuntu/CentOS) 或 macOS。
 
 ---
 
-## 部署步骤
+## 2. 部署步骤
 
-### 步骤 1：解压部署包
+### 步骤 1：准备环境
+1. **解压部署包**。
+2. **编辑配置**：在 `sources/docker/.env` 或启动目录创建 `.env` 文件。
 
-1. **下载部署包** (`edms-deployment.zip`)
-2. **解压到合适目录**：
-   - Windows：右键选择"全部提取"
-   - Linux/macOS：使用 `unzip edms-deployment.zip` 命令
+### 步骤 2：启动服务
 
-### 步骤 2：安装 Docker
+#### 【选项 A：Docker 一键部署（推荐）】
+1. **进入目录**：`cd sources/docker`。
+2. **启动**：
+   - Windows: 运行 `build.bat`。
+   - Linux: 运行 `./build.sh`。
+   - 或者手动执行：`docker-compose up -d --build`。
 
-- **Windows**：从官方网站安装 Docker Desktop
-- **Linux**：按照官方 Docker 安装指南操作
-- **验证安装**：
-  ```bash
-  docker --version
-  docker-compose --version
+#### 【选项 B：手动本地部署】
+1. **MySQL 初始化**：
+   ```sql
+   CREATE DATABASE edms_db CHARSET utf8mb4;
+   ```
+2. **后端启动**：
+   ```bash
+   cd sources/backend
+   pip install -r requirements.txt
+   pip install pymysql
+   python wsgi.py
+   ```
+3. **前端启动**：
+   ```bash
+   cd sources/frontend
+   npm install
+   npm run dev
+   ```
+
+---
+
+## 3. 配置指南 (.env 环境变量)
+
+您必须正确配置 `.env` 文件，特别是数据库连接串：
+
+| 变量名 | 说明 | 示例值 |
+| :--- | :--- | :--- |
+| WEB_PORT | 系统访问端口 | 80 |
+| DATABASE_URL | MySQL 连接串 | mysql+pymysql://root:123456@db:3306/edms_db?charset=utf8mb4 |
+| JWT_SECRET_KEY | 令牌签名密钥 | production-secure-key |
+| AI_API_KEY | 大模型 API Key | sk-xxxxxx |
+
+*注意：`DATABASE_URL` 必须包含 `charset=utf8mb4` 以支持复杂富文本。*
+
+---
+
+## 4. 故障排查
+
+### 4.1 数据库连接失败
+- **检查驱动**：确保 URL 以 `mysql+pymysql://` 开头。
+- **权限问题**：确保 MySQL 允许远程连接且账号密码正确。
+- **编码报错**：确保数据库默认字符集为 `utf8mb4`。
+
+### 4.2 实时协同断连 (WebSocket)
+- 如果前端通过 Nginx 转发，请确保配置了以下 Header：
+  ```nginx
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "Upgrade";
   ```
 
-### 步骤 3：启动服务
-
-#### Windows
-
-1. **以管理员身份打开命令提示符**
-2. **导航到 bin 目录**：
-   ```cmd
-   cd path\to\edms-deployment\bin\Windows
-   ```
-3. **启动服务**：
-   ```cmd
-   start.bat
-   ```
-
-#### Linux/macOS
-
-1. **打开终端**
-2. **导航到 bin 目录**：
-   ```bash
-   cd path/to/edms-deployment/bin/Linux
-   ```
-3. **添加执行权限**：
-   ```bash
-   chmod +x *.sh
-   ```
-4. **启动服务**：
-   ```bash
-   ./start.sh
-   ```
-
-### 步骤 4：停止服务
-
-#### Windows
-
-```cmd
-stop.bat
-```
-
-#### Linux/macOS
-
-```bash
-./stop.sh
-```
-
 ---
 
-## 配置指南
+## 5. 维护与备份
 
-### 环境变量
-
-您可以通过编辑 `bin/.env` 文件来自定义部署：
-
-| 变量名 | 说明 | 默认值 | 是否必填 |
-|--------|------|--------|----------|
-| `WEB_PORT` | Web 服务端口 | 80 | 是 |
-| `JWT_SECRET_KEY` | JWT 签名密钥 | 自动生成 | 是 |
-| `CORS_ORIGINS` | 允许的 CORS 来源 | http://localhost | 否 |
-| `DATABASE_URL` | 数据库连接字符串 | sqlite:///app/data/edms.db | 否 |
-
-**配置示例**：
-```env
-# 自定义 web 端口
-WEB_PORT=8080
-
-# 自定义 JWT 密钥（生产环境推荐）
-JWT_SECRET_KEY=your-secure-secret-key-here
-
-# 允许多个来源
-CORS_ORIGINS=http://localhost,http://your-domain.com
-```
-
-### 数据持久化
-
-所有持久化数据存储在 `bin/data/` 目录：
-- `bin/data/backend/` - 应用数据和 SQLite 数据库
-
-**重要**：定期备份此目录以防止数据丢失。
-
----
-
-## 部署后验证
-
-1. **服务状态检查**
-   ```bash
-   docker ps
-   ```
-
-2. **日志验证**
-   ```bash
-   # Windows
-   docker-compose -f bin\docker-compose.yml logs -f
-   
-   # Linux/macOS
-   docker compose -f bin/docker-compose.yml logs -f
-   ```
-
-3. **前端访问测试**
-   - 打开浏览器访问 http://localhost
-   - 验证登录页面是否正常加载
-
----
-
-## 故障排查
-
-### 端口已被占用
-
-**错误**：`Port 80 is already in use`
-
-**解决方案**：
-1. 编辑 `bin/.env` 文件
-2. 将 `WEB_PORT` 改为可用端口（如 8080）
-3. 重启服务
-
-### 容器启动失败
-
-**查看日志**：
+### 5.1 数据库备份
+定期使用 `mysqldump` 备份数据：
 ```bash
-docker logs edms-backend
-docker logs edms-frontend
+docker exec edms-mysql mysqldump -u root -p'password' edms_db > backup.sql
 ```
 
-**常见原因**：
-- 磁盘空间不足
-- 内存限制
-- 端口冲突
-
-### 数据库连接问题
-
-**解决方案**：
-1. 验证数据目录权限
-2. 检查数据库文件完整性
-3. 查看后端日志获取具体错误
-
----
-
-## 维护操作
-
-### 查看日志
-
-```bash
-# Windows
-docker-compose -f bin\docker-compose.yml logs -f
-
-# Linux/macOS
-docker compose -f bin/docker-compose.yml logs -f
-```
-
-### 重启服务
-
-```bash
-# Windows
-docker-compose -f bin\docker-compose.yml restart
-
-# Linux/macOS
-docker compose -f bin/docker-compose.yml restart
-```
-
-### 备份数据
-
-```bash
-# 先停止服务
-./Linux/stop.sh  # 或 Windows\stop.bat
-
-# 备份数据目录
-tar -czvf edms-backup-$(date +%Y%m%d).tar.gz bin/data/
-
-# 重启服务
-./Linux/start.sh  # 或 Windows\start.bat
-```
-
-### 更新部署
-
-1. **备份现有数据**
-2. **停止服务**
-3. **解压新版本覆盖现有文件**
-4. **启动服务**
-
----
-
-## 支持与反馈
-
-如需技术支持，请联系系统管理员或开发团队。
+### 5.2 文件资产备份
+请同步备份存放上传附件及区块链账本的持久化存储目录（通常为 `data/` 目录）。
