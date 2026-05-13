@@ -16,6 +16,12 @@
           style="margin-left: 12px;">
           {{ t('editor.blockchainVerify') }}
         </el-button>
+        <el-tag v-if="meta.category && meta.category !== '未分类'" type="info" size="small" style="margin-left:8px;">
+          {{ meta.category }}
+        </el-tag>
+        <el-tooltip v-if="meta.summary" :content="meta.summary" placement="bottom">
+          <el-icon style="margin-left: 8px; color: var(--el-text-color-secondary); cursor: pointer;"><InfoFilled /></el-icon>
+        </el-tooltip>
       </div>
       
       <div class="header-right">
@@ -264,10 +270,15 @@
               <!-- AI Tags Section -->
               <div class="ai-tags-section">
                 <div class="section-title">
-                   <span>🏷️ {{ t("editor.ai.aiTags") }}</span>
-                   <el-button link type="primary" size="small" @click="runAutoTag" :loading="tagging">
-                     {{ t("editor.ai.aiActionAutoTag") }}
-                   </el-button>
+                   <span>🏷️ {{ t("editor.ai.aiTags") }} / 检查</span>
+                   <div style="display:flex; gap:4px;">
+                     <el-button link type="warning" size="small" @click="runLogicCheck" :loading="checkingLogic">
+                       逻辑检查
+                     </el-button>
+                     <el-button link type="primary" size="small" @click="runAutoTag" :loading="tagging">
+                       {{ t("editor.ai.aiActionAutoTag") }}
+                     </el-button>
+                   </div>
                 </div>
                 <div class="tags-container">
                   <el-tag v-for="tag in aiTags" :key="tag" size="small" round effect="plain" class="ai-tag">
@@ -540,7 +551,7 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { ArrowDown, Back, Right, MagicStick, Microphone, Finished, Fold, Expand, ChatDotSquare, Collection } from "@element-plus/icons-vue";
+import { ArrowDown, Back, Right, MagicStick, Microphone, Finished, Fold, Expand, ChatDotSquare, Collection, InfoFilled } from "@element-plus/icons-vue";
 
 import { FontSize, LineHeight, Indent, CommentMark, TableExit, SearchAndReplace } from "@/utils/tiptapExtensions";
 import api from "@/api/client";
@@ -914,6 +925,24 @@ async function runAutoTag() {
     console.error("Auto-tag failed:", err);
   } finally {
     tagging.value = false;
+  }
+}
+
+const checkingLogic = ref(false);
+async function runLogicCheck() {
+  checkingLogic.value = true;
+  try {
+    const response = await api.post("/ai/check-logic", { doc_id: docId.value, ai_model: aiStore.selectedModel });
+    if (response.data?.data) {
+      aiStore.addMessage('editor', 'user', "请检查本文档的前后逻辑一致性。");
+      aiStore.addMessage('editor', 'ai', response.data.data);
+      scrollToBottom();
+    }
+  } catch (err) {
+    console.error("Logic check failed:", err);
+    ElMessage.error("逻辑检查请求失败");
+  } finally {
+    checkingLogic.value = false;
   }
 }
 

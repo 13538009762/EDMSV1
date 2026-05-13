@@ -113,6 +113,7 @@
               <el-button type="info" :icon="Lock" plain @click="batchShare(false)">{{ t('common.unshare') }}</el-button>
               <el-button type="success" :icon="Folder" plain @click="showMove = true">{{ t('library.moveToSpace', 'Move to Space') }}</el-button>
               <el-button type="info" :icon="Close" plain @click="batchClearSpace">{{ t('library.clearSpaces', 'Clear Categories') }}</el-button>
+              <el-button type="primary" :icon="ChatDotRound" plain @click="showMultiQa = true">{{ t('library.multiDocQa', '多文档 QA') }}</el-button>
               <el-divider direction="vertical" />
             </div>
   
@@ -305,6 +306,11 @@
       v-model="showCreateSpace"
       @saved="loadTree"
     />
+
+    <MultiDocQaDialog
+      v-model="showMultiQa"
+      :doc-ids="selectedIds"
+    />
   </div>
 </template>
 
@@ -319,7 +325,8 @@ import type { UploadRawFile } from "element-plus";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
 import DocumentMoveDialog from "@/components/DocumentMoveDialog.vue";
 import SpaceCreateDialog from "@/components/SpaceCreateDialog.vue";
-import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock, Close } from "@element-plus/icons-vue";
+import MultiDocQaDialog from "@/components/MultiDocQaDialog.vue";
+import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock, Close, ChatDotRound } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 import { Editor } from "@tiptap/vue-3";
@@ -363,6 +370,7 @@ const selectedIds = ref<number[]>([]);
 const deptOptions = ref<any[]>([]);
 const showMove = ref(false);
 const showCreateSpace = ref(false);
+const showMultiQa = ref(false);
 
 async function batchClearSpace() {
   if (selectedIds.value.length === 0) return;
@@ -698,17 +706,17 @@ async function onImportPdf(file: UploadRawFile) {
 }
 
 async function onImportImage(file: any) {
-  const loadingInstance = ElLoading.service({ text: 'AI 正在识别并排版...', background: 'rgba(0, 0, 0, 0.7)' });
+  const loadingInstance = ElLoading.service({ text: t('library.importImageLoading', 'AI 正在识别并排版...'), background: 'rgba(0, 0, 0, 0.7)' });
   try {
     const formData = new FormData();
     formData.append('file', file);
     const { data } = await api.post('/ai/import-image', formData);
     if (data.code === 200) {
-      ElMessage.success('识别成功');
+      ElMessage.success(t('library.importImageSuccess', '识别成功'));
       router.push({ name: 'editor', params: { id: data.data.document_id } });
     }
   } catch (err: any) {
-    ElMessage.error(err.response?.data?.error || '识别失败');
+    ElMessage.error(err.response?.data?.error || t('library.importImageFailed', '识别失败'));
   } finally {
     loadingInstance.close();
   }

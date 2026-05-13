@@ -140,6 +140,10 @@ export default {
   },
 
   library: {
+    importImage: "AI Vision Filing",
+    importImageLoading: "AI is recognizing and formatting...",
+    importImageSuccess: "Recognition successful",
+    importImageFailed: "Recognition failed",
     newDoc: "New document",
     importDocx: "Import DOCX",
     importDocxSuccess: "DOCX imported successfully",

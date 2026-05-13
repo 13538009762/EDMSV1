@@ -33,10 +33,72 @@ from app.services.document_access import (
 )
 from app.services.document_state import VALID_STATUSES
 from app.services.export_service import export_docx_bytes, export_pdf_bytes
+from app.services.ai_service import AIService
+from app.services.vector_store import upsert_document
 from app.utils.auth import current_user
 from app.utils.audit import audit_log_required
+from app.utils.background import run_in_background
+
+from app.utils.text import extract_text_from_tiptap
 
 bp = Blueprint("documents", __name__)
+
+# Cooldown tracker: doc_id -> last update epoch time
+# Prevents AI metadata from being triggered on every autosave (every 2s)
+_metadata_cooldown: dict = {}  # {doc_id: last_run_timestamp}
+_METADATA_COOLDOWN_SECONDS = 300  # 5 minutes
+
+def _trigger_metadata_update(app, doc_id: int):
+    """Background task to generate metadata and update vector DB."""
+    import time
+    now = time.time()
+    last_run = _metadata_cooldown.get(doc_id, 0)
+    if now - last_run < _METADATA_COOLDOWN_SECONDS:
+        print(f"[Background] Skipping metadata update for doc {doc_id} (cooldown: {int(_METADATA_COOLDOWN_SECONDS - (now - last_run))}s remaining)")
+        return
+    _metadata_cooldown[doc_id] = now
+
+    with app.app_context():
+        doc = db.session.get(Document, doc_id)
+        if not doc or not doc.current_version:
+            db.session.remove()
+            return
+        
+        # 1. Extract text
+        ver = doc.current_version
+        text_content = ""
+        doc_title = doc.title
+        if doc.doc_type == "pdf" and ver.file_path:
+            # We can't easily read PDF text here unless we have PyMuPDF, so we just use the title or fake it
+            text_content = doc_title
+        else:
+            try:
+                cj = json.loads(ver.content_json) if isinstance(ver.content_json, str) else ver.content_json
+                text_content = extract_text_from_tiptap(cj)
+            except Exception:
+                text_content = doc_title
+                
+        # 🔑 IMPORTANT: Release DB connection back to the pool before slow network IO!
+        db.session.remove()
+                
+        # 2. Vector DB Upsert
+        if text_content:
+            upsert_document(doc_id, doc_title, text_content)
+            
+            # 3. AI Metadata (Summary, Tags) -> This takes 10+ seconds
+            meta = AIService.generate_metadata(text_content)
+            
+            # Re-fetch document in a new, brief transaction
+            doc_update = db.session.get(Document, doc_id)
+            if doc_update:
+                doc_update.summary = meta.get("summary", "")
+                doc_update.tags = meta.get("tags", "")
+                doc_update.category = meta.get("category", "")
+                db.session.commit()
+                print(f"[Background] Updated metadata for doc {doc_id}")
+            
+            db.session.remove()
+
 
 
 def _doc_to_summary(doc: Document, user: User) -> dict:
@@ -414,6 +476,11 @@ def create_document():
         db.session.flush()
         doc.current_version_id = ver.id
         db.session.commit()
+        
+        # Trigger background updates
+        from flask import current_app
+        app_obj = current_app._get_current_object()
+        run_in_background(_trigger_metadata_update, app_obj, doc.id)
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to create document: {str(e)}"}), 500
@@ -595,6 +662,12 @@ def put_content(doc_id: int):
     doc.updated_at = datetime.utcnow()
     try:
         db.session.commit()
+        
+        # Trigger background updates
+        from flask import current_app
+        app_obj = current_app._get_current_object()
+        run_in_background(_trigger_metadata_update, app_obj, doc.id)
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Autosave failed: {str(e)}"}), 500

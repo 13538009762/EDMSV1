@@ -12,6 +12,9 @@ from app.services.approval_service import apply_decision
 from app.services.document_access import user_can_view_document
 from sqlalchemy import text
 from app.utils.auth import current_user
+from app.models.document import DocumentVersion
+from app.utils.text import extract_text_from_tiptap
+import json
 
 bp = Blueprint("approvals", __name__)
 
@@ -79,6 +82,7 @@ def inbox():
         items.append(
             {
                 "participant_id": display_participant.id,
+                "flow_id": flow.id,
                 "document_id": doc.id if doc else None,
                 "doc_number": doc.doc_number if doc else None,
                 "title": title,
@@ -278,3 +282,53 @@ def recall():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+@bp.get("/<int:flow_id>/ai-summary")
+@jwt_required()
+def ai_summary(flow_id: int):
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    flow = db.session.get(ApprovalFlow, flow_id)
+    if not flow:
+        return jsonify({"error": "Flow not found"}), 404
+        
+    # Check if user has access to this flow (admin, owner, or participant)
+    has_access = False
+    if user.login_name == 'admin':
+        has_access = True
+    elif flow.document and flow.document.owner_id == user.id:
+        has_access = True
+    else:
+        for p in flow.participants:
+            if p.user_id == user.id:
+                has_access = True
+                break
+                
+    if not has_access:
+        return jsonify({"error": "Forbidden"}), 403
+        
+    opinions = []
+    for p in flow.participants:
+        if p.decision:
+            user_name = p.user.display_name() if p.user else "Unknown"
+            opinions.append(f"【{user_name}】{p.decision.decision}: {p.decision.reason}")
+            
+    opinions_text = "\n".join(opinions) if opinions else "暂无审批意见。"
+    
+    # Extract document content
+    doc_text = ""
+    if flow.document and flow.document.current_version_id:
+        ver = db.session.get(DocumentVersion, flow.document.current_version_id)
+        if ver and ver.content_json:
+            try:
+                cj = json.loads(ver.content_json) if isinstance(ver.content_json, str) else ver.content_json
+                doc_text = extract_text_from_tiptap(cj)
+            except Exception:
+                pass
+
+    from app.services.ai_service import AIService
+    result = AIService.summarize_opinions(opinions_text, doc_text=doc_text)
+    
+    return jsonify({"code": 200, "data": result})

@@ -27,5 +27,10 @@ sources/docker/data/
 sources/backend/static/images/
 sources/backend/scratch/
 
-# temp gitignore
+# Data and Caches
+sources/backend/app/qdrant_data/
+tool_caches/
 install/
+.gemini/
+*.log
+.lock

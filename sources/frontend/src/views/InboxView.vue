@@ -30,7 +30,12 @@
             <el-table-column type="expand">
               <template #default="{ row }">
                 <div class="progress-details">
-                  <h4>{{ t("inbox.progressDetails") }}</h4>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0;">{{ t("inbox.progressDetails") }}</h4>
+                    <el-button size="small" type="primary" plain :icon="MagicStick" @click="getAiSummary(row.flow_id)" :loading="summarizing[row.flow_id]">
+                      ✨ AI 智能总结
+                    </el-button>
+                  </div>
                   <div class="initiator-info">
                     <strong>{{ t("inbox.initiator") }}:</strong> {{ row.initiator_name }}
                   </div>
@@ -131,7 +136,12 @@
             <el-table-column type="expand">
               <template #default="{ row }">
                 <div class="progress-details">
-                  <h4>{{ t("inbox.progressDetails") }}</h4>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0;">{{ t("inbox.progressDetails") }}</h4>
+                    <el-button size="small" type="primary" plain :icon="MagicStick" @click="getAiSummary(row.flow_id)" :loading="summarizing[row.flow_id]">
+                      ✨ AI 智能总结
+                    </el-button>
+                  </div>
                   <div class="initiator-info">
                     <strong>{{ t("inbox.initiator") }}:</strong> {{ row.initiator_name }}
                   </div>
@@ -232,16 +242,23 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- AI Summary Dialog -->
+    <el-dialog v-model="summaryDlg" title="✨ AI 审批意见总结" width="500px">
+      <div v-if="currentSummary" class="markdown-body" v-html="currentSummary"></div>
+      <div v-else>正在生成总结...</div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, reactive } from "vue";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Refresh, Search, Message } from "@element-plus/icons-vue"; // 引入图标
+import { Refresh, Search, Message, MagicStick } from "@element-plus/icons-vue"; // 引入图标
 import { formatLocalDate } from "@/utils/date";
+import { marked } from "marked";
 
 const { t } = useI18n();
 const activeTab = ref("pending");
@@ -301,6 +318,7 @@ interface Participant {
 
 interface InboxRow {
   participant_id: number;
+  flow_id: number;
   document_id: number;
   title: string;
   initiator_name: string;
@@ -396,10 +414,37 @@ function confirmReject() {
   rejectDlg.value = false;
 }
 
+const summaryDlg = ref(false);
+const currentSummary = ref("");
+const summarizing = reactive<Record<number, boolean>>({});
+
+async function getAiSummary(flowId: number) {
+  if (!flowId) return;
+  summarizing[flowId] = true;
+  summaryDlg.value = true;
+  currentSummary.value = "";
+  try {
+    const { data } = await api.get(`/approvals/${flowId}/ai-summary`);
+    if (data.code === 200) {
+      currentSummary.value = await marked.parse(data.data);
+    }
+  } catch (err) {
+    currentSummary.value = "生成摘要失败，请重试。";
+  } finally {
+    summarizing[flowId] = false;
+  }
+}
+
 onMounted(load);
 </script>
 
 <style scoped>
+/* Base Markdown styles */
+.markdown-body :deep(p) { margin: 0 0 10px; }
+.markdown-body :deep(p:last-child) { margin-bottom: 0; }
+.markdown-body :deep(ul), .markdown-body :deep(ol) { margin-top: 0; padding-left: 20px; }
+.markdown-body :deep(pre) { background: #f6f8fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+.markdown-body :deep(code) { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
 .page-wrapper {
   padding: 0 0 40px;
 }

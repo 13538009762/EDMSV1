@@ -221,8 +221,13 @@ class AIService:
                 
                 # Log to history store (which prints to console)
                 if formatted_messages and formatted_messages[-1]['role'] == 'user':
-                    user_id = current_user.id if current_user else 0
-                    user_login = current_user.login_name if current_user else "guest"
+                    if isinstance(current_user, dict):
+                        user_id = current_user.get('id', 0)
+                        user_login = current_user.get('login_name', 'guest')
+                    else:
+                        user_id = current_user.id if current_user else 0
+                        user_login = current_user.login_name if current_user else "guest"
+                        
                     ai_history_store.add_conversation(
                         user_id=user_id,
                         user_name=user_login,
@@ -461,8 +466,85 @@ class AIService:
     def process_meeting_audio(audio_file):
         time.sleep(3)
         original_text = "讨论了项目 A 的进度。小李负责后端，下周五交付。小张负责前端，下周三交付。"
-        summary_markdown = """### 会议纪要\n- **后端**: 下周五交付 (负责人: 小李)\n- **前端**: 下周三交付 (负责人: 小张)"""
+        summary_markdown = "### 会议纪要\n- **后端**: 下周五交付 (负责人: 小李)\n- **前端**: 下周三交付 (负责人: 小张)"
         return {
             "original_text": original_text,
             "summary_markdown": summary_markdown
         }
+
+    @staticmethod
+    def generate_metadata(text: str, ai_model='spark-lite'):
+        """Extract summary, tags and category from text."""
+        if not text or len(text.strip()) < 10:
+            return {"summary": "", "tags": "", "category": "未分类"}
+            
+        client = AIService.get_client(ai_model)
+        model_name = "deepseek-chat" if ai_model == 'deepseek' else "lite"
+        
+        system_msg = "你是一个文档分析助手。请分析提供的文本内容，提取摘要(summary)、标签(tags, 逗号分隔的字符串, 最多5个)和分类(category)。请务必只返回一个纯JSON对象，格式如下：{\"summary\": \"...\", \"tags\": \"tag1,tag2\", \"category\": \"...\"}"
+        user_msg = f"文本内容：\n{text[:3000]}" # Limit text length to avoid token limits
+        
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg}
+                ],
+                response_format={"type": "json_object"} if ai_model == 'deepseek' else None
+            )
+            content = response.choices[0].message.content
+            
+            # Clean up potential markdown JSON wrapping
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            
+            import json as _json
+            return _json.loads(content.strip())
+        except Exception as e:
+            print(f"[AI Service] Metadata Generation Error: {e}")
+            return {"summary": "无法生成摘要", "tags": "未提取", "category": "未分类"}
+
+    @staticmethod
+    def check_logic(text: str, ai_model='spark-lite'):
+        """Check text for logical inconsistencies."""
+        client = AIService.get_client(ai_model)
+        model_name = "deepseek-chat" if ai_model == 'deepseek' else "lite"
+        
+        system_msg = "你是一个严谨的文档审查助手。请检查下面文档内容中是否存在前后矛盾、逻辑不严密或遗漏的地方。如果发现问题，请分点列出具体的矛盾点和改进建议；如果逻辑严密无明显矛盾，请回复“文档逻辑连贯，未发现明显矛盾点。”"
+        user_msg = f"### 文档内容 ###\n{text[:5000]}\n### 结束 ###"
+        
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg}
+                ]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"逻辑检查失败: {str(e)}"
+
+    @staticmethod
+    def summarize_opinions(opinions_text: str, doc_text: str = "", ai_model='spark-lite'):
+        """Summarize document content and approval opinions."""
+        client = AIService.get_client(ai_model)
+        model_name = "deepseek-chat" if ai_model == 'deepseek' else "lite"
+        
+        system_msg = "你是一个审批流总结助手。请结合提供的【文档内容】和【各方审批意见】，生成一份综合摘要。要求包括：1. 文档核心内容概括；2. 审批意见要点总结；3. 后续修改建议。要求结构清晰，直击要点。"
+        user_msg = f"### 文档内容 ###\n{doc_text[:2000]}\n\n### 审批意见记录 ###\n{opinions_text}\n### 结束 ###"
+        
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg}
+                ]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"生成摘要失败: {str(e)}"
