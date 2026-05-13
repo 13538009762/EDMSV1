@@ -5,8 +5,14 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
 # Determine storage path
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-qdrant_path = os.path.join(base_dir, "qdrant_data")
+storage_root = os.environ.get("STORAGE_PATH")
+if storage_root:
+    # If in Docker/Prod, use the persistent storage path
+    qdrant_path = os.path.join(storage_root, "qdrant_data")
+else:
+    # Local development fallback
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    qdrant_path = os.path.join(base_dir, "qdrant_data")
 
 # Initialize Qdrant Client (Local Mode)
 # It will automatically use fastembed if we call add() or we can manage embeddings manually.
