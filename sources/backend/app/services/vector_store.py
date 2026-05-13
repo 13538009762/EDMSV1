@@ -32,42 +32,95 @@ def init_collection():
     try:
         # Check if collection exists
         if not client.collection_exists(COLLECTION_NAME):
-            # fastembed automatically configure vectors if we use client.create_collection with fastembed
-            # But qdrant_client.create_collection can be called directly or just let add() do it
+            # Create collection with default vector params if needed (usually handled by client.add)
             pass
+            
+        # 💡 Add Full-Text Index for BM25-like keyword search
+        from qdrant_client import models
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="document",
+            field_schema=models.TextIndexParams(
+                type="text",
+                tokenizer=models.TokenizerType.MULTILINGUAL,
+                min_token_len=2,
+                lowercase=True,
+            )
+        )
+        # Also index doc_id for fast filtering
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="doc_id",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
     except Exception as e:
         print(f"[VectorStore] Init collection error: {e}")
 
 # Call init
 init_collection()
 
-def chunk_text(text: str, max_chunk_size: int = 500) -> List[str]:
-    """Simple text chunker by paragraphs and sentences."""
+def chunk_text(text: str, max_chunk_size: int = 800) -> List[str]:
+    """
+    Advanced Markdown-aware chunker.
+    Splits by headings (H1-H6) first, then by paragraphs.
+    Maintains semantic independence by including the heading in each chunk.
+    """
     if not text:
         return []
+
+    # 1. Split by Markdown headings (lines starting with #)
+    # We use a regex that captures the heading and the following text
+    parts = re.split(r'(^#{1,6}\s+.*$)', text, flags=re.MULTILINE)
     
-    # Split by double newline (paragraphs)
-    paragraphs = re.split(r'\n\s*\n', text)
-    chunks = []
-    current_chunk = ""
+    sections = []
+    current_heading = "正文"
     
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
+    # re.split with capturing groups returns the matches as well
+    for part in parts:
+        part = part.strip()
+        if not part:
             continue
         
-        if len(current_chunk) + len(para) <= max_chunk_size:
-            current_chunk += "\n" + para if current_chunk else para
+        if part.startswith('#'):
+            current_heading = part
         else:
-            if current_chunk:
-                chunks.append(current_chunk)
-            # If a single paragraph is too large, just append it (or further split by sentences)
-            current_chunk = para
+            sections.append({
+                "heading": current_heading,
+                "content": part
+            })
             
-    if current_chunk:
-        chunks.append(current_chunk)
+    # Handle case where there are no headings
+    if not sections and text:
+        sections.append({"heading": "", "content": text})
+
+    final_chunks = []
+    for sec in sections:
+        heading = sec["heading"]
+        content = sec["content"]
         
-    return chunks
+        # Split section content into paragraphs
+        paragraphs = re.split(r'\n\s*\n', content)
+        
+        current_chunk = heading + "\n" if heading else ""
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+                
+            # If adding this paragraph exceeds limit, push current chunk and start new
+            if len(current_chunk) + len(para) > max_chunk_size:
+                if current_chunk.strip() and current_chunk != (heading + "\n"):
+                    final_chunks.append(current_chunk.strip())
+                
+                # Start new chunk with heading for context
+                current_chunk = (heading + "\n" if heading else "") + para
+            else:
+                current_chunk += "\n\n" + para if current_chunk and current_chunk != (heading + "\n") else para
+        
+        if current_chunk.strip():
+            final_chunks.append(current_chunk.strip())
+            
+    return final_chunks
 
 def upsert_document(doc_id: int, title: str, text_content: str):
     """

@@ -134,6 +134,16 @@
           <div class="blockchain-status-tag info">NETWORK</div>
         </el-card>
       </el-col>
+      <el-col :xs="12" :sm="8" :md="4">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-purple">
+          <div class="kpi-icon ai"><el-icon><MagicStick /></el-icon></div>
+          <div class="kpi-info">
+            <div class="kpi-label">{{ t('dashboard.aiTotalInteractions') }}</div>
+            <div class="kpi-value clickable" @click="$router.push({ name: 'aiHistory' })">{{ aiStats.total_interactions }}</div>
+          </div>
+          <div class="blockchain-status-tag purple">SMART</div>
+        </el-card>
+      </el-col>
     </el-row>
 
     <el-row :gutter="20" class="chart-row" v-if="!loading">
@@ -265,6 +275,33 @@
             </div>
           </template>
           <v-chart class="echart-container" :option="lineOption" autoresize />
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- AI 智能能力审计板块 -->
+    <div v-if="!loading && isAdmin" class="section-title cyber" style="margin-top: 20px;">
+      <el-icon><MagicStick /></el-icon> {{ t('dashboard.aiInteractionTitle') }}
+    </div>
+    <el-row :gutter="20" class="chart-row" v-if="!loading && isAdmin">
+      <el-col :span="24">
+        <el-card shadow="hover" class="chart-card ai-audit-card">
+          <template #header>
+            <div class="card-header">
+              <span>{{ t('dashboard.aiModelDistribution') }}</span>
+              <el-button link :icon="FullScreen" @click="zoomWidget('aiModelDistribution')" />
+            </div>
+          </template>
+          <div class="ai-stats-content">
+            <div class="ai-chart-wrapper">
+              <v-chart class="echart-container ai-pie" :option="aiModelOption" autoresize />
+            </div>
+            <div class="ai-summary-text">
+              <p>系统当前已集成 <strong>DeepSeek-V3</strong> 与 <strong>讯飞星火 Spark-Lite</strong> 大语言模型。</p>
+              <p>智能助手已协助用户完成了 <strong>{{ aiStats.total_interactions }}</strong> 次任务，涵盖文档总结、自动标号、审批辅助等核心场景。</p>
+              <el-button type="primary" size="small" @click="$router.push({ name: 'aiHistory' })">进入 AI 审计中心查看详情</el-button>
+            </div>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -455,7 +492,7 @@ import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { 
   Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen,
-  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Star, StarFilled
+  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Star, StarFilled, MagicStick
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { formatLocalDate } from "@/utils/date";
@@ -510,6 +547,7 @@ const storageInfo = ref<{ total_size_mb: number; by_type: StorageItem[] }>({ tot
 const heatmapData = ref<any[]>([]);
 const myStats = ref({ docs: 0, pending: 0 });
 const blockchainStats = ref({ on_chain_count: 0, tamper_alerts: 0, block_height: 15000 });
+const aiStats = ref({ total_interactions: 0, model_distribution: [] as any[] });
 const blockchainHistory = ref<any[]>([]);
 const securityAlerts = ref<any[]>([]);
 
@@ -607,6 +645,7 @@ const zoomedOption = computed(() => {
     if (zoomedWidget.value === 'statusDistribution') return statusDistributionOption.value;
     if (zoomedWidget.value === 'storageBreakdown') return storageOption.value;
     if (zoomedWidget.value === 'activityHeatmap') return heatmapOption.value;
+    if (zoomedWidget.value === 'aiModelDistribution') return aiModelOption.value;
     return {};
 });
 
@@ -643,6 +682,37 @@ const statusDistributionOption = computed(() => {
           fontSize: 11
         },
         labelLine: { length: 10, length2: 5 }
+      },
+    ],
+  };
+});
+
+const aiModelOption = computed(() => {
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: "item", confine: true },
+    legend: { 
+      orient: 'vertical',
+      right: '10%', 
+      top: 'center',
+      textStyle: { fontSize: 12 } 
+    },
+    series: [
+      {
+        name: t('dashboard.aiModelDistribution'),
+        type: "pie",
+        radius: ["40%", "70%"],
+        center: ["40%", "50%"],
+        avoidLabelOverlap: true,
+        data: aiStats.value.model_distribution,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: "#fff",
+          borderWidth: 2,
+        },
+        label: {
+          show: false
+        }
       },
     ],
   };
@@ -920,6 +990,7 @@ async function loadData() {
     storageInfo.value = data.storage_info || { total_size_mb: 0, by_type: [] };
     heatmapData.value = data.heatmap_data || [];
     blockchainStats.value = data.blockchain_stats || { on_chain_count: 0, tamper_alerts: 0, block_height: 15000 };
+    aiStats.value = data.ai_stats || { total_interactions: 0, model_distribution: [] };
     blockchainHistory.value = data.blockchain_history || [];
     securityAlerts.value = data.security_alerts || [];
     console.log("[DEBUG] Loaded data extensions:", data);
@@ -1068,6 +1139,10 @@ onMounted(() => {
 .kpi-icon.info {
   background: rgba(99, 102, 241, 0.1);
   color: #4338ca;
+}
+.kpi-icon.ai {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
 }
 
 .kpi-info {
@@ -1266,6 +1341,7 @@ onMounted(() => {
 .kpi-card.blockchain.cyber-green-soft { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); }
 .kpi-card.blockchain.cyber-red-soft { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); }
 .kpi-card.blockchain.cyber-indigo { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); }
+.kpi-card.blockchain.cyber-purple { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border-color: rgba(139, 92, 246, 0.2); }
 
 .kpi-icon.blue { color: #409eff; }
 .kpi-icon.orange { color: #e6a23c; }
@@ -1293,6 +1369,7 @@ onMounted(() => {
 }
 .blockchain-status-tag.danger { background: rgba(245, 108, 108, 0.1); color: #f56c6c; }
 .blockchain-status-tag.success { background: rgba(103, 194, 58, 0.1); color: #67c23a; }
+.blockchain-status-tag.purple { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
 
 .blockchain-card, .security-card {
   min-height: 400px;
@@ -1347,4 +1424,33 @@ onMounted(() => {
   100% { opacity: 0.6; }
 }
 .pulse-tag { animation: pulse 2s infinite; }
+
+.ai-audit-card {
+  min-height: 280px;
+}
+.ai-stats-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 10px 40px;
+}
+.ai-chart-wrapper {
+  width: 400px;
+}
+.ai-pie {
+  height: 220px;
+}
+.ai-summary-text {
+  flex: 1;
+  padding-left: 40px;
+  color: var(--el-text-color-regular);
+}
+.ai-summary-text p {
+  line-height: 1.8;
+  margin-bottom: 12px;
+}
+.ai-summary-text strong {
+  color: var(--el-color-primary);
+  font-size: 1.1rem;
+}
 </style>

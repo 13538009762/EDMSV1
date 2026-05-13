@@ -117,6 +117,23 @@ class AIHistoryStore:
         with self._lock:
             return len(self._store)
 
+    def get_summary_stats(self) -> Dict:
+        """获取摘要统计信息用于仪表盘"""
+        with self._lock:
+            total = len(self._store)
+            model_dist = {}
+            for conv in self._store:
+                m = conv.get("ai_model") or "unknown"
+                model_dist[m] = model_dist.get(m, 0) + 1
+            
+            # Format for charts
+            chart_data = [{"name": m, "value": count} for m, count in model_dist.items()]
+            
+            return {
+                "total_interactions": total,
+                "model_distribution": chart_data
+            }
+
 
 # 全局单例
 ai_history_store = AIHistoryStore()

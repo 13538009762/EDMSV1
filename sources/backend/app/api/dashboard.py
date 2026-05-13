@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, text, or_, select
 import traceback
 import os
+from app.services.ai_history_store import ai_history_store
 
 bp = Blueprint("dashboard", __name__)
 
@@ -337,6 +338,7 @@ def get_stats():
         "blockchain_stats": blockchain_stats,
         "blockchain_history": blockchain_history,
         "security_alerts": security_alerts,
+        "ai_stats": ai_history_store.get_summary_stats(),
         "is_admin": is_admin
     })
 

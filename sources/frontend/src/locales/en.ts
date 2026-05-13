@@ -496,6 +496,9 @@ export default {
     tamperAlerts: "Zero-Trust Interceptions",
     blockHeight: "Simulated Block Height",
     businessStats: "Business Statistics",
+    aiInteractionTitle: "AI Assistant Activity Audit",
+    aiTotalInteractions: "Total AI Interactions",
+    aiModelDistribution: "AI Model Usage Distribution",
     storage: {
       richText: "Rich Text (JSON)",
       realtime: "Real-time States",

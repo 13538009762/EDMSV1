@@ -510,6 +510,9 @@ export default {
     tamperAlerts: "零信任系统拦截次数",
     blockHeight: "模拟区块高度 (Block Height)",
     businessStats: "基础业务数据统计",
+    aiInteractionTitle: "AI 智能助手活跃审计",
+    aiTotalInteractions: "AI 交互总数 (Total AI Interactions)",
+    aiModelDistribution: "AI 大模型使用分布",
     storage: {
       richText: "富文本内容 (JSON)",
       realtime: "实时编辑状态",

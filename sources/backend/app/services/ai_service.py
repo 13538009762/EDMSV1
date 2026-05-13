@@ -35,7 +35,7 @@ class AIService:
     def get_client(ai_model: str = 'spark-lite'):
         # Determine if we should ignore system proxies
         ignore_proxies = os.getenv('AI_IGNORE_PROXIES', 'true').lower() == 'true'
-        http_client = httpx.Client(proxies=None) if ignore_proxies else None
+        http_client = httpx.Client(trust_env=False) if ignore_proxies else None
 
         if ai_model == 'deepseek':
             api_key = os.getenv('DEEPSEEK_API_KEY')
