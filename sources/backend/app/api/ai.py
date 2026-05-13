@@ -16,13 +16,21 @@ def ai_chat():
         doc_context = data.get("doc_context", "")
 
         ai_model = data.get("ai_model", "spark-lite")
+        user = current_user()
+        user_info = {
+            "id": user.id if user else 0,
+            "login_name": user.login_name if user else "guest"
+        }
+        
+        from app.extensions import db
+        db.session.remove()
         
         return Response(
             stream_with_context(AIService.stream_chat(
                 messages, 
                 user_context=context_url, 
                 doc_context=doc_context, 
-                current_user=current_user(),
+                current_user=user_info,
                 ai_model=ai_model
             )),
             mimetype="text/event-stream"
@@ -43,6 +51,9 @@ def ai_generate():
         return jsonify({"error": "No prompt provided"}), 400
         
     ai_model = data.get("ai_model", "spark-lite")
+    
+    from app.extensions import db
+    db.session.remove()
     
     return Response(
         stream_with_context(AIService.stream_generate(prompt, action, lang, ai_model=ai_model)),
@@ -143,6 +154,79 @@ def delete_ai_history(history_id):
     if success:
         return jsonify({"code": 200, "message": "Success"})
     return jsonify({"error": "Not found"}), 404
+
+@bp.post("/cross-qa")
+@jwt_required()
+def cross_document_qa():
+    data = request.get_json(silent=True) or {}
+    doc_ids = data.get("doc_ids", [])
+    query = data.get("query", "")
+    ai_model = data.get("ai_model", "spark-lite")
+    
+    if not doc_ids or not query:
+        return jsonify({"error": "Missing doc_ids or query"}), 400
+        
+    from app.services.vector_store import search_documents
+    
+    # Search top 5 chunks across the selected documents
+    contexts = search_documents(query, doc_ids=doc_ids, limit=5)
+    
+    context_text = "\n\n".join([f"文档片段 (来自《{c.get('title')}》):\n{c.get('text')}" for c in contexts])
+    
+    # We can stream the answer back using stream_chat
+    messages = [
+        {"role": "user", "content": f"请结合以下文档片段回答问题：\n{query}\n\n{context_text}"}
+    ]
+    user = current_user()
+    user_info = {
+        "id": user.id if user else 0,
+        "login_name": user.login_name if user else "guest"
+    }
+    
+    from app.extensions import db
+    db.session.remove()
+    
+    return Response(
+        stream_with_context(AIService.stream_chat(
+            messages, 
+            user_context="多文档联合分析", 
+            doc_context="", 
+            current_user=user_info,
+            ai_model=ai_model
+        )),
+        mimetype="text/event-stream"
+    )
+
+@bp.post("/check-logic")
+@jwt_required()
+def check_logic():
+    data = request.get_json(silent=True) or {}
+    doc_id = data.get("doc_id")
+    ai_model = data.get("ai_model", "spark-lite")
+    
+    if not doc_id:
+        return jsonify({"error": "Missing doc_id"}), 400
+        
+    from app.models import Document
+    from app.extensions import db
+    doc = db.session.get(Document, doc_id)
+    if not doc or not doc.current_version:
+        return jsonify({"error": "Document not found"}), 404
+        
+    ver = doc.current_version
+    text_content = ""
+    try:
+        cj = json.loads(ver.content_json) if isinstance(ver.content_json, str) else ver.content_json
+        from app.api.documents import _extract_text_from_tiptap
+        text_content = _extract_text_from_tiptap(cj)
+    except Exception:
+        text_content = doc.title
+        
+    # IMPORTANT: Release connection back to pool before slow network IO!
+    db.session.remove()
+        
+    result = AIService.check_logic(text_content, ai_model=ai_model)
+    return jsonify({"code": 200, "data": result})
 
 def random_str(length):
     import random

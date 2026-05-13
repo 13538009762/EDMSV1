@@ -15,5 +15,6 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=5000, 
         debug=True, 
-        allow_unsafe_werkzeug=True
+        allow_unsafe_werkzeug=True,
+        use_reloader=False  # Prevent double-init issues with thread pool
     )

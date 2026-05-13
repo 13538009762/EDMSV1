@@ -41,6 +41,11 @@ class Document(db.Model):
     file_hash = db.Column(db.String(256), nullable=True)
     tx_hash = db.Column(db.String(256), nullable=True)
 
+    # === AI 元数据字段 ===
+    summary = db.Column(db.Text, nullable=True)
+    tags = db.Column(db.String(512), nullable=True) # JSON or comma separated string
+    category = db.Column(db.String(128), nullable=True)
+
     owner = db.relationship("User", back_populates="documents_owned", foreign_keys=[owner_id])
     current_version = db.relationship(
         "DocumentVersion",

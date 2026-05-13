@@ -142,6 +142,10 @@ export default {
   },
 
   library: {
+    importImage: "AI 识图建档",
+    importImageLoading: "AI 正在识别并排版...",
+    importImageSuccess: "识别成功",
+    importImageFailed: "识别失败",
     newDoc: "新建文档",
     importDocx: "导入 DOCX",
     importDocxSuccess: "DOCX 导入成功",
