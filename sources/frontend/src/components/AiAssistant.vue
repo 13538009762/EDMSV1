@@ -3,7 +3,7 @@
     <div class="ai-header" @click="toggleExpand">
       <div class="title-wrap">
         <el-icon class="magic-icon"><MagicStick /></el-icon>
-        <span v-if="!isSidebarCollapsed">AI 智能助理</span>
+        <span v-if="!isSidebarCollapsed">{{ t("nav.aiAssistant") }}</span>
       </div>
       <div v-if="!isSidebarCollapsed" class="model-selector-wrap" @click.stop>
         <el-select v-model="aiStore.selectedModel" size="small" class="premium-select">
@@ -37,15 +37,15 @@
               <div v-if="msg.action" class="sidebar-action-card">
                 <div class="card-desc">{{ getActionDesc(msg.action) }}</div>
                 <div class="card-btns">
-                  <el-button type="primary" size="small" @click="executeAction(msg.action, i)">执行</el-button>
-                  <el-button size="small" link @click="msg.action = null">忽略</el-button>
+                  <el-button type="primary" size="small" @click="executeAction(msg.action, i)">{{ t("common.confirm") }}</el-button>
+                  <el-button size="small" link @click="msg.action = null">{{ t("editor.ai.actionCancelBtn") }}</el-button>
                 </div>
               </div>
 
               <!-- Quick Insert Button -->
               <div v-if="msg.role === 'assistant' && isEditorPage" class="bubble-footer">
                 <el-button size="small" link type="primary" @click="insertToDoc(msg.content)">
-                  <el-icon><MagicStick /></el-icon> 插入到文档
+                  <el-icon><MagicStick /></el-icon> {{ t("editor.ai.insertToDoc") }}
                 </el-button>
               </div>
             </div>
@@ -53,17 +53,40 @@
         </transition-group>
 
         <div class="chat-input-area">
-          <el-input
-            v-model="input"
-            type="textarea"
-            :rows="2"
-            placeholder="问问 AI..."
-            @keyup.enter.prevent="sendMessage"
-            resize="none"
-          />
-          <el-button type="primary" size="small" :loading="isTyping" @click="sendMessage" circle>
-            <el-icon><Promotion /></el-icon>
-          </el-button>
+          <div class="input-actions-top" v-if="isEditorPage">
+            <el-switch
+              v-model="isMeetingMode"
+              :active-text="t('editor.ai.meetingMode')"
+              :inactive-text="t('editor.ai.chatMode')"
+              inline-prompt
+              size="small"
+            />
+          </div>
+          <div class="input-row">
+            <el-input
+              v-model="input"
+              type="textarea"
+              :rows="2"
+              :placeholder="isMeetingMode ? t('editor.ai.meetingModePlaceholder') : t('aiView.inputPlaceholder')"
+              @keyup.enter.prevent="sendMessage"
+              resize="none"
+            />
+            <div class="input-btns">
+              <el-button 
+                :type="isRecording ? 'danger' : 'default'" 
+                size="small" 
+                @click="toggleRecording" 
+                circle
+                class="voice-btn"
+                :class="{ 'pulse': isRecording }"
+              >
+                <el-icon><Microphone /></el-icon>
+              </el-button>
+              <el-button type="primary" size="small" :loading="isTyping" @click="sendMessage" circle>
+                <el-icon><Promotion /></el-icon>
+              </el-button>
+            </div>
+          </div>
         </div>
       </div>
     </transition>
@@ -72,8 +95,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import { MagicStick, ArrowUp, ArrowDown, Promotion } from '@element-plus/icons-vue';
+import { MagicStick, ArrowUp, ArrowDown, Promotion, Microphone } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import { useAiStore, type AiMessage } from '@/stores/ai';
 import { marked } from 'marked';
@@ -88,12 +112,18 @@ const props = defineProps({
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const auth = useAuthStore();
 const aiStore = useAiStore();
 const input = ref('');
 const isTyping = ref(false);
 const isExpanded = ref(true);
 const scrollContainer = ref<HTMLElement | null>(null);
+
+const isMeetingMode = ref(false);
+const isRecording = ref(false);
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
 
 const isEditorPage = computed(() => route.path.startsWith('/doc/'));
 
@@ -104,7 +134,72 @@ function insertToDoc(content: string) {
   
   // Dispatch a custom event that EditorView.vue listens to
   window.dispatchEvent(new CustomEvent('edms:insert_content', { detail: { content: cleanContent } }));
-  ElMessage.success("内容已发送至编辑器");
+  ElMessage.success(t("editor.ai.insertToDoc"));
+}
+
+async function toggleRecording() {
+  if (isRecording.value) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    
+    mediaRecorder.ondataavailable = (event) => {
+      audioChunks.push(event.data);
+    };
+    
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+      await sendAudioForTranscription(audioBlob);
+    };
+    
+    mediaRecorder.start();
+    isRecording.value = true;
+    ElMessage.info(t("editor.ai.recording"));
+  } catch (err) {
+    console.error("Mic access failed", err);
+    ElMessage.error("麦克风权限开启失败");
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder) {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+  }
+  isRecording.value = false;
+}
+
+async function sendAudioForTranscription(blob: Blob) {
+  const formData = new FormData();
+  formData.append('audio', blob, 'recording.wav');
+  
+  try {
+    const res = await api.post('/ai/transcribe', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    
+    const text = res.data.text;
+    if (text) {
+      if (isMeetingMode.value) {
+        insertToDoc(text);
+      } else {
+        input.value = (input.value + ' ' + text).trim();
+      }
+    } else {
+      ElMessage.warning(t("editor.ai.notFound"));
+    }
+  } catch (err) {
+    console.error("Transcription failed", err);
+    ElMessage.error(t("aiView.messages.serviceError"));
+  }
 }
 
 const getActionDesc = (action: any) => {
@@ -692,13 +787,42 @@ const sendMessage = async () => {
 
 /* 2. 底部输入区域：果冻质感的底座 */
 .chat-input-area {
-  padding: 16px;
+  padding: 12px 16px;
   display: flex;
-  gap: 12px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
   background-color: rgba(255, 255, 255, 0.4) !important; 
   border-top: 1px solid rgba(255, 255, 255, 0.5) !important;
   border-radius: 0 0 16px 16px !important;
+}
+
+.input-actions-top {
+  display: flex;
+  justify-content: flex-start;
+  padding-bottom: 4px;
+}
+
+.input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.input-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.voice-btn.pulse {
+  animation: voice-pulse 1.5s infinite;
+  box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.7);
+}
+
+@keyframes voice-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(245, 108, 108, 0); }
+  100% { transform: scale(1); }
 }
 
 /* 3. 砸穿 Element Plus 输入框的死白底色 */

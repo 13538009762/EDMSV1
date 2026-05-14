@@ -128,6 +128,22 @@ def meeting_summary():
         "data": result
     })
 
+@bp.post("/transcribe")
+@jwt_required()
+def ai_transcribe():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio part"}), 400
+    file = request.files["audio"]
+    
+    try:
+        text = AIService.transcribe_audio(file)
+        return jsonify({
+            "code": 200,
+            "text": text
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @bp.get("/history")
 @jwt_required()
 def get_ai_history():
@@ -240,6 +256,7 @@ def check_logic():
     data = request.get_json(silent=True) or {}
     doc_id = data.get("doc_id")
     ai_model = data.get("ai_model", "spark-lite")
+    lang = data.get("lang", "zh")
     
     if not doc_id:
         return jsonify({"error": "Missing doc_id"}), 400
@@ -262,7 +279,7 @@ def check_logic():
     # IMPORTANT: Release connection back to pool before slow network IO!
     db.session.remove()
         
-    result = AIService.check_logic(text_content, ai_model=ai_model)
+    result = AIService.check_logic(text_content, ai_model=ai_model, lang=lang)
     return jsonify({"code": 200, "data": result})
 
 def random_str(length):

@@ -297,9 +297,9 @@
               <v-chart class="echart-container ai-pie" :option="aiModelOption" autoresize />
             </div>
             <div class="ai-summary-text">
-              <p>系统当前已集成 <strong>DeepSeek-V3</strong> 与 <strong>讯飞星火 Spark-Lite</strong> 大语言模型。</p>
-              <p>智能助手已协助用户完成了 <strong>{{ aiStats.total_interactions }}</strong> 次任务，涵盖文档总结、自动标号、审批辅助等核心场景。</p>
-              <el-button type="primary" size="small" @click="$router.push({ name: 'aiHistory' })">进入 AI 审计中心查看详情</el-button>
+              <p v-html="renderMarkdown(t('dashboard.aiIntro'))"></p>
+              <p v-html="renderMarkdown(t('dashboard.aiSummary', { count: aiStats.total_interactions }))"></p>
+              <el-button type="primary" size="small" @click="$router.push({ name: 'aiHistory' })">{{ t('dashboard.viewAiAudit') }}</el-button>
             </div>
           </div>
         </el-card>
@@ -390,14 +390,14 @@
               </el-icon>
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="拦截时间" width="180">
+          <el-table-column prop="created_at" :label="t('auditLog.colTimestamp')" width="180">
             <template #default="{ row }">
               {{ formatLocalDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column prop="user_name" label="操作用户" width="120" />
-          <el-table-column prop="ip_address" label="来源 IP" width="140" />
-          <el-table-column prop="description" label="拦截描述" min-width="200" />
+          <el-table-column prop="user_name" :label="t('auditLog.colUser')" width="120" />
+          <el-table-column prop="ip_address" :label="t('auditLog.colIp')" width="140" />
+          <el-table-column prop="description" :label="t('auditLog.colSummary')" min-width="200" />
         </el-table>
       </div>
     </el-dialog>
@@ -406,7 +406,7 @@
         <el-card shadow="hover" class="chart-card blockchain-card">
           <template #header>
             <div class="card-header cyber">
-              <span><el-icon><Link /></el-icon> 实时确权哈希流 (Live Blockchain Feed)</span>
+              <span><el-icon><Link /></el-icon> {{ t('dashboard.liveFeed') }}</span>
               <el-tag type="success" effect="dark" size="small" class="pulse-tag">CONNECTED</el-tag>
             </div>
           </template>
@@ -414,11 +414,11 @@
             <div v-for="item in blockchainHistory" :key="item.id" class="hash-item">
                <div class="hash-time">{{ formatLocalDate(item.time) }}</div>
                <div class="hash-content">
-                  文档 <strong>"{{ item.title }}"</strong> 已确权固化
+                  <span v-html="renderMarkdown(t('dashboard.docNotarized', { title: item.title }))"></span>
                </div>
-               <div class="hash-value">交易凭证: <span>{{ item.tx_hash }}</span></div>
+               <div class="hash-value">{{ t('dashboard.txProof') }}: <span>{{ item.tx_hash }}</span></div>
             </div>
-            <div v-if="blockchainHistory.length === 0" class="empty-state">暂无上链记录</div>
+            <div v-if="blockchainHistory.length === 0" class="empty-state">{{ t('dashboard.noChainRecords') }}</div>
           </div>
         </el-card>
       </el-col>
@@ -427,19 +427,19 @@
         <el-card shadow="hover" class="chart-card security-card">
           <template #header>
             <div class="card-header danger">
-              <span><el-icon><WarnTriangleFilled /></el-icon> 零信任安全雷达 (Security Alerts)</span>
+              <span><el-icon><WarnTriangleFilled /></el-icon> {{ t('dashboard.securityRadar') }}</span>
             </div>
           </template>
           <div class="security-radar-container">
             <div v-if="securityAlerts.length > 0" class="alert-list">
               <div v-for="alert in securityAlerts" :key="alert.id" class="alert-item animate__animated animate__headShake">
                 <div class="alert-header">
-                  <el-tag type="danger" size="small" effect="dark">非法篡改拦截</el-tag>
+                  <el-tag type="danger" size="small" effect="dark">{{ t('dashboard.tamperIntercept') }}</el-tag>
                   <span class="alert-time">{{ formatLocalDate(alert.time) }}</span>
                 </div>
                 <div class="alert-body">{{ alert.description }}</div>
                 <div class="alert-footer">
-                  <span>来源 IP: {{ alert.ip }} | 用户: {{ alert.user }}</span>
+                  <span>{{ t('dashboard.alertSource', { ip: alert.ip, user: alert.user }) }}</span>
                   <el-icon 
                     class="star-icon mini" 
                     :class="{ 'is-starred': alert.is_starred }"
@@ -452,7 +452,7 @@
               </div>
             </div>
             <div v-else class="secure-state">
-               <el-result icon="success" title="系统安全运行中" sub-title="底层物理指纹哈希校验一致"></el-result>
+               <el-result icon="success" :title="t('dashboard.secureRunning')" :sub-title="t('dashboard.hashConsistent')"></el-result>
             </div>
           </div>
         </el-card>
@@ -590,9 +590,9 @@ async function handleMetricClick(type: string, status?: string) {
   } else if (type === 'users') {
     metricTitle.value = t('dashboard.totalUsers');
   } else if (type === 'blockchain_docs') {
-    metricTitle.value = '已上链存证文档明细';
+    metricTitle.value = t('dashboard.blockchainDetails');
   } else if (type === 'tamper_alerts') {
-    metricTitle.value = '零信任安全拦截日志详情';
+    metricTitle.value = t('dashboard.tamperDetails');
   }
 
   try {

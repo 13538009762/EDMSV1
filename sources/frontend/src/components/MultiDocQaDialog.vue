@@ -1,14 +1,23 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="t('library.multiDocQa', '跨文档问答')"
+    :title="t('library.multiDocQa')"
     width="600px"
     @closed="onClosed"
   >
     <div class="qa-container">
-      <div class="selected-docs">
-        <span class="label">已选文档：</span>
-        <el-tag v-for="id in docIds" :key="id" size="small" class="doc-tag">ID: {{ id }}</el-tag>
+      <div class="qa-header">
+        <div class="selected-docs">
+          <span class="label">{{ t('library.selectedDocs') }}：</span>
+          <el-tag v-for="id in docIds" :key="id" size="small" class="doc-tag">ID: {{ id }}</el-tag>
+        </div>
+        <div class="model-selector">
+          <span class="label">{{ t('library.useModel') }}：</span>
+          <el-select v-model="aiStore.selectedModel" size="small" style="width: 130px">
+            <el-option label="Spark Lite" value="spark-lite" />
+            <el-option label="DeepSeek Chat" value="deepseek" />
+          </el-select>
+        </div>
       </div>
 
       <div class="chat-area" ref="chatArea">
@@ -26,10 +35,10 @@
           v-model="query"
           type="textarea"
           :rows="2"
-          placeholder="基于选中的文档提问，例如：综合这三份文档的内容，提取出本季度的核心业务指标..."
+          :placeholder="t('library.multiDocQaPlaceholder')"
           @keydown.enter.prevent="askQuestion"
         />
-        <el-button type="primary" :icon="ChatDotRound" @click="askQuestion" :loading="loading" class="send-btn">发送</el-button>
+        <el-button type="primary" :icon="ChatDotRound" @click="askQuestion" :loading="loading" class="send-btn">{{ t('common.send') }}</el-button>
       </div>
     </div>
   </el-dialog>
@@ -155,11 +164,25 @@ async function askQuestion() {
   flex-direction: column;
   height: 60vh;
 }
-.selected-docs {
-  padding: 8px;
-  background: var(--el-fill-color-light);
-  border-radius: 4px;
+.qa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 12px;
+  background: var(--el-fill-color-light);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+.selected-docs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow: hidden;
+}
+.model-selector {
+  display: flex;
+  align-items: center;
+  margin-left: 16px;
 }
 .label {
   font-size: 13px;

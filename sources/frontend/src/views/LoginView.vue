@@ -159,13 +159,13 @@
     <div class="security-footer">
       <div class="security-badges">
         <div class="badge-item">
-          <el-icon><Lock /></el-icon> 数据加密传输
+          <el-icon><Lock /></el-icon> {{ t('login.encryption') }}
         </div>
         <div class="badge-item">
-          <el-icon><Finished /></el-icon> 权限精细管控
+          <el-icon><Finished /></el-icon> {{ t('login.accessControl') }}
         </div>
         <div class="badge-item">
-          <el-icon><Bell /></el-icon> 全链路审计
+          <el-icon><Bell /></el-icon> {{ t('login.auditTrail') }}
         </div>
       </div>
       <div class="copyright">

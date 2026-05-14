@@ -16,7 +16,7 @@
       <div class="perm-section" v-if="docStatus === 'draft'">
         <div class="section-header">
           <el-tag type="primary" effect="plain">{{ t('editor.roleEdit') }}</el-tag>
-          <span class="section-desc">可以修改文档内容和设置</span>
+          <span class="section-desc">{{ t('editor.roleEditDesc') }}</span>
         </div>
         <el-select
           v-model="editIds"
@@ -39,7 +39,7 @@
       <div class="perm-section">
         <div class="section-header">
           <el-tag type="warning" effect="plain">{{ t('editor.roleComment') }}</el-tag>
-          <span class="section-desc">可以针对内容发表批注</span>
+          <span class="section-desc">{{ t('editor.roleCommentDesc') }}</span>
         </div>
         <el-select
           v-model="commentIds"
@@ -62,7 +62,7 @@
       <div class="perm-section">
         <div class="section-header">
           <el-tag type="info" effect="plain">{{ t('editor.roleView') }}</el-tag>
-          <span class="section-desc">仅允许查看文档</span>
+          <span class="section-desc">{{ t('editor.roleViewDesc') }}</span>
         </div>
         <el-select
           v-model="viewIds"

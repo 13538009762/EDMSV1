@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 
 
@@ -17,9 +17,12 @@ export const useAiStore = defineStore('ai', () => {
   // Selected AI model, persisted in localStorage
   const selectedModel = ref<string>(localStorage.getItem('aiModel') || 'spark-lite');
 
+  watch(selectedModel, (val) => {
+    localStorage.setItem('aiModel', val);
+  });
+
   function setModel(model: string) {
     selectedModel.value = model;
-    localStorage.setItem('aiModel', model);
   }
 
   function addMessage(

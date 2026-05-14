@@ -270,10 +270,10 @@
               <!-- AI Tags Section -->
               <div class="ai-tags-section">
                 <div class="section-title">
-                   <span>🏷️ {{ t("editor.ai.aiTags") }} / 检查</span>
+                   <span>🏷️ {{ t("editor.ai.aiTags") }} / {{ t("editor.ai.inspection") }}</span>
                    <div style="display:flex; gap:4px;">
                      <el-button link type="warning" size="small" @click="runLogicCheck" :loading="checkingLogic">
-                       逻辑检查
+                       {{ t("editor.ai.logicCheck") }}
                      </el-button>
                      <el-button link type="primary" size="small" @click="runAutoTag" :loading="tagging">
                        {{ t("editor.ai.aiActionAutoTag") }}
@@ -344,19 +344,41 @@
                     <el-empty :description="t('editor.ai.aiChatEmpty')" :image-size="40" />
                   </div>
                 
-                <div class="chat-input-area">
+                <div class="chat-input-wrapper">
                   <el-input
                     v-model="aiQuery"
                     type="textarea"
                     :rows="2"
-                    :placeholder="t('editor.ai.aiChatPlaceholder')"
+                    :placeholder="isMeetingMode ? t('editor.ai.meetingModePlaceholder') : t('editor.ai.aiChatPlaceholder')"
                     @keyup.enter.prevent="() => askAi()"
                     resize="none"
+                    class="premium-input"
                   />
-                  <div class="chat-actions">
-                    <el-button type="primary" size="small" @click="() => askAi()">
-                      {{ t("common.send") }}
-                    </el-button>
+                  <div class="input-footer">
+                    <div class="footer-left">
+                      <el-switch
+                        v-model="isMeetingMode"
+                        :active-text="t('editor.ai.meetingMode')"
+                        :inactive-text="t('editor.ai.chatMode')"
+                        inline-prompt
+                        size="small"
+                      />
+                    </div>
+                    <div class="footer-right">
+                      <el-button 
+                        :type="isChatRecording ? 'danger' : 'default'" 
+                        size="small" 
+                        @click="toggleChatRecording" 
+                        circle
+                        class="voice-btn"
+                        :class="{ 'pulse': isChatRecording }"
+                      >
+                        <el-icon><Microphone /></el-icon>
+                      </el-button>
+                      <el-button type="primary" size="small" @click="() => askAi()" class="send-btn">
+                        {{ t("common.send") }}
+                      </el-button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -774,6 +796,73 @@ const handleAudioUpload = async (blob: Blob) => {
     loadingInstance.close();
   }
 };
+
+// --- Chat Voice Input Logic ---
+const isMeetingMode = ref(false);
+const isChatRecording = ref(false);
+let chatMediaRecorder: MediaRecorder | null = null;
+let chatAudioChunks: Blob[] = [];
+
+const toggleChatRecording = async () => {
+  if (isChatRecording.value) {
+    if (chatMediaRecorder && chatMediaRecorder.state !== 'inactive') {
+      chatMediaRecorder.stop();
+      isChatRecording.value = false;
+    }
+  } else {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chatMediaRecorder = new MediaRecorder(stream);
+      chatAudioChunks = [];
+      
+      chatMediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chatAudioChunks.push(event.data);
+      };
+      
+      chatMediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(chatAudioChunks, { type: 'audio/webm' });
+        await handleChatAudioTranscription(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      chatMediaRecorder.start();
+      isChatRecording.value = true;
+      ElMessage.info(t('editor.ai.recording'));
+    } catch (err) {
+      console.error("Mic access failed", err);
+      ElMessage.error("获取麦克风权限失败，请检查设置。");
+    }
+  }
+};
+
+const handleChatAudioTranscription = async (blob: Blob) => {
+  try {
+    const formData = new FormData();
+    formData.append('audio', blob, 'recording.webm');
+    
+    const res = await api.post('/ai/transcribe', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    
+    const text = res.data.text;
+    if (text) {
+      if (isMeetingMode.value) {
+        if (editor.value) {
+          editor.value.commands.insertContent(text);
+          ElMessage.success("内容已发送至编辑器");
+        }
+      } else {
+        aiQuery.value = (aiQuery.value + ' ' + text).trim();
+      }
+    } else {
+      ElMessage.warning("未能识别到语音内容");
+    }
+  } catch (err) {
+    console.error("Transcription failed", err);
+    ElMessage.error("语音识别服务异常");
+  }
+};
+
 const askingCount = ref(0);
 const asking = computed(() => askingCount.value > 0);
 const aiStore = useAiStore();
@@ -932,15 +1021,19 @@ const checkingLogic = ref(false);
 async function runLogicCheck() {
   checkingLogic.value = true;
   try {
-    const response = await api.post("/ai/check-logic", { doc_id: docId.value, ai_model: aiStore.selectedModel });
+    const response = await api.post("/ai/check-logic", { 
+      doc_id: docId.value, 
+      ai_model: aiStore.selectedModel,
+      lang: locale.value
+    });
     if (response.data?.data) {
-      aiStore.addMessage('editor', 'user', "请检查本文档的前后逻辑一致性。");
+      aiStore.addMessage('editor', 'user', t("editor.ai.logicCheckPrompt"));
       aiStore.addMessage('editor', 'ai', response.data.data);
       scrollToBottom();
     }
   } catch (err) {
     console.error("Logic check failed:", err);
-    ElMessage.error("逻辑检查请求失败");
+    ElMessage.error(t("editor.ai.logicCheckFailed"));
   } finally {
     checkingLogic.value = false;
   }
@@ -2453,5 +2546,66 @@ onBeforeUnmount(() => {
 }
 .side-collapse-btn:hover {
   color: var(--el-color-primary);
+}
+</style>
+
+<style scoped>
+.chat-input-wrapper {
+  margin: 10px;
+  background: white;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.3s;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-input-wrapper:focus-within {
+  border-color: var(--el-color-primary);
+}
+
+.premium-input :deep(.el-textarea__inner) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 10px 10px 40px 10px !important;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+}
+
+.input-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: transparent;
+  pointer-events: none;
+}
+
+.input-footer > * {
+  pointer-events: auto;
+}
+
+.footer-right {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.voice-btn.pulse {
+  animation: voice-pulse 1.5s infinite;
+  box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.7);
+}
+
+@keyframes voice-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(245, 108, 108, 0); }
+  100% { transform: scale(1); }
 }
 </style>
