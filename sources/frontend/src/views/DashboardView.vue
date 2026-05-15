@@ -497,6 +497,7 @@ import {
 import { ElMessage } from "element-plus";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
+import { marked } from "marked";
 
 // ECharts imports
 import { use } from "echarts/core";
@@ -564,6 +565,11 @@ const formatSpaceName = (name: string, nameEn?: string) => formatName(name, name
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.is_manager);
+
+const renderMarkdown = (text: string) => {
+  if (!text) return "";
+  return marked.parse(text);
+};
 
 const widgetSearch = ref("");
 const zoomVisible = ref(false);

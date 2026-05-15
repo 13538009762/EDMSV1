@@ -10,7 +10,7 @@ def app():
     app = create_app()
     app.config.update(
         TESTING=True,
-        SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL_TEST", "mysql+pymysql://root:84916325@127.0.0.1:3306/edms_db_test"),
+        SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL_TEST", "mysql+pymysql://root:123456@127.0.0.1:3306/edms_db_test"),
         JWT_SECRET_KEY="test-jwt",
         SECRET_KEY="test-secret",
     )
