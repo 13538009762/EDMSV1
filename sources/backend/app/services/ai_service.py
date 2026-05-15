@@ -373,72 +373,150 @@ class AIService:
     @staticmethod
     def transcribe_audio(audio_file):
         """
-        Transcribe audio using iFlytek IAT (语音听写) WebAPI.
+        Transcribe audio using iFlytek IAT (语音听写) WebSocket API v2.
+        Optimized for Multi-language Recognition Large Model.
         """
         import base64
         import json as _json
-        import requests
+        import hashlib
+        import hmac
         import time
         from datetime import datetime
+        from wsgiref.handlers import format_date_time
+        from time import mktime
+        from urllib.parse import urlencode
+        import websocket
+        import os
+
+        app_id = os.getenv('SPARK_APPID', '')
+        api_key = os.getenv('SPARK_API_KEY', '')
+        api_secret = os.getenv('SPARK_API_SECRET', '')
+        
+        result_text = []
+
+        def parse_message(message):
+            try:
+                # Verbose logging for ALL messages
+                print(f"[WS RAW MSG] {message[:500]}") 
+                
+                data = _json.loads(message)
+                code = data.get("code")
+                if code != 0:
+                    print(f"[WS ERROR] API returned code {code}: {data.get('message')}")
+                    return
+                
+                # Debug raw message status
+                data_obj = data.get("data", {})
+                status = data_obj.get("status")
+                
+                result = data_obj.get("result", {})
+                if result:
+                    print(f"[WS RESULT CHUNK] Found result data.")
+                elif status == 2:
+                    print(f"[WS DEBUG] Received final status=2.")
+                
+                ws_data = result.get("ws", [])
+                w = ""
+                for i in ws_data:
+                    for t in i.get("cw", []):
+                        w += t.get("w", "")
+                
+                if w:
+                    print(f"[WS TEXT] {w}")
+                    result_text.append(w)
+            except Exception as e:
+                print(f"[WS DEBUG ERROR] Failed to parse message: {e}, Raw: {message[:200]}")
 
         try:
-            audio_data = audio_file.read()
-            base64_audio = base64.b64encode(audio_data).decode('utf-8')
+            print(f"\n{'='*20} [VOICE RECOGNITION (WS) START] {'='*20}")
+            print(f"[TIME] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             
-            app_id = os.getenv('SPARK_APPID', '')
-            # Using the newer IAT API which follows the same auth pattern as OCR/Spark
-            api_url = "https://iat-api.xfyun.cn/v2/iat"
+            # 1. Build Authenticated URL
+            host = "iat-api.xfyun.cn"
+            path = "/v2/iat"
+            now = datetime.now()
+            date = format_date_time(mktime(now.timetuple()))
             
-            print(f"[AI Transcribe] Processing audio, length: {len(audio_data)} bytes")
+            signature_origin = f"host: {host}\ndate: {date}\nGET {path} HTTP/1.1"
+            signature_sha = hmac.new(api_secret.encode('utf-8'), signature_origin.encode('utf-8'), digestmod=hashlib.sha256).digest()
+            signature_sha_base64 = base64.b64encode(signature_sha).decode(encoding='utf-8')
+            
+            auth_origin = f'api_key="{api_key}", algorithm="hmac-sha256", headers="host date request-line", signature="{signature_sha_base64}"'
+            authorization = base64.b64encode(auth_origin.encode('utf-8')).decode(encoding='utf-8')
+            
+            params = {"authorization": authorization, "date": date, "host": host}
+            url = f"wss://{host}{path}?" + urlencode(params)
 
-            # IAT is usually WebSocket based for real-time, but for small files 
-            # we can use a similar pattern if they support it, or use the older WebAPI.
-            # However, for this task, I'll implement a robust mock that explains the requirement
-            # if the specific endpoint signature differs, or try the standard WebAPI 1.1 pattern.
+            # 2. Create Connection
+            ws = websocket.create_connection(url, timeout=10)
             
-            # Since the user specifically asked for this, I'll use a reliable implementation 
-            # for "One-Sentence Recognition" if possible.
+            # 3. Read and Send Audio in Chunks
+            audio_file.seek(0)
+            audio_data = audio_file.read()
+            print(f"[FILE] Size: {len(audio_data)} bytes")
             
-            # For simplicity and reliability in this environment, I'll implement the 
-            # signature for the IAT WebAPI 1.1 which is commonly used for REST.
+            # Use smaller chunks for standard WebSocket IAT
+            chunk_size = 8000 
+            total_chunks = (len(audio_data) + chunk_size - 1) // chunk_size
             
-            cur_time = str(int(time.time()))
-            param = {
-                "engine_type": "sms16k",
-                "aue": "raw"
-            }
-            param_base64 = base64.b64encode(_json.dumps(param).encode('utf-8')).decode('utf-8')
-            
-            api_key = os.getenv('SPARK_API_KEY', '')
-            import hashlib
-            m2 = hashlib.md5()
-            m2.update((api_key + cur_time + param_base64).encode('utf-8'))
-            check_sum = m2.hexdigest()
-            
-            headers = {
-                'X-Appid': app_id,
-                'X-CurTime': cur_time,
-                'X-Param': param_base64,
-                'X-CheckSum': check_sum,
-                'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
-            }
-            
-            # Note: The older WebAPI 1.1 uses a different URL
-            web_api_url = "http://api.xfyun.cn/v1/service/v1/iat"
-            
-            # Try the request
-            response = requests.post(web_api_url, data={'audio': base64_audio}, headers=headers, timeout=10)
-            res_data = response.json()
-            
-            if res_data.get('code') != "0":
-                print(f"[AI Transcribe] API Error: {res_data.get('desc')}")
-                # Fallback to a mock result if API fails (for demo purposes)
-                return "（语音识别内容：这是一个关于文档管理系统的讨论。）"
+            for i in range(0, len(audio_data), chunk_size):
+                status = 1 # Middle frame
+                if i == 0: status = 0 # First frame
+                if i + chunk_size >= len(audio_data): status = 2 # Last frame
                 
-            return res_data.get('data', '')
+                chunk = audio_data[i:i + chunk_size]
+                frame = {
+                    "common": {"app_id": app_id},
+                    "business": {
+                        "domain": "bmm", # 💡 尝试使用 bmm 域名 (Big Model Multilingual)
+                        "language": "zh_cn", 
+                        "accent": "mandarin",
+                        "vinfo": 1
+                    },
+                    "data": {
+                        "status": status,
+                        "format": "audio/L16;rate=16000",
+                        "encoding": "raw",
+                        "audio": base64.b64encode(chunk).decode('utf-8')
+                    }
+                }
+                ws.send(_json.dumps(frame))
+                
+                # Try to read intermediate results to keep buffer clean
+                try:
+                    ws.settimeout(0.01)
+                    while True:
+                        msg = ws.recv()
+                        parse_message(msg)
+                except Exception:
+                    pass
+            
+            # 4. Final Wait for Results
+            print(f"[STATUS] Audio sent, waiting for final response...")
+            try:
+                ws.settimeout(10.0)
+                while True:
+                    msg = ws.recv()
+                    if not msg: break
+                    parse_message(msg)
+                    # If we get a message with code 0 and status 2 in data, it's finished
+                    if '"status":2' in msg: break 
+            except Exception as e:
+                print(f"[WS STATUS] Stopped waiting for results. Reason: {e}")
+                pass
+            
+            ws.close()
+            
+            final_text = "".join(result_text)
+            print(f"[RESULT] {final_text}")
+            print(f"{'='*20} [VOICE RECOGNITION END] {'='*20}\n")
+            
+            return final_text if final_text else "（未能识别出有效文字，请检查音频格式是否为 16k 16bit PCM）"
 
         except Exception as e:
-            print(f"[AI Transcribe] Error: {str(e)}")
+            print(f"[WS CRITICAL ERROR] {str(e)}")
+            import traceback
+            traceback.print_exc()
             return f"（语音识别失败: {str(e)}）"
 
     @staticmethod
@@ -549,9 +627,20 @@ class AIService:
 
     @staticmethod
     def process_meeting_audio(audio_file):
+        from datetime import datetime
+        print(f"\n{'>'*15} [MEETING SUMMARY REQUEST] {'<'*15}")
+        print(f"[TIME] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"[FILE] {getattr(audio_file, 'filename', 'blob')}")
+        print(f"[STATUS] Running Mock Summary Logic (3s delay)...")
+        
         time.sleep(3)
+        
         original_text = "讨论了项目 A 的进度。小李负责后端，下周五交付。小张负责前端，下周三交付。"
         summary_markdown = "### 会议纪要\n- **后端**: 下周五交付 (负责人: 小李)\n- **前端**: 下周三交付 (负责人: 小张)"
+        
+        print(f"[RESULT] Mock summary generated successfully.")
+        print(f"{'>'*45}\n")
+        
         return {
             "original_text": original_text,
             "summary_markdown": summary_markdown

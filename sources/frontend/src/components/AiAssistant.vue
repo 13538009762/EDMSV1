@@ -81,6 +81,7 @@
                 :class="{ 'pulse': isRecording }"
               >
                 <el-icon><Microphone /></el-icon>
+                <span v-if="isRecording" style="margin-left: 4px; font-size: 10px;">{{ recordingSeconds }}s</span>
               </el-button>
               <el-button type="primary" size="small" :loading="isTyping" @click="sendMessage" circle>
                 <el-icon><Promotion /></el-icon>
@@ -104,7 +105,7 @@ import { marked } from 'marked';
 import { ElMessage, ElNotification } from 'element-plus';
 import api from '@/api/client';
 import ThinkingNineLoader from './ThinkingNineLoader.vue';
-
+import { convertToPcm } from '@/utils/audioConverter';
 
 const props = defineProps({
   isSidebarCollapsed: Boolean
@@ -122,6 +123,8 @@ const scrollContainer = ref<HTMLElement | null>(null);
 
 const isMeetingMode = ref(false);
 const isRecording = ref(false);
+const recordingSeconds = ref(0);
+let timerInterval: any = null;
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 
@@ -138,6 +141,7 @@ function insertToDoc(content: string) {
 }
 
 async function toggleRecording() {
+  console.log("[Audio Debug] toggleRecording clicked, current state:", isRecording.value);
   if (isRecording.value) {
     stopRecording();
   } else {
@@ -152,15 +156,58 @@ async function startRecording() {
     audioChunks = [];
     
     mediaRecorder.ondataavailable = (event) => {
-      audioChunks.push(event.data);
+      if (event.data.size > 0) {
+        audioChunks.push(event.data);
+        console.log(`[Audio Debug] Data available: +${event.data.size} bytes. Total size so far: ${audioChunks.reduce((acc, c) => acc + c.size, 0)} bytes`);
+      }
     };
-    
+
+    mediaRecorder.onerror = (event) => {
+      console.error("[Audio Debug] MediaRecorder Error:", (event as any).error);
+    };
+
     mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-      await sendAudioForTranscription(audioBlob);
+      console.log(`[Audio Debug] Recording stopped. Total chunks: ${audioChunks.length}`);
+      
+      // Stop tracks after recording is fully processed
+      if (mediaRecorder && mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+
+      if (audioChunks.length === 0) {
+        console.error("[Audio Debug] No data chunks collected!");
+        return;
+      }
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      // Debug: Provide a way to listen to the recording in the browser console
+      const debugUrl = URL.createObjectURL(audioBlob);
+      console.log("[DEBUG] Audio recorded. Play it here:", debugUrl);
+      
+      try {
+        const pcmBuffer = await convertToPcm(audioBlob);
+        const pcmBlob = new Blob([pcmBuffer], { type: 'audio/raw' });
+        await sendAudioForTranscription(pcmBlob);
+      } catch (err) {
+        console.error("Audio conversion failed", err);
+        ElMessage.error("音频处理失败");
+      }
     };
     
-    mediaRecorder.start();
+    mediaRecorder.start(1000); 
+    console.log("[Audio Debug] MediaRecorder started, state:", mediaRecorder.state);
+    
+    // 启动 UI 计时器
+    recordingSeconds.value = 0;
+    timerInterval = setInterval(() => {
+      recordingSeconds.value++;
+    }, 1000);
+
+    // 💡 监控 stream 状态
+    stream.getTracks().forEach(track => {
+      console.log(`[Audio Debug] Track enabled: ${track.enabled}, state: ${track.readyState}`);
+      track.onended = () => console.warn("[Audio Debug] Track ended unexpectedly!");
+    });
+
     isRecording.value = true;
     ElMessage.info(t("editor.ai.recording"));
   } catch (err) {
@@ -170,9 +217,13 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  console.log("[Audio Debug] stopRecording called");
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
   if (mediaRecorder) {
     mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach(track => track.stop());
   }
   isRecording.value = false;
 }

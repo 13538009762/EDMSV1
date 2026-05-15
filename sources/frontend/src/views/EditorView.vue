@@ -44,7 +44,7 @@
           :loading="isProcessingAudio"
         >
           <el-icon style="margin-right: 4px;"><Microphone /></el-icon>
-          {{ isRecording ? '停止录音并生成摘要' : '智能会议录音' }}
+          {{ isRecording ? `停止录音 (${recordingSeconds}s)` : '智能会议录音' }}
         </el-button>
 
         
@@ -587,6 +587,7 @@ import mammoth from "mammoth";
 import { Markdown } from "tiptap-markdown";
 import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
 import { formatLocalDate } from "@/utils/date";
+import { convertToPcm } from '@/utils/audioConverter';
 
 const CustomImage = Image.extend({
   addAttributes() {
@@ -741,27 +742,51 @@ const stopResizing = () => {
 
 // --- Meeting Recording Logic ---
 const isRecording = ref(false);
+const recordingSeconds = ref(0);
+let timerInterval: any = null;
 const isProcessingAudio = ref(false);
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 
 const startRecording = async () => {
+  console.log("[Audio Debug] Meeting recording starting...");
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
 
     mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) audioChunks.push(event.data);
+      if (event.data.size > 0) {
+        audioChunks.push(event.data);
+        console.log(`[Audio Debug] Meeting data: +${event.data.size} bytes`);
+      }
     };
 
     mediaRecorder.onstop = async () => {
+      console.log(`[Audio Debug] Meeting recording stopped. Chunks: ${audioChunks.length}`);
+      if (mediaRecorder && mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+      
       const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      await handleAudioUpload(audioBlob);
+      try {
+        const pcmBuffer = await convertToPcm(audioBlob);
+        const pcmBlob = new Blob([pcmBuffer], { type: 'audio/raw' });
+        await handleAudioUpload(pcmBlob);
+      } catch (e) {
+        console.error("[Audio Debug] Conversion failed", e);
+        ElMessage.error("音频转换失败");
+      }
     };
 
-    mediaRecorder.start();
+    mediaRecorder.start(1000);
     isRecording.value = true;
+    
+    recordingSeconds.value = 0;
+    timerInterval = setInterval(() => {
+      recordingSeconds.value++;
+    }, 1000);
+    
     ElMessage.info("会议录音开始...");
   } catch (err) {
     console.error("麦克风授权失败", err);
@@ -770,6 +795,11 @@ const startRecording = async () => {
 };
 
 const stopRecording = () => {
+  console.log("[Audio Debug] stopRecording called");
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
     isRecording.value = false;
@@ -781,7 +811,7 @@ const handleAudioUpload = async (blob: Blob) => {
   const loadingInstance = ElLoading.service({ text: 'AI 正在转写并生成会议摘要...', background: 'rgba(0, 0, 0, 0.7)' });
   try {
     const formData = new FormData();
-    formData.append('audio', blob, 'meeting.webm');
+    formData.append('audio', blob, 'meeting.wav');
     const { data } = await api.post('/ai/meeting-summary', formData);
     
     if (data.code === 200) {
@@ -804,6 +834,7 @@ let chatMediaRecorder: MediaRecorder | null = null;
 let chatAudioChunks: Blob[] = [];
 
 const toggleChatRecording = async () => {
+  console.log("[Audio Debug] toggleChatRecording clicked, current state:", isChatRecording.value);
   if (isChatRecording.value) {
     if (chatMediaRecorder && chatMediaRecorder.state !== 'inactive') {
       chatMediaRecorder.stop();
@@ -816,16 +847,27 @@ const toggleChatRecording = async () => {
       chatAudioChunks = [];
       
       chatMediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chatAudioChunks.push(event.data);
+        if (event.data.size > 0) {
+          chatAudioChunks.push(event.data);
+          console.log(`[Audio Debug] Chat data: +${event.data.size} bytes`);
+        }
       };
       
       chatMediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(chatAudioChunks, { type: 'audio/webm' });
-        await handleChatAudioTranscription(audioBlob);
+        console.log(`[Audio Debug] Chat recording stopped. Chunks: ${chatAudioChunks.length}`);
         stream.getTracks().forEach(track => track.stop());
+        
+        const audioBlob = new Blob(chatAudioChunks, { type: 'audio/webm' });
+        try {
+          const pcmBuffer = await convertToPcm(audioBlob);
+          const pcmBlob = new Blob([pcmBuffer], { type: 'audio/raw' });
+          await handleChatAudioTranscription(pcmBlob);
+        } catch (e) {
+          console.error("[Audio Debug] Chat conversion failed", e);
+        }
       };
       
-      chatMediaRecorder.start();
+      chatMediaRecorder.start(1000);
       isChatRecording.value = true;
       ElMessage.info(t('editor.ai.recording'));
     } catch (err) {
@@ -838,7 +880,7 @@ const toggleChatRecording = async () => {
 const handleChatAudioTranscription = async (blob: Blob) => {
   try {
     const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
+    formData.append('audio', blob, 'recording.wav');
     
     const res = await api.post('/ai/transcribe', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

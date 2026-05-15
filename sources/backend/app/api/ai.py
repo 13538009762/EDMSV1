@@ -3,6 +3,8 @@ from flask_jwt_extended import jwt_required
 from app.services.ai_service import AIService
 from app.utils.auth import current_user
 import json
+import os
+from datetime import datetime
 
 bp = Blueprint("ai", __name__)
 
@@ -115,6 +117,23 @@ def import_image():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+def _add_wav_header(pcm_data):
+    """Add a 44-byte WAV header to raw PCM data (16k, 16bit, mono)."""
+    header = bytearray()
+    header.extend(b'RIFF')
+    header.extend((len(pcm_data) + 36).to_bytes(4, 'little'))
+    header.extend(b'WAVEfmt ')
+    header.extend((16).to_bytes(4, 'little'))
+    header.extend((1).to_bytes(2, 'little'))
+    header.extend((1).to_bytes(2, 'little'))
+    header.extend((16000).to_bytes(4, 'little'))
+    header.extend((32000).to_bytes(4, 'little'))
+    header.extend((2).to_bytes(2, 'little'))
+    header.extend((16).to_bytes(2, 'little'))
+    header.extend(b'data')
+    header.extend(len(pcm_data).to_bytes(4, 'little'))
+    return header + pcm_data
+
 @bp.post("/meeting-summary")
 @jwt_required()
 def meeting_summary():
@@ -122,11 +141,47 @@ def meeting_summary():
         return jsonify({"error": "No audio part"}), 400
     file = request.files["audio"]
     
-    result = AIService.process_meeting_audio(file)
-    return jsonify({
-        "code": 200,
-        "data": result
-    })
+    try:
+        # Debug: Save audio file locally
+        debug_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "debug_audio"))
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_filename = f"meeting_{timestamp}_{file.filename}"
+        debug_path = os.path.join(debug_dir, debug_filename)
+        
+        # Save a copy (handle both PCM and WebM for now)
+        pcm_data = file.read()
+        if len(pcm_data) > 0:
+            with open(debug_path, "wb") as f:
+                # If it looks like PCM (no header), add one for playback
+                if pcm_data[:4] != b'RIFF':
+                    f.write(_add_wav_header(pcm_data))
+                else:
+                    f.write(pcm_data)
+        
+        file.seek(0)
+        
+        # Use real transcription
+        text = AIService.transcribe_audio(file)
+        
+        # Generate a summary using AI after transcription
+        summary_markdown = "### 语音转写结果\n" + text
+        if len(text) > 20:
+             # If text is long enough, try to generate a real summary
+             # For now, just return the text as it's better than a mock
+             pass
+
+        return jsonify({
+            "code": 200,
+            "data": {
+                "original_text": text,
+                "summary_markdown": summary_markdown
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @bp.post("/transcribe")
 @jwt_required()
@@ -136,6 +191,26 @@ def ai_transcribe():
     file = request.files["audio"]
     
     try:
+        # Debug: Save audio file locally to check if recording is working
+        debug_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "debug_audio"))
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_filename = f"debug_{timestamp}_{file.filename}"
+        debug_path = os.path.join(debug_dir, debug_filename)
+        
+        # Save a copy with WAV header
+        pcm_data = file.read()
+        wav_data = _add_wav_header(pcm_data)
+        with open(debug_path, "wb") as f:
+            f.write(wav_data)
+        
+        print(f"[DEBUG] Audio saved to: {debug_path}")
+        
+        # Reset file pointer for transcription service
+        file.seek(0)
+
         text = AIService.transcribe_audio(file)
         return jsonify({
             "code": 200,
