@@ -35,6 +35,11 @@ services:
       - STORAGE_PATH=/app/data
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+      - SPARK_APPID=${SPARK_APPID}
+      - SPARK_API_KEY=${SPARK_API_KEY}
+      - SPARK_API_SECRET=${SPARK_API_SECRET}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - AI_IGNORE_PROXIES=${AI_IGNORE_PROXIES:-true}
     networks:
       - edms-network
     dns:
