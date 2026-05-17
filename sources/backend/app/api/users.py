@@ -262,6 +262,14 @@ def update_user(user_id: int):
         
         if "is_manager" in data: target_user.is_manager = data["is_manager"]
         if "position_short" in data: target_user.position_short = data["position_short"]
+        if "login_name" in data:
+            new_login = data["login_name"].strip()
+            if not new_login:
+                return jsonify({"error": "Login name cannot be empty"}), 400
+            existing = User.query.filter_by(login_name=new_login).first()
+            if existing and existing.id != target_user.id:
+                return jsonify({"error": "Login name already exists"}), 409
+            target_user.login_name = new_login
 
     try:
         db.session.commit()
