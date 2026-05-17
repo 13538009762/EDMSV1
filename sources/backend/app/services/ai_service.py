@@ -461,14 +461,16 @@ class AIService:
             
             for i in range(0, len(audio_data), chunk_size):
                 status = 1 # Middle frame
-                if i == 0: status = 0 # First frame
-                if i + chunk_size >= len(audio_data): status = 2 # Last frame
+                if i == 0: 
+                    status = 0 # First frame
+                elif i + chunk_size >= len(audio_data): 
+                    status = 2 # Last frame
                 
                 chunk = audio_data[i:i + chunk_size]
                 frame = {
                     "common": {"app_id": app_id},
                     "business": {
-                        "domain": "bmm", # 💡 尝试使用 bmm 域名 (Big Model Multilingual)
+                        "domain": "iat",
                         "language": "zh_cn", 
                         "accent": "mandarin",
                         "vinfo": 1
@@ -490,6 +492,25 @@ class AIService:
                         parse_message(msg)
                 except Exception:
                     pass
+            
+            # If the audio was very short and only sent status=0, send status=2 to close
+            if len(audio_data) <= chunk_size:
+                frame = {
+                    "common": {"app_id": app_id},
+                    "business": {
+                        "domain": "iat", 
+                        "language": "zh_cn", 
+                        "accent": "mandarin",
+                        "vinfo": 1
+                    },
+                    "data": {
+                        "status": 2,
+                        "format": "audio/L16;rate=16000",
+                        "encoding": "raw",
+                        "audio": ""
+                    }
+                }
+                ws.send(_json.dumps(frame))
             
             # 4. Final Wait for Results
             print(f"[STATUS] Audio sent, waiting for final response...")
