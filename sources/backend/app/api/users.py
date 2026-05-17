@@ -90,6 +90,79 @@ def get_me():
         "is_manager": user.is_manager
     })
 
+@bp.get("/me/stats")
+@jwt_required()
+def get_me_stats():
+    user = current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    from app.models import Document, DocumentVersion, DocumentPermission
+    from app.models.workflow import ApprovalFlow, ApprovalParticipant, ApprovalDecision
+    from sqlalchemy import or_
+    
+    # 1. Created docs (owned by user, active, not template)
+    created_count = Document.query.filter_by(
+        owner_id=user.id, 
+        is_template=False, 
+        deleted_at=None
+    ).count()
+    
+    # 2. Collaborated docs (not owned by user, but user has explicit permission OR has created a version)
+    collab_doc_ids = set()
+    
+    # a. User has permission
+    perms = db.session.query(DocumentPermission.document_id)\
+        .filter(DocumentPermission.user_id == user.id).all()
+    for p in perms:
+        collab_doc_ids.add(p[0])
+        
+    # b. User has edited/created a version
+    versions = db.session.query(DocumentVersion.document_id)\
+        .filter(DocumentVersion.created_by_id == user.id).all()
+    for v in versions:
+        collab_doc_ids.add(v[0])
+        
+    # Filter valid collaborated documents
+    if collab_doc_ids:
+        collaborated_count = Document.query.filter(
+            Document.id.in_(list(collab_doc_ids)),
+            Document.owner_id != user.id,
+            Document.deleted_at == None,
+            Document.is_template == False
+        ).count()
+    else:
+        collaborated_count = 0
+        
+    # 3. Approved docs (owned by user that are approved OR approved by this user as reviewer/approver)
+    # Documents approved by this user
+    reviewed_doc_ids = db.session.query(ApprovalFlow.document_id)\
+        .join(ApprovalParticipant, ApprovalParticipant.flow_id == ApprovalFlow.id)\
+        .join(ApprovalDecision, ApprovalDecision.participant_id == ApprovalParticipant.id)\
+        .filter(ApprovalParticipant.user_id == user.id)\
+        .filter(ApprovalDecision.decision == 'approve')\
+        .filter(ApprovalFlow.document_id != None)\
+        .distinct().all()
+        
+    approved_doc_ids = [r[0] for r in reviewed_doc_ids]
+    
+    approved_count = Document.query.filter(
+        Document.deleted_at == None,
+        Document.is_template == False,
+        Document.status == 'approved',
+        or_(
+            Document.owner_id == user.id,
+            Document.id.in_(approved_doc_ids) if approved_doc_ids else False
+        )
+    ).count()
+    
+    return jsonify({
+        "created_docs": created_count,
+        "collaborated_docs": collaborated_count,
+        "approved_docs": approved_count
+    })
+
+
 @bp.get("")
 @jwt_required()
 def list_users():
