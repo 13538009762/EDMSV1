@@ -69,6 +69,16 @@ class Document(db.Model):
         """Backward compatibility for single space access."""
         return self.spaces[0] if self.spaces else None
 
+    @classmethod
+    def get_by_id_or_number(cls, identifier):
+        from app.extensions import db
+        # Try numeric primary key lookup first
+        doc = db.session.get(cls, identifier)
+        if not doc:
+            # Try unique business number lookup (doc_number is string, YYYYMMDDxxx format)
+            doc = cls.query.filter_by(doc_number=str(identifier)).first()
+        return doc
+
 
 class DocumentVersion(db.Model):
     __tablename__ = "document_versions"

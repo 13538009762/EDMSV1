@@ -19,8 +19,8 @@
     <!-- Stats Strip -->
     <div class="stats-strip">
       <div class="stat-card">
-        <span class="stat-num">{{ auth.user?.login_name === 'admin' ? items.length : ownItems.length }}</span>
-        <span class="stat-label">{{ auth.user?.login_name === 'admin' ? t('templates.statTotal', 'Total Templates') : t('personal.createdDocs', 'My Templates') }}</span>
+        <span class="stat-num">{{ auth.user?.is_super_admin ? items.length : ownItems.length }}</span>
+        <span class="stat-label">{{ auth.user?.is_super_admin ? t('templates.statTotal', 'Total Templates') : t('personal.createdDocs', 'My Templates') }}</span>
       </div>
       <div class="stat-card published">
         <span class="stat-num">{{ publishedCount }}</span>
@@ -281,7 +281,7 @@ const filteredItems = computed(() => {
 });
 
 const canManage = (row: any) => {
-  return auth.user?.login_name === 'admin' || row.owner_id === auth.user?.id;
+  return auth.user?.is_super_admin || row.owner_id === auth.user?.id;
 };
 
 function formatDate(iso: string | null): string {

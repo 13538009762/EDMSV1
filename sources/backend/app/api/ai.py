@@ -229,7 +229,7 @@ def get_ai_history():
     
     # Only admin can see all, users see their own
     user = current_user()
-    user_id = None if user.login_name == 'admin' else user.id
+    user_id = None if user.is_super_admin else user.id
     
     history = ai_history_store.get_all(page=page, per_page=per_page, document_id=doc_id, user_id=user_id)
     return jsonify({

@@ -51,7 +51,7 @@ def admin_import_master_data():
             verify_jwt_in_request()
             user = current_user()
             # 💡 优化：仅允许超级管理员（login_name 为 admin）进行 Excel 全量导入
-            if not user or user.login_name != 'admin':
+            if not user or not user.is_super_admin:
                 return jsonify({
                     "error": "Access denied. Only the super admin can import master data via Excel."
                 }), 403
@@ -109,11 +109,11 @@ from sqlalchemy import or_
 def admin_list_audit_logs():
     """Get audit logs (System Admin only)"""
     user = current_user()
-    if not user or user.login_name != 'admin':
+    if not user or not user.is_super_admin:
         return jsonify({"error": "Forbidden"}), 403
 
     from datetime import datetime, timedelta
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    cutoff = datetime.utcnow() - timedelta(days=10)
     query = AuditLog.query.filter(or_(AuditLog.created_at >= cutoff, AuditLog.is_starred == True))
 
     # Filters
@@ -159,7 +159,7 @@ def admin_list_audit_logs():
 def admin_toggle_audit_star(log_id: int):
     """Star or unstar an audit log."""
     user = current_user()
-    if not user or user.login_name != 'admin':
+    if not user or not user.is_super_admin:
         return jsonify({"error": "Forbidden"}), 403
     
     log = db.session.get(AuditLog, log_id)

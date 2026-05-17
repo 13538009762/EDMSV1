@@ -59,7 +59,7 @@ class AIService:
         try:
             # Robust role detection
             user_login = current_user.login_name if current_user else "guest"
-            is_admin = (user_login == 'admin')
+            is_admin = getattr(current_user, 'is_super_admin', False) if current_user else False
             is_manager = getattr(current_user, 'is_manager', False) if current_user else False
             
             dept_name = "未知部门"

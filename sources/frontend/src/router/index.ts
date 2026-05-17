@@ -49,12 +49,12 @@ router.beforeEach((to, _from, next) => {
     return;
   }
   // 检查是否需要 manager 权限
-  if (to.meta.requiresManager && !auth.user?.is_manager && auth.user?.login_name !== 'admin') {
+  if (to.meta.requiresManager && !auth.user?.is_manager && !auth.user?.is_super_admin) {
     next({ name: "library" });
     return;
   }
   // 检查是否需要 system admin 权限
-  if (to.meta.requiresAdmin && auth.user?.login_name !== 'admin') {
+  if (to.meta.requiresAdmin && !auth.user?.is_super_admin) {
     next({ name: "library" });
     return;
   }

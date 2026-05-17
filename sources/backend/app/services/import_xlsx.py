@@ -363,13 +363,13 @@ def import_master_data_xlsx(file_bytes: bytes, overwrite: bool = True, table_typ
             db.session.delete(doc)
         
         # 保护 admin 用户，删除其他所有用户
-        db.session.execute(delete(User).where(User.login_name != 'admin'))
+        db.session.execute(delete(User).where(User.is_super_admin == False))
         
         db.session.execute(delete(Position))
         db.session.execute(delete(Department))
         
         # 确保 admin 用户依然是 active 且为 manager
-        admin = db.session.query(User).filter_by(login_name='admin').first()
+        admin = db.session.query(User).filter_by(is_super_admin=True).first()
         if admin:
             admin.is_manager = True
             admin.registration_status = 'active'
@@ -449,7 +449,7 @@ def import_master_data_xlsx(file_bytes: bytes, overwrite: bool = True, table_typ
             u.gender = str(row.get("gender") or u.gender).strip()
             u.department_id = dept_id or u.department_id
             u.position_short = str(row.get("position_short") or u.position_short).strip()
-            u.is_manager = bool(row.get("_is_manager")) or u.is_manager or login == "admin"
+            u.is_manager = bool(row.get("_is_manager")) or u.is_manager or u.is_super_admin
             u.registration_status = "active" # Force active on import
         else:
             # Create new user
@@ -494,7 +494,7 @@ def import_master_data_xlsx(file_bytes: bytes, overwrite: bool = True, table_typ
     print("[IMPORT] Database flushed.")
 
     # Initialize standard templates after users are created
-    admin_user = db.session.query(User).filter_by(login_name='admin').first() or db.session.query(User).first()
+    admin_user = db.session.query(User).filter_by(is_super_admin=True).first() or db.session.query(User).first()
     admin_id = admin_user.id if admin_user else None
     
     tmpl_count = 0

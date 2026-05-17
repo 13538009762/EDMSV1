@@ -26,7 +26,8 @@
           </el-input>
 
           <el-select 
-            v-if="auth.user?.login_name === 'admin'"
+            v-slot:default
+            v-if="auth.user?.is_super_admin"
             v-model="filterDept" 
             :placeholder="t('profile.dept', 'Department')" 
             clearable 
@@ -42,20 +43,22 @@
           </el-select>
 
           <el-select 
-            v-model="filterManager" 
+            v-model="filterRole" 
             :placeholder="t('library.colRole', 'Role')" 
             clearable 
-            class="filter-select mini"
+            class="filter-select"
             @change="loadUsers"
           >
-            <el-option :label="t('common.roles.manager', 'Manager')" :value="1" />
-            <el-option :label="t('common.roles.user', 'Staff')" :value="0" />
+            <el-option :label="t('common.roles.admin', 'System Admin')" value="admin" />
+            <el-option :label="t('common.roles.manager', 'Manager')" value="manager" />
+            <el-option :label="t('common.roles.user', 'Staff')" value="staff" />
           </el-select>
         </div>
 
         <div class="header-actions">
           <el-button 
-            v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" 
+            v-slot:default
+            v-if="auth.user?.is_super_admin || auth.user?.is_manager" 
             type="primary" 
             :icon="Plus" 
             @click="openAddUser"
@@ -63,7 +66,8 @@
             {{ t('admin.addUser', 'Add Member') }}
           </el-button>
           <el-button 
-            v-if="auth.user?.login_name === 'admin'" 
+            v-slot:default
+            v-if="auth.user?.is_super_admin" 
             type="success" 
             :icon="Plus" 
             @click="deptDialogVisible = true"
@@ -96,17 +100,18 @@
             {{ formatDeptName(row.department_name, row.department_name_en) }}
           </template>
         </el-table-column>
-        <el-table-column prop="is_manager" :label="t('profile.mgr')" width="100">
+        <el-table-column :label="t('library.colRole', 'Role')" width="120">
           <template #default="{ row }">
-            <el-tag v-if="row.is_manager" type="success" size="small">{{ t('common.yes') }}</el-tag>
-            <el-tag v-else type="info" size="small">{{ t('common.no') }}</el-tag>
+            <el-tag v-if="row.is_super_admin" type="danger" size="small">{{ t('common.roles.admin', 'Super Admin') }}</el-tag>
+            <el-tag v-else-if="row.is_manager" type="success" size="small">{{ t('common.roles.manager', 'Manager') }}</el-tag>
+            <el-tag v-else type="info" size="small">{{ t('common.roles.user', 'Staff') }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('common.actions')" width="240" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="editUser(row)">{{ t('common.edit') }}</el-button>
             <el-button type="warning" link @click="handleResetPassword(row)">{{ t('admin.resetPass') }}</el-button>
-            <el-button v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" type="danger" link @click="handleDeleteUser(row)">{{ t('common.delete') }}</el-button>
+            <el-button v-if="auth.user?.is_super_admin || auth.user?.is_manager" type="danger" link @click="handleDeleteUser(row)">{{ t('common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -158,7 +163,7 @@
         <el-form-item :label="t('profile.lastName')">
           <el-input v-model="userForm.last_name" />
         </el-form-item>
-        <el-form-item v-if="auth.user?.login_name === 'admin'" :label="t('profile.dept')">
+        <el-form-item v-if="auth.user?.is_super_admin" :label="t('profile.dept')">
           <el-select v-model="userForm.department_id" style="width: 100%">
             <el-option 
               v-for="d in deptOptions" 
@@ -170,6 +175,9 @@
         </el-form-item>
         <el-form-item :label="t('profile.mgr')">
           <el-switch v-model="userForm.is_manager" />
+        </el-form-item>
+        <el-form-item v-if="auth.user?.is_super_admin" :label="t('common.roles.admin', 'Super Admin')">
+          <el-switch v-model="userForm.is_super_admin" :disabled="isEdit && editingUserId === auth.user?.id" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -231,7 +239,7 @@ const currentPage = ref(1);
 const pageSize = ref(15);
 const searchQuery = ref("");
 const filterDept = ref<number | null>(null);
-const filterManager = ref<number | null>(null);
+const filterRole = ref<string | null>(null);
 const selectedIds = ref<number[]>([]);
 
 let searchTimer: any = null;
@@ -260,7 +268,8 @@ const userForm = ref({
   first_name: "",
   last_name: "",
   department_id: null as number | null,
-  is_manager: false
+  is_manager: false,
+  is_super_admin: false
 });
 
 async function loadDepts() {
@@ -277,8 +286,9 @@ function openAddUser() {
     employee_no: "",
     first_name: "",
     last_name: "",
-    department_id: auth.user?.login_name === 'admin' ? null : (auth.user?.department_id ?? null),
-    is_manager: false
+    department_id: auth.user?.is_super_admin ? null : (auth.user?.department_id ?? null),
+    is_manager: false,
+    is_super_admin: false
   };
   userDialogVisible.value = true;
 }
@@ -293,7 +303,8 @@ function editUser(row: any) {
     first_name: row.display_name.split(' ')[1] || row.display_name,
     last_name: row.display_name.split(' ')[0] || "",
     department_id: row.department_id,
-    is_manager: row.is_manager || false
+    is_manager: row.is_manager || false,
+    is_super_admin: row.is_super_admin || false
   };
   userDialogVisible.value = true;
 }
@@ -312,7 +323,7 @@ async function handleDeleteUser(user: any) {
 }
 
 async function createUser() {
-  const isDeptMissing = auth.user?.login_name === 'admin' && !userForm.value.department_id;
+  const isDeptMissing = auth.user?.is_super_admin && !userForm.value.department_id;
   if (!userForm.value.login_name || (!isEdit.value && !userForm.value.password) || isDeptMissing) {
     return ElMessage.warning("Please fill required fields");
   }
@@ -336,6 +347,18 @@ async function createUser() {
 async function loadUsers() {
   loading.value = true;
   try {
+    let isManagerParam: number | null = null;
+    let isSuperAdminParam: number | null = null;
+    if (filterRole.value === 'admin') {
+      isSuperAdminParam = 1;
+    } else if (filterRole.value === 'manager') {
+      isSuperAdminParam = 0;
+      isManagerParam = 1;
+    } else if (filterRole.value === 'staff') {
+      isSuperAdminParam = 0;
+      isManagerParam = 0;
+    }
+
     const { data } = await api.get("/users", {
       params: { 
         page: currentPage.value, 
@@ -343,7 +366,8 @@ async function loadUsers() {
         management: 1,
         search: searchQuery.value,
         department_id: filterDept.value,
-        is_manager: filterManager.value
+        is_manager: isManagerParam,
+        is_super_admin: isSuperAdminParam
       }
     });
     users.value = data.items;

@@ -609,7 +609,7 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const auth = useAuthStore();
 const docId = computed(() => Number(route.params.id));
-const isAdmin = computed(() => auth.user?.login_name === 'admin');
+const isAdmin = computed(() => !!auth.user?.is_super_admin);
 const isOwner = computed(() => auth.user?.id === meta.value.owner_id);
 
 const loading = ref(true);

@@ -93,7 +93,7 @@
 
             <el-table-column :label="t('inbox.colActions')" width="300" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" size="small" @click="$router.push(`/doc/${row.document_id}`)">
+                <el-button type="primary" size="small" @click="$router.push(`/doc/${row.doc_number || row.document_id}`)">
                   {{ t("library.open") }}
                 </el-button>
 
@@ -207,7 +207,7 @@
 
             <el-table-column :label="t('inbox.colActions')" width="200" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" size="small" @click="$router.push(`/doc/${row.document_id}`)">
+                <el-button type="primary" size="small" @click="$router.push(`/doc/${row.doc_number || row.document_id}`)">
                   {{ t("library.open") }}
                 </el-button>
 

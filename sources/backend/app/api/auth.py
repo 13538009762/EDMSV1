@@ -58,6 +58,7 @@ def login():
                 "display_name": user.display_name(),
                 "employee_no": user.employee_no,
                 "is_manager": user.is_manager,
+                "is_super_admin": user.is_super_admin,
             },
         }
     )
@@ -143,6 +144,7 @@ def me():
             "last_name": user.last_name,
             "employee_no": user.employee_no,
             "is_manager": user.is_manager,
+            "is_super_admin": user.is_super_admin,
             "department": {
                 "id": user.department.id if user.department else None,
                 "name": user.department.name if user.department else "",

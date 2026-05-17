@@ -21,7 +21,7 @@ def get_stats():
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
         
-    is_admin = user.login_name == 'admin'
+    is_admin = user.is_super_admin
     
     # 💡 权限过滤器：确保管理员看到全部，普通用户看到授权内容
     def get_authorized_filter():
@@ -67,7 +67,9 @@ def get_stats():
             else:
                 total_users = 1 # Just self
         total_docs = Document.query.filter(*auth_filter).count()
+        total_templates = Document.query.filter_by(is_template=True, deleted_at=None).count()
     except Exception as e:
+        total_templates = 0
         print(f"[CRITICAL ERROR] Basic metrics failed: {e}")
         traceback.print_exc()
 
@@ -339,6 +341,7 @@ def get_stats():
         "blockchain_history": blockchain_history,
         "security_alerts": security_alerts,
         "ai_stats": ai_history_store.get_summary_stats(),
+        "total_templates": total_templates,
         "is_admin": is_admin
     })
 
@@ -346,7 +349,7 @@ def get_stats():
 @jwt_required()
 def get_tamper_alerts():
     user = current_user()
-    if not user or user.login_name != 'admin':
+    if not user or not user.is_super_admin:
         return jsonify({"error": "Unauthorized"}), 401
     
     logs = AuditLog.query.filter_by(action='INTRUSION_ALERT').order_by(AuditLog.created_at.desc()).all()

@@ -63,7 +63,7 @@
     </div>
 
     <el-row :gutter="16" class="kpi-row">
-      <el-col :xs="12" :sm="8" :md="4">
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-blue-soft">
           <div class="kpi-icon total"><el-icon><Document /></el-icon></div>
           <div class="kpi-info">
@@ -74,7 +74,7 @@
         </el-card>
       </el-col>
       
-      <el-col :xs="12" :sm="8" :md="4">
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-grey">
           <div class="kpi-icon active"><el-icon><EditPen /></el-icon></div>
           <div class="kpi-info">
@@ -85,7 +85,7 @@
         </el-card>
       </el-col>
       
-      <el-col :xs="12" :sm="8" :md="4">
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-orange">
           <div class="kpi-icon warning"><el-icon><Stamp /></el-icon></div>
           <div class="kpi-info">
@@ -96,7 +96,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="12" :sm="8" :md="4">
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-green-soft">
           <div class="kpi-icon success">
             <el-icon><CircleCheck /></el-icon>
@@ -109,7 +109,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="12" :sm="8" :md="4">
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-red-soft">
           <div class="kpi-icon danger">
             <el-icon><CircleClose /></el-icon>
@@ -122,7 +122,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="12" :sm="8" :md="4">
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-indigo">
           <div class="kpi-icon info">
             <el-icon><User /></el-icon>
@@ -134,7 +134,8 @@
           <div class="blockchain-status-tag info">NETWORK</div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="8" :md="4">
+      
+      <el-col :xs="12" :sm="6" :md="6">
         <el-card shadow="hover" class="kpi-card blockchain cyber-purple">
           <div class="kpi-icon ai"><el-icon><MagicStick /></el-icon></div>
           <div class="kpi-info">
@@ -142,6 +143,17 @@
             <div class="kpi-value clickable" @click="$router.push({ name: 'aiHistory' })">{{ aiStats.total_interactions }}</div>
           </div>
           <div class="blockchain-status-tag purple">SMART</div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="12" :sm="6" :md="6">
+        <el-card shadow="hover" class="kpi-card blockchain cyber-teal">
+          <div class="kpi-icon teal"><el-icon><Files /></el-icon></div>
+          <div class="kpi-info">
+            <div class="kpi-label">{{ t('dashboard.templatesCount') }}</div>
+            <div class="kpi-value clickable" @click="$router.push({ name: 'templates' })">{{ totalTemplates }}</div>
+          </div>
+          <div class="blockchain-status-tag teal">TEMPLATES</div>
         </el-card>
       </el-col>
     </el-row>
@@ -236,7 +248,7 @@
             <div v-for="(doc, i) in trendingDocs" :key="doc.id" class="trending-item">
               <div class="rank">{{ i + 1 }}</div>
               <div class="info">
-                <el-link class="title" @click="$router.push({ name: 'editor', params: { id: doc.id } })">{{ doc.title }}</el-link>
+                <el-link class="title" @click="$router.push({ name: 'editor', params: { id: doc.doc_number || doc.id } })">{{ doc.title }}</el-link>
                 <div class="hits">{{ doc.hits }} {{ t('dashboard.hits', 'views') }}</div>
               </div>
               <el-progress 
@@ -324,7 +336,7 @@
                 :timestamp="formatLocalDate(activity.updated_at)"
                 :type="activity.status === 'approved' ? 'success' : (activity.status === 'rejected' ? 'danger' : 'primary')"
               >
-                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="zoomVisible = false; $router.push(`/doc/${activity.id}`)">{{ activity.title }}</el-link></strong>"
+                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="zoomVisible = false; $router.push(`/doc/${activity.doc_number || activity.id}`)">{{ activity.title }}</el-link></strong>"
                 <el-tag size="small" style="margin-left: 8px;" :type="statusTagType(activity.status)">{{ activity.status }}</el-tag>
               </el-timeline-item>
             </el-timeline>
@@ -344,7 +356,7 @@
           <el-table-column prop="doc_number" :label="t('library.colId')" width="140" />
           <el-table-column prop="title" :label="t('library.colTitle')" min-width="180">
             <template #default="{ row }">
-               <el-link @click="metricVisible = false; $router.push({ name: 'editor', params: { id: row.id } })">{{ row.title }}</el-link>
+               <el-link @click="metricVisible = false; $router.push({ name: 'editor', params: { id: row.doc_number || row.id } })">{{ row.title }}</el-link>
             </template>
           </el-table-column>
           <el-table-column prop="status" :label="t('library.colStatus')" width="120">
@@ -475,7 +487,7 @@
                 :timestamp="formatLocalDate(activity.updated_at)"
                 :type="activity.status === 'approved' ? 'success' : (activity.status === 'rejected' ? 'danger' : 'primary')"
               >
-                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="$router.push({ name: 'editor', params: { id: activity.id } })">{{ activity.title }}</el-link></strong>"
+                <strong>{{ activity.owner_name }}</strong> {{ t('dashboard.updatedDoc') }} "<strong><el-link @click="$router.push({ name: 'editor', params: { id: activity.doc_number || activity.id } })">{{ activity.title }}</el-link></strong>"
                 <el-tag size="small" style="margin-left: 8px;" :type="statusTagType(activity.status)">{{ activity.status }}</el-tag>
               </el-timeline-item>
             </el-timeline>
@@ -492,7 +504,7 @@ import { useI18n } from "vue-i18n";
 import api from "@/api/client";
 import { 
   Document, EditPen, Stamp, User, CircleCheck, CircleClose, Search, FullScreen,
-  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Star, StarFilled, MagicStick
+  Link, Lock, Box, Cpu, Connection, WarnTriangleFilled, DataLine, Star, StarFilled, MagicStick, Files
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { formatLocalDate } from "@/utils/date";
@@ -533,6 +545,7 @@ const { t, locale, te } = useI18n();
 const loading = ref(true);
 const totalDocs = ref(0);
 const totalUsers = ref(0);
+const totalTemplates = ref(0);
 const statusData = ref<{ status: string; count: number }[]>([]);
 const deptData = ref<{ name: string; name_en?: string; count: number }[]>([]);
 const spaceData = ref<{ name: string; name_en?: string; count: number }[]>([]);
@@ -564,7 +577,7 @@ const formatDeptName = (name: string, nameEn?: string) => formatName(name, nameE
 const formatSpaceName = (name: string, nameEn?: string) => formatName(name, nameEn, 'space');
 
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.is_manager);
+const isAdmin = computed(() => !!(authStore.user?.is_super_admin || authStore.user?.is_manager));
 
 const renderMarkdown = (text: string) => {
   if (!text) return "";
@@ -986,6 +999,7 @@ async function loadData() {
     const { data } = await api.get("/dashboard/stats");
     totalDocs.value = data.total_docs;
     totalUsers.value = data.total_users;
+    totalTemplates.value = data.total_templates || 0;
     statusData.value = data.status_data;
     deptData.value = data.dept_data || [];
     spaceData.value = data.space_data || [];
@@ -1348,6 +1362,9 @@ onMounted(() => {
 .kpi-card.blockchain.cyber-red-soft { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); }
 .kpi-card.blockchain.cyber-indigo { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); }
 .kpi-card.blockchain.cyber-purple { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border-color: rgba(139, 92, 246, 0.2); }
+.kpi-card.blockchain.cyber-teal { background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%); border-color: rgba(20, 184, 166, 0.2); }
+
+.kpi-icon.teal { background: rgba(20, 184, 166, 0.1); color: #0d9488; }
 
 .kpi-icon.blue { color: #409eff; }
 .kpi-icon.orange { color: #e6a23c; }
@@ -1376,6 +1393,7 @@ onMounted(() => {
 .blockchain-status-tag.danger { background: rgba(245, 108, 108, 0.1); color: #f56c6c; }
 .blockchain-status-tag.success { background: rgba(103, 194, 58, 0.1); color: #67c23a; }
 .blockchain-status-tag.purple { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+.blockchain-status-tag.teal { background: rgba(20, 184, 166, 0.1); color: #0d9488; }
 
 .blockchain-card, .security-card {
   min-height: 400px;

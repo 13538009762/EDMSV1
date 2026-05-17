@@ -497,7 +497,7 @@ const executeAction = async (action: any, idx: number) => {
     } else if (type === 'CREATE_DOC') {
       const res = await api.post('/documents', p);
       ElMessage.success("文档创建成功");
-      router.push(`/doc/${res.data.id}`);
+      router.push(`/doc/${res.data.doc_number || res.data.id}`);
     } else if (type === 'START_APPROVAL') {
       const docId = p.doc_id || p.id;
       if (!docId) return ElMessage.warning("未指定文档 ID");

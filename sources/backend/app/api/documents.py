@@ -59,7 +59,7 @@ def _trigger_metadata_update(app, doc_id: int):
     _metadata_cooldown[doc_id] = now
 
     with app.app_context():
-        doc = db.session.get(Document, doc_id)
+        doc = Document.get_by_id_or_number(doc_id)
         if not doc or not doc.current_version:
             db.session.remove()
             return
@@ -89,7 +89,7 @@ def _trigger_metadata_update(app, doc_id: int):
             meta = AIService.generate_metadata(text_content)
             
             # Re-fetch document in a new, brief transaction
-            doc_update = db.session.get(Document, doc_id)
+            doc_update = Document.get_by_id_or_number(doc_id)
             if doc_update:
                 doc_update.summary = meta.get("summary", "")
                 doc_update.tags = meta.get("tags", "")
@@ -184,7 +184,7 @@ def list_document_tree():
             Document.is_template == False,
             Document.deleted_at == None
         )
-        if user.login_name != 'admin':
+        if not user.is_super_admin:
             docs = docs.filter(or_(
                 Document.owner_id == user.id,
                 Document.is_public == True
@@ -226,7 +226,7 @@ def list_document_tree():
             Document.is_template == False,
             Document.deleted_at == None
         ]
-        if user.login_name != 'admin':
+        if not user.is_super_admin:
             conditions.append(or_(
                 Document.owner_id == user.id,
                 Document.is_public == True
@@ -234,7 +234,7 @@ def list_document_tree():
             
         docs = Document.query.join(User).filter(*conditions).all()
 
-        if not docs and dpt.id != user.department_id and user.login_name != 'admin':
+        if not docs and dpt.id != user.department_id and not user.is_super_admin:
             continue
 
         doc_map = {d.id: {
@@ -267,7 +267,7 @@ def list_document_tree():
         Document.is_template == False,
         Document.deleted_at == None
     ]
-    if user.login_name != 'admin':
+    if not user.is_super_admin:
         unassigned_conditions.append(or_(
             Document.owner_id == user.id,
             Document.is_public == True
@@ -292,7 +292,7 @@ def get_stats():
     q = Document.query.filter(Document.deleted_at == None, Document.is_template == False)
     
     # 💡 Align with visibility logic from list_documents
-    if user.login_name == 'admin':
+    if user.is_super_admin:
         pass
     else:
         # Get permission IDs and flow IDs
@@ -322,7 +322,7 @@ def get_stats():
     return jsonify({
         "total_count": total_count,
         "owned_count": owned_count,
-        "is_admin": user.login_name == 'admin'
+        "is_admin": user.is_super_admin
     })
 
 @bp.get("")
@@ -354,7 +354,7 @@ def list_documents():
     
     # ── Admin Super Access ────────────────────────────────────────────────
     # If admin, show everything by default unless a specific space is filtered
-    if user.login_name == 'admin' and scope == "all":
+    if user.is_super_admin and scope == "all":
         pass 
     else:
         if scope == "approved":
@@ -559,14 +559,14 @@ def import_pdf():
     return jsonify(_doc_to_summary(doc, user)), 201
 
 
-@bp.get("/<int:doc_id>")
+@bp.get("/<doc_id>")
 @jwt_required()
 @audit_log_required("VIEW")
-def get_document(doc_id: int):
+def get_document(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     ver = doc.current_version
@@ -584,13 +584,13 @@ def get_document(doc_id: int):
     return jsonify(body)
 
 
-@bp.patch("/<int:doc_id>")
+@bp.patch("/<doc_id>")
 @jwt_required()
-def patch_document(doc_id: int):
+def patch_document(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     data = request.get_json(silent=True) or {}
@@ -619,14 +619,14 @@ def patch_document(doc_id: int):
     return jsonify(_doc_to_summary(doc, user))
 
 
-@bp.put("/<int:doc_id>/content")
+@bp.put("/<doc_id>/content")
 @jwt_required()
-def put_content(doc_id: int):
+def put_content(doc_id):
     """Autosave document body (TipTap JSON + optional Yjs state)."""
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     if not user_can_edit_content(user, doc):
@@ -675,15 +675,15 @@ def put_content(doc_id: int):
     return jsonify({"ok": True})
 
 
-@bp.delete("/<int:doc_id>")
+@bp.delete("/<doc_id>")
 @jwt_required()
 @audit_log_required("DELETE")
-def delete_document(doc_id: int):
+def delete_document(doc_id):
     """Delete a draft or rejected document (only owner)."""
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc:
         return jsonify({"error": "Not found"}), 404
     
@@ -737,13 +737,13 @@ def delete_document(doc_id: int):
     return jsonify({"ok": True})
 
 
-@bp.get("/<int:doc_id>/versions")
+@bp.get("/<doc_id>/versions")
 @jwt_required()
-def list_versions(doc_id: int):
+def list_versions(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     items = []
@@ -762,13 +762,13 @@ def list_versions(doc_id: int):
     return jsonify({"items": items})
 
 
-@bp.get("/<int:doc_id>/versions/<int:vid>/content")
+@bp.get("/<doc_id>/versions/<int:vid>/content")
 @jwt_required()
-def get_version_content(doc_id: int, vid: int):
+def get_version_content(doc_id, vid: int):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     v = db.session.get(DocumentVersion, vid)
@@ -782,13 +782,13 @@ def get_version_content(doc_id: int, vid: int):
     )
 
 
-@bp.get("/<int:doc_id>/diff")
+@bp.get("/<doc_id>/diff")
 @jwt_required()
-def get_diff(doc_id: int):
+def get_diff(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     v_from = request.args.get("from", type=int)
@@ -807,13 +807,13 @@ def get_diff(doc_id: int):
     return jsonify({"html": html_data})
 
 
-@bp.get("/<int:doc_id>/blame")
+@bp.get("/<doc_id>/blame")
 @jwt_required()
-def get_blame(doc_id: int):
+def get_blame(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
         
@@ -843,13 +843,13 @@ def get_blame(doc_id: int):
     return jsonify({"html": html_out, "legend": legend})
 
 
-@bp.post("/<int:doc_id>/permissions")
+@bp.post("/<doc_id>/permissions")
 @jwt_required()
-def set_permissions(doc_id: int):
+def set_permissions(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
     if doc.status not in ("draft", "approved"):
@@ -945,13 +945,13 @@ def set_permissions(doc_id: int):
     return jsonify({"ok": True})
 
 
-@bp.delete("/<int:doc_id>/permissions/<int:grantee_id>")
+@bp.delete("/<doc_id>/permissions/<int:grantee_id>")
 @jwt_required()
-def delete_permission(doc_id: int, grantee_id: int):
+def delete_permission(doc_id, grantee_id: int):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
     if doc.status not in ("draft", "approved"):
@@ -966,13 +966,13 @@ def delete_permission(doc_id: int, grantee_id: int):
     return jsonify({"ok": True})
 
 
-@bp.get("/<int:doc_id>/permissions")
+@bp.get("/<doc_id>/permissions")
 @jwt_required()
-def get_permissions(doc_id: int):
+def get_permissions(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Not found"}), 404
     perms = DocumentPermission.query.filter_by(document_id=doc.id).all()
@@ -986,14 +986,14 @@ def get_permissions(doc_id: int):
     )
 
 
-@bp.get("/<int:doc_id>/collaborators")
+@bp.get("/<doc_id>/collaborators")
 @jwt_required()
-def get_collaborators(doc_id: int):
+def get_collaborators(doc_id):
     """获取文档的协作者列表（当前有权限的用户）"""
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     
@@ -1023,14 +1023,14 @@ def get_collaborators(doc_id: int):
     return jsonify({"items": collabs})
 
 
-@bp.get("/<int:doc_id>/export.docx")
+@bp.get("/<doc_id>/export.docx")
 @jwt_required()
 @audit_log_required("EXPORT_DOCX")
-def export_docx(doc_id: int):
+def export_docx(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     ver = doc.current_version
@@ -1043,14 +1043,14 @@ def export_docx(doc_id: int):
     )
 
 
-@bp.get("/<int:doc_id>/export.pdf")
+@bp.get("/<doc_id>/export.pdf")
 @jwt_required()
 @audit_log_required("EXPORT_PDF")
-def export_pdf(doc_id: int):
+def export_pdf(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     ver = doc.current_version
@@ -1095,11 +1095,11 @@ def upload_image():
 
 
 
-@bp.post("/<int:doc_id>/approvals")
+@bp.post("/<doc_id>/approvals")
 @jwt_required()
-def start_approval(doc_id: int):
+def start_approval(doc_id):
     user = current_user()
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc:
         return jsonify({"error": "Document not found"}), 404
         
@@ -1174,14 +1174,14 @@ def start_approval(doc_id: int):
         return jsonify({"error": str(e)}), 400
 
 
-@bp.post("/<int:doc_id>/recall")
+@bp.post("/<doc_id>/recall")
 @jwt_required()
-def recall_document_approval(doc_id: int):
+def recall_document_approval(doc_id):
     """Recall a document from approval state."""
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or doc.owner_id != user.id:
         return jsonify({"error": "Forbidden"}), 403
     
@@ -1209,14 +1209,14 @@ def recall_document_approval(doc_id: int):
     return jsonify({"ok": True, "document_status": doc.status})
 
 
-@bp.post("/<int:doc_id>/new-version")
+@bp.post("/<doc_id>/new-version")
 @jwt_required()
-def new_version_after_reject(doc_id: int):
+def new_version_after_reject(doc_id):
     """Create new version from current content when document was rejected."""
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_manage_permissions(user, doc):
         return jsonify({"error": "Forbidden"}), 403
     if doc.status != "rejected":
@@ -1359,13 +1359,13 @@ def batch_share_documents():
     db.session.commit()
     return jsonify({"message": f"Shared {success_count} documents", "errors": errors})
 
-@bp.route('/<int:doc_id>/archive', methods=['POST'])
+@bp.route('/<doc_id>/archive', methods=['POST'])
 @jwt_required()
 def archive_document(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc:
         return jsonify({"error": "Not found"}), 404
         
@@ -1386,10 +1386,10 @@ def archive_document(doc_id):
     
     return jsonify({"msg": "归档并上链成功", "tx_hash": tx_hash})
 
-@bp.route('/<int:doc_id>/verify', methods=['GET'])
+@bp.route('/<doc_id>/verify', methods=['GET'])
 @jwt_required()
 def verify_document(doc_id):
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc:
         return jsonify({"error": "Not found"}), 404
         

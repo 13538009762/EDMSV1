@@ -100,6 +100,32 @@ def create_app(config_class=Config):
                 except Exception as e2:
                     db.session.rollback()
                     print(f"[Bootstrap] Failed to auto-patch schema: {e2}")
+
+            # 💡 Self-healing: Ensure is_super_admin column exists
+            try:
+                db.session.execute(text("SELECT is_super_admin FROM users LIMIT 1"))
+            except Exception:
+                db.session.rollback()
+                try:
+                    print("[Bootstrap] Adding missing is_super_admin column to users...")
+                    db.session.execute(text("ALTER TABLE users ADD COLUMN is_super_admin BOOLEAN DEFAULT FALSE"))
+                    db.session.commit()
+                except Exception as e2:
+                    db.session.rollback()
+                    print(f"[Bootstrap] Failed to auto-patch users schema: {e2}")
+
+            # 💡 Self-healing: Ensure doc_number column exists
+            try:
+                db.session.execute(text("SELECT doc_number FROM documents LIMIT 1"))
+            except Exception:
+                db.session.rollback()
+                try:
+                    print("[Bootstrap] Adding missing doc_number column to documents...")
+                    db.session.execute(text("ALTER TABLE documents ADD COLUMN doc_number VARCHAR(64) UNIQUE NULL"))
+                    db.session.commit()
+                except Exception as e3:
+                    db.session.rollback()
+                    print(f"[Bootstrap] Failed to auto-patch documents schema: {e3}")
         except Exception as e:
             print(f"❌ [Bootstrap] 数据库表创建失败! 请确保数据库已存在。 Error: {e}")
             if "Unknown database" in str(e):
@@ -126,6 +152,7 @@ def create_app(config_class=Config):
                         last_name='Admin',
                         department_id=dept.id if dept else None,
                         is_manager=True,
+                        is_super_admin=True,
                         registration_status='active'
                     )
                     admin.set_password('123456')
@@ -137,6 +164,9 @@ def create_app(config_class=Config):
                     needs_update = False
                     if not admin.is_manager:
                         admin.is_manager = True
+                        needs_update = True
+                    if not admin.is_super_admin:
+                        admin.is_super_admin = True
                         needs_update = True
                     if admin.registration_status != 'active':
                         admin.registration_status = 'active'

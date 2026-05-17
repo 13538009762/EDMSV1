@@ -29,13 +29,13 @@ def _serialize(c: Comment) -> dict:
     }
 
 
-@bp.get("/documents/<int:doc_id>/comments")
+@bp.get("/documents/<doc_id>/comments")
 @jwt_required()
-def list_comments(doc_id: int):
+def list_comments(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     ver = doc.current_version
@@ -58,13 +58,13 @@ def list_comments(doc_id: int):
     return jsonify({"items": items})
 
 
-@bp.post("/documents/<int:doc_id>/comments")
+@bp.post("/documents/<doc_id>/comments")
 @jwt_required()
-def create_comment(doc_id: int):
+def create_comment(doc_id):
     user = current_user()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc or not user_can_view_document(user, doc):
         return jsonify({"error": "Not found"}), 404
     if not user_can_comment(user, doc):

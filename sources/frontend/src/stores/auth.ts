@@ -4,7 +4,7 @@ import api from "@/api/client";
 
 export const useAuthStore = defineStore("auth", () => {
   const token = ref<string | null>(sessionStorage.getItem("edms_token"));
-  const user = ref<{ id: number; login_name: string; display_name: string; employee_no: string; department_id?: number; is_manager?: boolean } | null>(
+  const user = ref<{ id: number; login_name: string; display_name: string; employee_no: string; department_id?: number; is_manager?: boolean; is_super_admin?: boolean } | null>(
     null,
   );
 
@@ -38,7 +38,7 @@ export const useAuthStore = defineStore("auth", () => {
       return;
     }
 
-    if (user.value.login_name === "admin") {
+    if (user.value.is_super_admin) {
       htmlEl.setAttribute("data-theme", "admin");
     } else if (user.value.is_manager) {
       htmlEl.setAttribute("data-theme", "manager");

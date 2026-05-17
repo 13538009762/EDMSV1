@@ -25,7 +25,7 @@
           <el-icon><CopyDocument /></el-icon>
           <span>{{ t("nav.templates", "Templates") }}</span>
         </el-menu-item>
-        <el-menu-item v-if="auth.user?.login_name === 'admin' || auth.user?.is_manager" index="/template-admin">
+        <el-menu-item v-if="auth.user?.is_super_admin || auth.user?.is_manager" index="/template-admin">
           <el-icon><Grid /></el-icon>
           <span>{{ t("nav.templateAdmin", "Template Mgmt") }}</span>
         </el-menu-item>
@@ -37,15 +37,15 @@
           <el-icon><User /></el-icon>
           <span>{{ t("nav.users", "Member Management") }}</span>
         </el-menu-item>
-        <el-menu-item v-if="auth.user?.login_name === 'admin'" index="/import">
+        <el-menu-item v-if="auth.user?.is_super_admin" index="/import">
           <el-icon><Setting /></el-icon>
           <span>{{ t("nav.masterData", "Master Data") }}</span>
         </el-menu-item>
-        <el-menu-item v-if="auth.user?.login_name === 'admin'" index="/audit-log">
+        <el-menu-item v-if="auth.user?.is_super_admin" index="/audit-log">
           <el-icon><Monitor /></el-icon>
           <span>{{ t("nav.auditLog", "Audit Log") }}</span>
         </el-menu-item>
-        <el-menu-item v-if="auth.user?.login_name === 'admin'" index="/ai-history">
+        <el-menu-item v-if="auth.user?.is_super_admin" index="/ai-history">
           <el-icon><MagicStick /></el-icon>
           <span>{{ t("nav.aiHistory", "AI Audit") }}</span>
         </el-menu-item>
@@ -124,7 +124,7 @@
             effect="dark"
             class="role-badge"
           >
-            {{ auth.user?.login_name === 'admin' ? t('common.roles.admin') : (auth.user?.is_manager ? t('common.roles.manager') : t('common.roles.user')) }}
+            {{ auth.user?.is_super_admin ? t('common.roles.admin') : (auth.user?.is_manager ? t('common.roles.manager') : t('common.roles.user')) }}
           </el-tag>
           <el-avatar size="small" :style="{ backgroundColor: 'var(--el-color-primary)' }">
             {{ (auth.user?.display_name || auth.user?.login_name || "U").charAt(0).toUpperCase() }}

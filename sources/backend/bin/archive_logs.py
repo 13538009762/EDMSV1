@@ -50,5 +50,5 @@ def archive_audit_logs(days=30):
         print(f"[Cleanup] Deleted {count} cold entries from database.")
 
 if __name__ == "__main__":
-    # 默认清理 30 天以前的日志
-    archive_audit_logs(30)
+    # 默认清理 10 天以前的日志
+    archive_audit_logs(10)

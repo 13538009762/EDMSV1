@@ -39,7 +39,7 @@ def create_user():
     
     # 💡 修改：department_id 对普通经理是可选的，由后端自动填充
     required = ["login_name", "password", "employee_no", "first_name", "last_name"]
-    if admin.login_name == 'admin':
+    if admin.is_super_admin:
         required.append("department_id")
 
     for f in required:
@@ -57,10 +57,11 @@ def create_user():
         first_name=data["first_name"],
         last_name=data["last_name"],
         patronymic=data.get("patronymic", ""),
-        department_id=admin.department_id if admin.login_name != 'admin' else data["department_id"],
+        department_id=admin.department_id if not admin.is_super_admin else data["department_id"],
         position_short=data.get("position_short", ""),
         gender=data.get("gender", ""),
         is_manager=data.get("is_manager", False),
+        is_super_admin=data.get("is_super_admin", False) if admin.is_super_admin else False,
         registration_status="active"
     )
     user.set_password(data["password"])
@@ -174,7 +175,7 @@ def list_users():
     
     # 逻辑分歧：如果是管理模式 (management=1)，经理只能看本部门
     is_management = request.args.get("management") == "1"
-    is_super = user.login_name == 'admin'
+    is_super = user.is_super_admin
     
     if is_management and not is_super and user.is_manager:
         query = query.filter_by(department_id=user.department_id)
@@ -187,6 +188,10 @@ def list_users():
     is_mgr = request.args.get("is_manager")
     if is_mgr is not None and is_mgr != "":
         query = query.filter_by(is_manager=bool(int(is_mgr)))
+
+    is_super_adm = request.args.get("is_super_admin")
+    if is_super_adm is not None and is_super_adm != "":
+        query = query.filter_by(is_super_admin=bool(int(is_super_adm)))
 
     search = request.args.get("search")
 
@@ -219,7 +224,8 @@ def list_users():
             "department_id": u.department_id,
             "department_name": u.department.name if u.department else None,
             "department_name_en": u.department.name_en if u.department else None,
-            "is_manager": u.is_manager
+            "is_manager": u.is_manager,
+            "is_super_admin": u.is_super_admin
         })
     return jsonify({"total": total, "items": items})
 
@@ -231,8 +237,8 @@ def update_user(user_id: int):
     if not target_user:
         return jsonify({"error": "User not found"}), 404
     
-    is_admin = c_user and c_user.is_manager
-    is_super = c_user and c_user.login_name == 'admin'
+    is_admin = c_user and (c_user.is_manager or c_user.is_super_admin)
+    is_super = c_user and c_user.is_super_admin
     is_self = c_user and c_user.id == target_user.id
     
     # 💡 校验范围：部门经理仅能编辑自己部门的人员
@@ -270,6 +276,11 @@ def update_user(user_id: int):
             if existing and existing.id != target_user.id:
                 return jsonify({"error": "Login name already exists"}), 409
             target_user.login_name = new_login
+        if "is_super_admin" in data:
+            if is_self and not data["is_super_admin"]:
+                return jsonify({"error": "Cannot revoke your own super admin rights"}), 400
+            if is_super:
+                target_user.is_super_admin = bool(data["is_super_admin"])
 
     try:
         db.session.commit()
@@ -282,7 +293,7 @@ def update_user(user_id: int):
 @jwt_required()
 def delete_user(user_id: int):
     admin = current_user()
-    if not admin or not admin.is_manager:
+    if not admin or not (admin.is_manager or admin.is_super_admin):
         return jsonify({"error": "Admin access required"}), 403
     
     if admin.id == user_id:
@@ -293,7 +304,7 @@ def delete_user(user_id: int):
         return jsonify({"error": "User not found"}), 404
     
     # 💡 范围校验：仅超级管理员可以删除所有人，经理仅能删除本部门人员
-    if admin.login_name != 'admin' and user.department_id != admin.department_id:
+    if not admin.is_super_admin and user.department_id != admin.department_id:
         return jsonify({"error": "Forbidden: User is in another department"}), 403
     
     try:
@@ -308,7 +319,7 @@ def delete_user(user_id: int):
 @jwt_required()
 def batch_delete_users():
     admin = current_user()
-    if not admin or not admin.is_manager:
+    if not admin or not (admin.is_manager or admin.is_super_admin):
         return jsonify({"error": "Admin access required"}), 403
     
     data = request.get_json() or {}
@@ -326,7 +337,7 @@ def batch_delete_users():
         u = db.session.get(User, uid)
         if u:
             # 💡 优化：对于部门经理，跳过不属于其部门的用户
-            if admin.login_name != 'admin' and u.department_id != admin.department_id:
+            if not admin.is_super_admin and u.department_id != admin.department_id:
                 errors.append(f"User ID {uid} belongs to another department - skipped")
                 continue
             
@@ -350,7 +361,7 @@ def list_depts():
 @jwt_required()
 def create_department():
     admin = current_user()
-    if not admin or admin.login_name != "admin":
+    if not admin or not admin.is_super_admin:
         return jsonify({"error": "Strict admin access required"}), 403
     
     data = request.get_json() or {}
@@ -371,7 +382,7 @@ def create_department():
 @jwt_required()
 def reset_password(user_id: int):
     admin = current_user()
-    if not admin or not admin.is_manager:
+    if not admin or not (admin.is_manager or admin.is_super_admin):
         return jsonify({"error": "Admin access required"}), 403
         
     target_user = db.session.get(User, user_id)
@@ -379,7 +390,7 @@ def reset_password(user_id: int):
         return jsonify({"error": "User not found"}), 404
         
     # 💡 范围校验：部门经理仅能重置本部门人员密码
-    if admin.login_name != 'admin' and target_user.department_id != admin.department_id:
+    if not admin.is_super_admin and target_user.department_id != admin.department_id:
         return jsonify({"error": "Forbidden: User belongs to another department"}), 403
         
     data = request.get_json(silent=True) or {}

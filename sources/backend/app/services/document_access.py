@@ -37,7 +37,7 @@ def user_effective_document_role(user: User, doc: Document) -> str:
 
 
 def user_can_view_document(user: User, doc: Document) -> bool:
-    if user.login_name == 'admin' or doc.owner_id == user.id:
+    if user.is_super_admin or doc.owner_id == user.id:
         return True
     if doc.status == "approved" and doc.is_public:
         return True
@@ -67,7 +67,7 @@ def user_document_role(user: User, doc: Document) -> Optional[str]:
 
 def user_can_edit_metadata(user: User, doc: Document) -> bool:
     """标题、页面设置、归类等元数据：允许所有者或管理员在任何阶段修改（用于归档/分类）。"""
-    if user.login_name == 'admin' or doc.owner_id == user.id:
+    if user.is_super_admin or doc.owner_id == user.id:
         return True
     return user_can_edit_content(user, doc)
 
@@ -105,7 +105,7 @@ def user_can_comment(user: User, doc: Document) -> bool:
 def user_can_manage_permissions(user: User, doc: Document) -> bool:
     """Check if user can change sharing settings or public visibility."""
     # 1. Admin always has full control
-    if user.login_name == 'admin':
+    if user.is_super_admin:
         return True
         
     # 2. Owner always has control

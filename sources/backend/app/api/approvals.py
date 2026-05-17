@@ -52,7 +52,7 @@ def inbox():
                     break
         
         # If not my turn but I'm admin and it's a registration, I can still see it
-        is_admin_override = (user.login_name == 'admin' and flow.flow_type == "registration")
+        is_admin_override = (user.is_super_admin and flow.flow_type == "registration")
         
         if not my_participant and not is_admin_override:
             continue
@@ -109,7 +109,7 @@ def decide(participant_id: int):
         return jsonify({"error": "Not found"}), 404
     
     # Check if this flow is for the current user OR if current user is admin manually taking over a registration
-    is_admin_override = (user.login_name == 'admin' and p.flow.flow_type == 'registration')
+    is_admin_override = (user.is_super_admin and p.flow.flow_type == 'registration')
     if p.user_id != user.id and not is_admin_override:
          return jsonify({"error": "Forbidden"}), 403
     doc = p.flow.document
@@ -255,7 +255,7 @@ def recall():
     if not doc_id:
         return jsonify({"error": "doc_id required"}), 400
         
-    doc = db.session.get(Document, doc_id)
+    doc = Document.get_by_id_or_number(doc_id)
     if not doc:
         return jsonify({"error": "Document not found"}), 404
         
@@ -296,7 +296,7 @@ def ai_summary(flow_id: int):
         
     # Check if user has access to this flow (admin, owner, or participant)
     has_access = False
-    if user.login_name == 'admin':
+    if user.is_super_admin:
         has_access = True
     elif flow.document and flow.document.owner_id == user.id:
         has_access = True

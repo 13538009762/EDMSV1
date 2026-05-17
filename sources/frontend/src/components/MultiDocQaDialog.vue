@@ -9,7 +9,15 @@
       <div class="qa-header">
         <div class="selected-docs">
           <span class="label">{{ t('library.selectedDocs') }}：</span>
-          <el-tag v-for="id in docIds" :key="id" size="small" class="doc-tag">ID: {{ id }}</el-tag>
+          <el-tag 
+            v-for="doc in displayDocs" 
+            :key="doc.id" 
+            size="small" 
+            class="doc-tag"
+            :title="doc.title"
+          >
+            {{ doc.doc_number || ('ID: ' + doc.id) }}
+          </el-tag>
         </div>
         <div class="model-selector">
           <span class="label">{{ t('library.useModel') }}：</span>
@@ -45,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { ref, watch, nextTick, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ChatDotRound } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
@@ -53,9 +61,16 @@ import { marked } from 'marked';
 import { useAuthStore } from '@/stores/auth';
 import { useAiStore } from '@/stores/ai';
 
+interface SelectedDoc {
+  id: number;
+  doc_number?: string;
+  title?: string;
+}
+
 const props = defineProps<{
   modelValue: boolean;
   docIds: number[];
+  selectedDocs?: SelectedDoc[];
 }>();
 
 const emit = defineEmits<{
@@ -63,6 +78,13 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+const displayDocs = computed<SelectedDoc[]>(() => {
+  if (props.selectedDocs && props.selectedDocs.length > 0) {
+    return props.selectedDocs;
+  }
+  return props.docIds.map(id => ({ id }));
+});
 const authStore = useAuthStore();
 const aiStore = useAiStore();
 const visible = ref(props.modelValue);

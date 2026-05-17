@@ -531,6 +531,7 @@ export default {
     aiInteractionTitle: "AI 智能助手活跃审计",
     aiTotalInteractions: "AI 交互总数 (Total AI Interactions)",
     aiModelDistribution: "AI 大模型使用分布",
+    templatesCount: "系统模板总数",
     storage: {
       richText: "富文本内容 (JSON)",
       realtime: "实时编辑状态",

@@ -51,7 +51,7 @@ def audit_log_required(action: str):
                         is_starred=(action == "INTRUSION_ALERT")
                     )
                     db.session.add(log)
-                    # 💡 Log retention/archival is handled by bin/archive_logs.py (30-day window).
+                    # 💡 Log retention/archival is handled by bin/archive_logs.py (10-day window).
                     # Do NOT purge logs inline here — doing so destroys historical data
                     # needed by the Dashboard Activity Trend chart (last 30 days).
                     db.session.commit()

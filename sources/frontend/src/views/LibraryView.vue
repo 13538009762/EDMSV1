@@ -21,7 +21,7 @@
                 <el-icon><Folder /></el-icon> {{ t("library.wikiTree", "Wiki Directory") }}
                 <el-tooltip :content="t('library.createSpace')" placement="top">
                   <el-button 
-                    v-if="authStore.user?.login_name === 'admin'" 
+                    v-if="authStore.user?.is_super_admin" 
                     size="small" 
                     circle 
                     :icon="Plus" 
@@ -125,7 +125,7 @@
               style="width: 180px"
             />
             <el-select
-              v-show="authStore.user?.login_name === 'admin' || authStore.user?.is_manager"
+              v-show="authStore.user?.is_super_admin || authStore.user?.is_manager"
               v-model="currentDeptId"
               clearable
               style="width: 180px"
@@ -225,7 +225,7 @@
               <el-button 
                 type="primary" 
                 size="small" 
-                @click="open(row.id)"
+                @click="open(row.doc_number || row.id)"
                 class="main-action"
               >
                 {{ t("library.open") }}
@@ -252,7 +252,7 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item 
-                      v-if="row.is_owner || authStore.user?.login_name === 'admin'"
+                      v-if="row.is_owner || authStore.user?.is_super_admin"
                       command="move"
                       :icon="Folder"
                     >
@@ -260,7 +260,7 @@
                     </el-dropdown-item>
                     
                     <el-dropdown-item 
-                      v-if="(row.is_owner || authStore.user?.login_name === 'admin') && (row.status === 'draft' || row.status === 'rejected' || row.status === 'approved')"
+                      v-if="(row.is_owner || authStore.user?.is_super_admin) && (row.status === 'draft' || row.status === 'rejected' || row.status === 'approved')"
                       command="delete"
                       :icon="Delete"
                       divided
@@ -310,6 +310,7 @@
     <MultiDocQaDialog
       v-model="showMultiQa"
       :doc-ids="selectedIds"
+      :selected-docs="selectedRows"
     />
   </div>
 </template>
@@ -367,6 +368,7 @@ const currentSpaceName = ref("");
 const currentDeptId = ref<string | null>(null);
 const currentDeptName = ref("");
 const selectedIds = ref<number[]>([]);
+const selectedRows = ref<DocRow[]>([]);
 const deptOptions = ref<any[]>([]);
 const showMove = ref(false);
 const showCreateSpace = ref(false);
@@ -422,6 +424,7 @@ function toggleToolbar() {
 
 function handleSelectionChange(selection: DocRow[]) {
   selectedIds.value = selection.map(row => row.id);
+  selectedRows.value = selection;
 }
 
 async function batchDelete() {
@@ -581,13 +584,13 @@ function handleNodeClick(data: any) {
     }
     load();
   } else if (data.id && !data.is_space && !data.is_dept) {
-    open(data.id);
+    open(data.doc_number || data.id);
   }
 }
 
 function handleCommand(cmd: string, row: DocRow) {
     if (cmd === 'share') openShare(row.id);
-    if (cmd === 'diff') router.push({ name: 'diff', params: { id: row.id } });
+    if (cmd === 'diff') router.push({ name: 'diff', params: { id: row.doc_number || row.id } });
     if (cmd === 'move') {
       selectedIds.value = [row.id];
       showMove.value = true;
@@ -612,7 +615,7 @@ async function createDoc() {
     
     const { data } = await api.post("/documents", payload);
     if (data && data.id) {
-        router.push({ name: "editor", params: { id: data.id } });
+        router.push({ name: "editor", params: { id: data.doc_number || data.id } });
     } else {
         throw new Error("Invalid document ID received");
     }
@@ -622,7 +625,7 @@ async function createDoc() {
   }
 }
 
-function open(id: number) {
+function open(id: number | string) {
   router.push({ name: "editor", params: { id } });
 }
 
@@ -713,7 +716,7 @@ async function onImportImage(file: any) {
     const { data } = await api.post('/ai/import-image', formData);
     if (data.code === 200) {
       ElMessage.success(t('library.importImageSuccess', '识别成功'));
-      router.push({ name: 'editor', params: { id: data.data.document_id } });
+      router.push({ name: 'editor', params: { id: data.data.doc_number || data.data.document_id } });
     }
   } catch (err: any) {
     ElMessage.error(err.response?.data?.error || t('library.importImageFailed', '识别失败'));
