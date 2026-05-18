@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="t('library.createSpace', 'Create New Category')"
+    :title="spaceData ? t('library.editSpace', 'Edit Category') : t('library.createSpace', 'Create New Category')"
     width="450px"
     @closed="handleClosed"
     append-to-body
@@ -39,6 +39,12 @@ import { ElMessage } from 'element-plus';
 
 const props = defineProps<{
   modelValue: boolean;
+  spaceData?: {
+    id: number;
+    name: string;
+    name_en?: string;
+    description?: string;
+  } | null;
 }>();
 
 const emit = defineEmits(['update:modelValue', 'saved']);
@@ -61,6 +67,18 @@ watch(visible, (val) => {
   emit('update:modelValue', val);
 });
 
+watch(() => props.spaceData, (val) => {
+  if (val) {
+    form.name = val.name || '';
+    form.name_en = val.name_en || '';
+    form.description = val.description || '';
+  } else {
+    form.name = '';
+    form.name_en = '';
+    form.description = '';
+  }
+}, { immediate: true });
+
 function handleClosed() {
   form.name = '';
   form.name_en = '';
@@ -75,13 +93,18 @@ async function handleSubmit() {
   
   submitting.value = true;
   try {
-    // Note: We need to update backend to handle name_en if we want it saved.
-    // The current create_space API only takes name and description.
-    await api.post('/spaces', {
+    const payload = {
       name: form.name.trim(),
       name_en: form.name_en.trim() || undefined,
       description: form.description.trim()
-    });
+    };
+    
+    if (props.spaceData?.id) {
+      await api.patch(`/spaces/${props.spaceData.id}`, payload);
+    } else {
+      await api.post('/spaces', payload);
+    }
+    
     ElMessage.success(t('common.success'));
     emit('saved');
     visible.value = false;

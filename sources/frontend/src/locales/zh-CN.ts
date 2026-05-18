@@ -187,6 +187,8 @@ export default {
     moveToSpace: "移动至空间",
     clearSpaces: '清空分类',
     createSpace: '新建知识空间',
+    editSpace: '编辑知识空间',
+    deleteSpaceConfirm: '确定要删除该种类吗？该种类内的文档如果还有归为其他类别就归为其他，如果没有其他类别就归为无类别。',
     spaceName: '空间名称',
     spaceNameEn: '空间英文名',
     spaceDescription: '空间描述',

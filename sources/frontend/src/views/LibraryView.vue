@@ -53,9 +53,34 @@
             >
               <template #default="{ node, data }">
                 <span class="custom-tree-node">
-                  <el-icon v-if="data.is_space"><Connection /></el-icon>
-                  <el-icon v-else><Document /></el-icon>
-                  <span class="node-label" :title="node.label">{{ node.label }}</span>
+                  <span class="node-left">
+                    <el-icon v-if="data.is_space"><Connection /></el-icon>
+                    <el-icon v-else><Document /></el-icon>
+                    <span class="node-label" :title="node.label">{{ node.label }}</span>
+                  </span>
+                  <span 
+                    v-if="data.is_space && !data.is_dept && authStore.user?.is_super_admin" 
+                    class="node-actions"
+                  >
+                    <el-button 
+                      type="primary" 
+                      link 
+                      size="small" 
+                      @click.stop="handleEditSpace(data)"
+                      style="padding: 2px; margin: 0 2px;"
+                    >
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                    <el-button 
+                      type="danger" 
+                      link 
+                      size="small" 
+                      @click.stop="handleDeleteSpace(data)"
+                      style="padding: 2px; margin: 0 2px;"
+                    >
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </span>
                 </span>
               </template>
             </el-tree>
@@ -304,6 +329,7 @@
 
     <SpaceCreateDialog
       v-model="showCreateSpace"
+      :space-data="editSpaceData"
       @saved="loadTree"
     />
 
@@ -316,7 +342,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import api from "@/api/client";
@@ -327,7 +353,7 @@ import DocumentShareDialog from "@/components/DocumentShareDialog.vue";
 import DocumentMoveDialog from "@/components/DocumentMoveDialog.vue";
 import SpaceCreateDialog from "@/components/SpaceCreateDialog.vue";
 import MultiDocQaDialog from "@/components/MultiDocQaDialog.vue";
-import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock, Close, ChatDotRound } from "@element-plus/icons-vue";
+import { Search, Plus, Folder, Connection, Upload, Expand, Fold, MagicStick, Refresh, ArrowUp, ArrowDown, Share, Delete, More, Reading, Lock, Close, ChatDotRound, Edit } from "@element-plus/icons-vue";
 import { formatLocalDate } from "@/utils/date";
 import { useAuthStore } from "@/stores/auth";
 import { Editor } from "@tiptap/vue-3";
@@ -373,6 +399,13 @@ const deptOptions = ref<any[]>([]);
 const showMove = ref(false);
 const showCreateSpace = ref(false);
 const showMultiQa = ref(false);
+const editSpaceData = ref<any>(null);
+
+watch(showCreateSpace, (val) => {
+  if (!val) {
+    editSpaceData.value = null;
+  }
+});
 
 async function batchClearSpace() {
   if (selectedIds.value.length === 0) return;
@@ -585,6 +618,47 @@ function handleNodeClick(data: any) {
     load();
   } else if (data.id && !data.is_space && !data.is_dept) {
     open(data.doc_number || data.id);
+  }
+}
+
+function handleEditSpace(data: any) {
+  editSpaceData.value = {
+    id: data.space_id || data.id.toString().replace("space_", ""),
+    name: data.name,
+    name_en: data.name_en,
+    description: data.description || ""
+  };
+  showCreateSpace.value = true;
+}
+
+async function handleDeleteSpace(data: any) {
+  const sid = (data.space_id || data.id).toString().replace("space_", "");
+  try {
+    await ElMessageBox.confirm(
+      t('library.deleteSpaceConfirm', 'Are you sure you want to delete this category? Documents inside will belong to their other categories, or become uncategorized if they have no other categories left.'),
+      t('common.warning', 'Warning'),
+      {
+        confirmButtonText: t('common.ok', 'OK'),
+        cancelButtonText: t('common.cancel', 'Cancel'),
+        type: 'warning'
+      }
+    );
+    const loadingInstance = ElLoading.service({ text: t('common.processing', 'Processing...') });
+    await api.delete(`/spaces/${sid}`);
+    loadingInstance.close();
+    ElMessage.success(t('common.success', 'Success'));
+    
+    // If the currently selected space is the one being deleted, clear the filter
+    if (currentSpaceId.value === sid) {
+      clearSpaceFilter();
+    }
+    
+    loadTree();
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error(err);
+      ElMessage.error(t('common.failed', 'Operation failed'));
+    }
   }
 }
 
@@ -1005,14 +1079,30 @@ onMounted(() => {
 .custom-tree-node {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  justify-content: space-between;
   width: 100%;
+  padding-right: 8px;
+  font-size: 13px;
+}
+.node-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .node-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.node-actions {
+  display: none;
+  align-items: center;
+}
+.custom-tree-node:hover .node-actions {
+  display: flex;
 }
 .selection-actions {
   display: flex;

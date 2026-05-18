@@ -191,6 +191,8 @@ export default {
     moveToSpace: "Move to Space",
     clearSpaces: 'Clear Categories',
     createSpace: 'Create New Category',
+    editSpace: 'Edit Category',
+    deleteSpaceConfirm: 'Are you sure you want to delete this category? Documents inside will belong to their other categories, or become uncategorized if they have no other categories left.',
     spaceName: 'Category Name',
     spaceNameEn: 'Category Name (EN)',
     spaceDescription: 'Description',

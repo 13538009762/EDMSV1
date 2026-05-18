@@ -32,8 +32,8 @@ def list_spaces():
 @jwt_required()
 def create_space():
     user = current_user()
-    if not user or not user.is_manager:
-        return jsonify({"error": "Forbidden: Only managers can create spaces"}), 403
+    if not user or not user.is_super_admin:
+        return jsonify({"error": "Forbidden: Only system administrators can create spaces"}), 403
     
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "New Space").strip()[:256]
@@ -49,6 +49,53 @@ def create_space():
         "name": s.name,
         "description": s.description,
     }), 201
+
+@bp.patch("/<int:space_id>")
+@jwt_required()
+def patch_space(space_id: int):
+    user = current_user()
+    if not user or not user.is_super_admin:
+        return jsonify({"error": "Forbidden: Only system administrators can update spaces"}), 403
+    
+    s = db.session.get(Space, space_id)
+    if not s:
+        return jsonify({"error": "Space not found"}), 404
+        
+    data = request.get_json(silent=True) or {}
+    if "name" in data:
+        s.name = str(data["name"]).strip()[:256]
+    if "name_en" in data:
+        s.name_en = str(data["name_en"]).strip()[:256]
+    if "description" in data:
+        s.description = str(data["description"]).strip()
+        
+    db.session.commit()
+    return jsonify({
+        "id": s.id,
+        "name": s.name,
+        "name_en": s.name_en,
+        "description": s.description,
+    })
+
+@bp.delete("/<int:space_id>")
+@jwt_required()
+def delete_space(space_id: int):
+    user = current_user()
+    if not user or not user.is_super_admin:
+        return jsonify({"error": "Forbidden: Only system administrators can delete spaces"}), 403
+    
+    s = db.session.get(Space, space_id)
+    if not s:
+        return jsonify({"error": "Space not found"}), 404
+        
+    # Nullify single-space backward compatibility foreign keys on documents
+    db.session.query(Document).filter(Document.space_id == space_id).update(
+        {Document.space_id: None}, synchronize_session=False
+    )
+    
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 @bp.get("/templates")
 @jwt_required()
