@@ -818,7 +818,7 @@ async function doImportImage(file: any) {
 async function confirmDelete(id: number) {
   try {
     await ElMessageBox.confirm(
-      t("editor.deleteConfirm"),
+      t("editor.deleteDocConfirm"),
       t("common.warning", "Warning"),
       {
         confirmButtonText: t("common.ok", "OK"),

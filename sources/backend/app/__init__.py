@@ -147,14 +147,25 @@ def create_app(config_class=Config):
         feature_desc = get_feature_description(request.method, request.path)
         
         # 优雅的终端输出结构
-        print(f"\n{gray_color}[{time.strftime('%Y-%m-%d %H:%M:%S')}]{reset_color} "
-              f"{purple_color}[SYSTEM API LOG]{reset_color} "
-              f"👤 操作人: {cyan_color}{user_info}{reset_color}\n"
-              f"   🚀 请求: {request.method} {request.path}"
-              f"{' ?' + request.query_string.decode('utf-8') if request.query_string else ''}\n"
-              f"   ⚙️  功能: {purple_color}{feature_desc}{reset_color}\n"
-              f"   ⏱️  耗时: {duration:.2f}ms | 状态: {status_color}{status}{reset_color}\n"
-              f"{gray_color}" + "-" * 75 + f"{reset_color}")
+        try:
+            print(f"\n{gray_color}[{time.strftime('%Y-%m-%d %H:%M:%S')}]{reset_color} "
+                  f"{purple_color}[SYSTEM API LOG]{reset_color} "
+                  f"👤 操作人: {cyan_color}{user_info}{reset_color}\n"
+                  f"   🚀 请求: {request.method} {request.path}"
+                  f"{' ?' + request.query_string.decode('utf-8') if request.query_string else ''}\n"
+                  f"   ⚙️  功能: {purple_color}{feature_desc}{reset_color}\n"
+                  f"   ⏱️  耗时: {duration:.2f}ms | 状态: {status_color}{status}{reset_color}\n"
+                  f"{gray_color}" + "-" * 75 + f"{reset_color}")
+        except UnicodeEncodeError:
+            # Fallback to plain ASCII characters for Windows consoles that don't support emojis/unicode
+            print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
+                  f"[SYSTEM API LOG] "
+                  f"User: {user_info}\n"
+                  f"   Request: {request.method} {request.path}"
+                  f"{' ?' + request.query_string.decode('utf-8') if request.query_string else ''}\n"
+                  f"   Feature: {feature_desc}\n"
+                  f"   Duration: {duration:.2f}ms | Status: {status}\n"
+                  f"-" * 75)
               
         return response
 
@@ -215,6 +226,13 @@ def create_app(config_class=Config):
         from flask import send_from_directory
         storage_base = os.environ.get("STORAGE_PATH", app.root_path)
         return send_from_directory(os.path.join(storage_base, "static", "images"), filename)
+
+    @app.route("/static/uploads/<path:filename>")
+    def custom_static_uploads(filename):
+        import os
+        from flask import send_from_directory
+        storage_base = os.environ.get("STORAGE_PATH", app.root_path)
+        return send_from_directory(os.path.join(storage_base, "static", "uploads"), filename)
 
     from app.sockets import collab  # noqa: F401  registers handlers
 
