@@ -26,6 +26,9 @@ export default {
       reader: "只读",
       editor: "编辑",
       commenter: "批注",
+      view: "只读",
+      edit: "编辑",
+      comment: "批注",
     },
     status: {
       draft: "草稿",

@@ -25,6 +25,9 @@ export default {
       reader: "Reader",
       editor: "Editor",
       commenter: "Commenter",
+      view: "Reader",
+      edit: "Editor",
+      comment: "Commenter",
     },
     status: {
       draft: "Draft",
