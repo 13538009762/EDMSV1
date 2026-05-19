@@ -31,9 +31,31 @@ def init_collection():
         return
     try:
         # Check if collection exists
-        if not client.collection_exists(COLLECTION_NAME):
-            # Create collection with default vector params if needed (usually handled by client.add)
-            pass
+        exists = client.collection_exists(COLLECTION_NAME)
+        if exists:
+            try:
+                info = client.get_collection(COLLECTION_NAME)
+                vectors = info.config.params.vectors
+                # If vectors is not a dict, or our specific fastembed key is not in it:
+                if not isinstance(vectors, dict) or "fast-bge-small-zh-v1.5" not in vectors:
+                    print(f"[VectorStore] Incompatible collection '{COLLECTION_NAME}' detected. Recreating...")
+                    client.delete_collection(COLLECTION_NAME)
+                    exists = False
+            except Exception as e:
+                print(f"[VectorStore] Error checking collection schema: {e}. Recreating...")
+                try:
+                    client.delete_collection(COLLECTION_NAME)
+                except Exception:
+                    pass
+                exists = False
+
+        if not exists:
+            # Create collection with default vector params matching fastembed requirements
+            client.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=client.get_fastembed_vector_params()
+            )
+            print(f"[VectorStore] Created collection '{COLLECTION_NAME}' with correct fastembed vector params.")
             
         # 💡 Add Full-Text Index for BM25-like keyword search
         from qdrant_client import models
@@ -122,6 +144,38 @@ def chunk_text(text: str, max_chunk_size: int = 800) -> List[str]:
             
     return final_chunks
 
+def recreate_incompatible_collection(e: Exception):
+    print(f"[VectorStore] Incompatible or missing collection detected: {e}. Recreating...")
+    try:
+        client.delete_collection(COLLECTION_NAME)
+    except Exception as delete_err:
+        print(f"[VectorStore] Failed to delete collection during recovery: {delete_err}")
+        
+    try:
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=client.get_fastembed_vector_params()
+        )
+        from qdrant_client import models
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="document",
+            field_schema=models.TextIndexParams(
+                type="text",
+                tokenizer=models.TokenizerType.MULTILINGUAL,
+                min_token_len=2,
+                lowercase=True,
+            )
+        )
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="doc_id",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        print(f"[VectorStore] Recreated collection '{COLLECTION_NAME}' successfully.")
+    except Exception as create_err:
+        print(f"[VectorStore] Error during collection recovery: {create_err}")
+
 def upsert_document(doc_id: int, title: str, text_content: str):
     """
     Chunk the document text and insert/update in Qdrant.
@@ -130,7 +184,8 @@ def upsert_document(doc_id: int, title: str, text_content: str):
         return
     
     print(f"[VectorStore] Upserting document {doc_id} to vector DB...")
-    try:
+    
+    def _execute_upsert():
         chunks = chunk_text(text_content)
         if not chunks:
             # Delete if empty
@@ -149,8 +204,6 @@ def upsert_document(doc_id: int, title: str, text_content: str):
 
         docs = chunks
         metadata = [{"doc_id": doc_id, "title": title, "chunk_index": i} for i in range(len(chunks))]
-        # Using fastembed's add method which handles embedding automatically
-        # Note: Qdrant client replaces existing points if IDs match. We generate deterministic IDs or just use add()
         
         # First, delete old chunks for this doc_id
         from qdrant_client import models
@@ -173,8 +226,20 @@ def upsert_document(doc_id: int, title: str, text_content: str):
             metadata=metadata
         )
         print(f"[VectorStore] Successfully upserted {len(chunks)} chunks for doc {doc_id}")
+
+    try:
+        _execute_upsert()
     except Exception as e:
-        print(f"[VectorStore] Error upserting document {doc_id}: {e}")
+        error_msg = str(e)
+        if "incompatible vector params" in error_msg.lower() or "not found" in error_msg.lower():
+            recreate_incompatible_collection(e)
+            try:
+                print(f"[VectorStore] Retrying upsert for document {doc_id}...")
+                _execute_upsert()
+            except Exception as retry_err:
+                print(f"[VectorStore] Error during collection recovery and retry: {retry_err}")
+        else:
+            print(f"[VectorStore] Error upserting document {doc_id}: {e}")
 
 def search_documents(query: str, doc_ids: List[int], limit: int = 5) -> List[Dict[str, Any]]:
     """
@@ -183,9 +248,8 @@ def search_documents(query: str, doc_ids: List[int], limit: int = 5) -> List[Dic
     if not client:
         return []
         
-    try:
+    def _execute_search():
         from qdrant_client import models
-        
         filter_cond = None
         if doc_ids:
             filter_cond = models.Filter(
@@ -215,6 +279,19 @@ def search_documents(query: str, doc_ids: List[int], limit: int = 5) -> List[Dic
             })
             
         return contexts
+
+    try:
+        return _execute_search()
     except Exception as e:
-        print(f"[VectorStore] Search error: {e}")
-        return []
+        error_msg = str(e)
+        if "incompatible vector params" in error_msg.lower() or "not found" in error_msg.lower():
+            recreate_incompatible_collection(e)
+            try:
+                print("[VectorStore] Retrying search...")
+                return _execute_search()
+            except Exception as retry_err:
+                print(f"[VectorStore] Recovery during search failed: {retry_err}")
+                return []
+        else:
+            print(f"[VectorStore] Search error: {e}")
+            return []

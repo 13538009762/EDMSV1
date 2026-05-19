@@ -23,6 +23,141 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     socketio.init_app(app)
 
+    # 💡 增加：统一的系统功能调用美化日志中间件
+    def get_feature_description(method: str, path: str) -> str:
+        if path.startswith("/api/auth/login"):
+            return "用户登录 (User Login)"
+        if path.startswith("/api/auth/register"):
+            return "用户注册 (User Registration)"
+        if path.startswith("/api/auth/me"):
+            return "获取当前用户信息 (Get Profile)"
+        if path.startswith("/api/auth/logout"):
+            return "用户登出 (User Logout)"
+            
+        if path.startswith("/api/documents"):
+            if method == "GET":
+                if "tree" in path:
+                    return "查看文档目录树结构 (Get Document Directory Tree)"
+                if "diff" in path:
+                    return "获取文档版本差异对比 (Get Version Diff)"
+                return "获取文档列表 (List Documents)"
+            if method == "POST":
+                if "batch-move" in path:
+                    return "批量移动文档空间 (Batch Move Documents)"
+                return "创建新文档 (Create Document)"
+            if method in ("PUT", "PATCH"):
+                return "编辑文档元数据/内容 (Edit Document)"
+            if method == "DELETE":
+                return "删除文档 (Delete Document)"
+                
+        if path.startswith("/api/spaces"):
+            if method == "GET":
+                return "获取知识空间列表 (List Knowledge Spaces)"
+            if method == "POST":
+                return "创建新知识空间 (Create Knowledge Space)"
+                
+        if path.startswith("/api/comments"):
+            return "发表/查看文档评论 (Comment Action)"
+            
+        if path.startswith("/api/approvals"):
+            if method == "POST":
+                return "提交/处理审批流程 (Submit/Process Approval)"
+            return "查看审批流列表 (List Approvals)"
+            
+        if path.startswith("/api/ai"):
+            if "ocr" in path:
+                return "AI 图生文 / OCR 识别 (AI OCR Translation)"
+            return "AI 智能写作/对话助手 (AI Writing/Chat Assistant)"
+            
+        if path.startswith("/api/master-data"):
+            if "import" in path:
+                return "主数据批量导入 (Import Master Data)"
+            return "管理组织架构主数据 (Manage Master Data)"
+            
+        if path.startswith("/api/notifications"):
+            return "获取通知消息列表 (List Notifications)"
+            
+        if path.startswith("/api/dashboard"):
+            return "查看控制面板统计看板 (Get Dashboard Analytics)"
+            
+        if path.startswith("/api/users"):
+            if "departments" in path:
+                return "获取系统部门结构 (Get System Departments)"
+            return "管理/查询系统用户 (Manage Users)"
+            
+        return "其它系统操作 (Other Operation)"
+
+    @app.before_request
+    def log_request_start():
+        import time
+        from flask import g
+        from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+        
+        g.start_time = time.time()
+        user_info = "访客 (Guest / Unauthenticated)"
+        
+        try:
+            verify_jwt_in_request(optional=True)
+            user_id = get_jwt_identity()
+            if user_id:
+                from app.models import User
+                user = db.session.get(User, int(user_id))
+                if user:
+                    dept_name = user.department.name if user.department else "无部门 (No Dept)"
+                    user_info = f"{user.login_name} (ID: {user.id} | {user.display_name()} | 部门: {dept_name})"
+                else:
+                    user_info = f"UserID: {user_id} (未在DB中找到该用户)"
+        except Exception:
+            pass
+            
+        g.user_info = user_info
+
+    @app.after_request
+    def log_request_end(response):
+        import time
+        from flask import request, g
+        
+        # 忽略静态资源、健康检查等以保持终端清洁
+        ignored_prefixes = ("/static", "/favicon.ico", "/api/health")
+        if request.path.startswith(ignored_prefixes):
+            return response
+
+        duration = 0.0
+        if hasattr(g, "start_time"):
+            duration = (time.time() - g.start_time) * 1000  # ms
+            
+        user_info = getattr(g, "user_info", "Guest")
+        status = response.status_code
+        
+        # 根据状态码配置粗体色
+        if status >= 500:
+            status_color = "\033[1;31m"  # Bold Red
+        elif status >= 400:
+            status_color = "\033[1;33m"  # Bold Yellow
+        elif status >= 300:
+            status_color = "\033[1;34m"  # Bold Blue
+        else:
+            status_color = "\033[1;32m"  # Bold Green
+            
+        reset_color = "\033[0m"
+        cyan_color = "\033[1;36m"
+        purple_color = "\033[1;35m"
+        gray_color = "\033[90m"
+        
+        feature_desc = get_feature_description(request.method, request.path)
+        
+        # 优雅的终端输出结构
+        print(f"\n{gray_color}[{time.strftime('%Y-%m-%d %H:%M:%S')}]{reset_color} "
+              f"{purple_color}[SYSTEM API LOG]{reset_color} "
+              f"👤 操作人: {cyan_color}{user_info}{reset_color}\n"
+              f"   🚀 请求: {request.method} {request.path}"
+              f"{' ?' + request.query_string.decode('utf-8') if request.query_string else ''}\n"
+              f"   ⚙️  功能: {purple_color}{feature_desc}{reset_color}\n"
+              f"   ⏱️  耗时: {duration:.2f}ms | 状态: {status_color}{status}{reset_color}\n"
+              f"{gray_color}" + "-" * 75 + f"{reset_color}")
+              
+        return response
+
 
     @app.errorhandler(500)
     def handle_500(e):

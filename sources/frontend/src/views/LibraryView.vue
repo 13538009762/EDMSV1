@@ -107,6 +107,7 @@
             <el-upload
               :show-file-list="false"
               accept=".docx"
+              action="#"
               :before-upload="onImportDocx"
               style="display: inline-flex; margin-right: 8px;"
             >
@@ -115,6 +116,7 @@
             <el-upload
               :show-file-list="false"
               accept=".pdf"
+              action="#"
               :before-upload="onImportPdf"
               style="display: inline-flex; margin-right: 8px;"
             >
@@ -123,6 +125,7 @@
             <el-upload
               :show-file-list="false"
               accept="image/*"
+              action="#"
               :before-upload="onImportImage"
               style="display: inline-flex;"
             >
@@ -708,7 +711,12 @@ function openShare(id: number) {
   shareOpen.value = true;
 }
 
-async function onImportDocx(file: UploadRawFile) {
+function onImportDocx(file: UploadRawFile) {
+  doImportDocx(file);
+  return false;
+}
+
+async function doImportDocx(file: UploadRawFile) {
   try {
     const payload: any = { title: file.name.replace(/\.docx$/, "") };
     if (currentSpaceId.value && currentSpaceId.value !== "unassigned") {
@@ -755,10 +763,14 @@ async function onImportDocx(file: UploadRawFile) {
     console.error("Import DOCX error:", error);
     ElMessage.error(t("library.importDocxFailed"));
   }
+}
+
+function onImportPdf(file: UploadRawFile) {
+  doImportPdf(file);
   return false;
 }
 
-async function onImportPdf(file: UploadRawFile) {
+async function doImportPdf(file: UploadRawFile) {
   try {
     const formData = new FormData();
     formData.append("file", file);
@@ -779,10 +791,14 @@ async function onImportPdf(file: UploadRawFile) {
   } finally {
     loading.value = false;
   }
+}
+
+function onImportImage(file: any) {
+  doImportImage(file);
   return false;
 }
 
-async function onImportImage(file: any) {
+async function doImportImage(file: any) {
   const loadingInstance = ElLoading.service({ text: t('library.importImageLoading', 'AI 正在识别并排版...'), background: 'rgba(0, 0, 0, 0.7)' });
   try {
     const formData = new FormData();
@@ -797,7 +813,6 @@ async function onImportImage(file: any) {
   } finally {
     loadingInstance.close();
   }
-  return false;
 }
 
 async function confirmDelete(id: number) {

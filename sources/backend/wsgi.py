@@ -1,3 +1,7 @@
+# Gevent monkey patching must be done before importing any other modules
+from gevent import monkey
+monkey.patch_all()
+
 from app import create_app, socketio
 
 app = create_app()
